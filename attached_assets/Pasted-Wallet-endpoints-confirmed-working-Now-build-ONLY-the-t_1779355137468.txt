@@ -1,0 +1,189 @@
+Wallet endpoints confirmed working. Now build 
+ONLY the trip lifecycle endpoints. Do not touch 
+wallets, auth, or any other existing code.
+
+TASK 5: Trip Lifecycle Endpoints
+
+Add to src/routes/trips.ts and
+src/controllers/tripController.ts
+
+---
+
+PATCH /api/trips/:tripId/start
+Protected: authenticateToken
+Allowed roles: driver only
+Logic:
+  Find trip by tripId where deleted_at IS NULL
+  Validate:
+    - Trip must exist, return 404 if not
+    - req.user.userId must match trip.driver_id
+      return 403 "You are not assigned to this trip"
+    - Trip status must be 'created'
+      return 409 "Trip cannot be started from 
+      its current status"
+  
+  Update trips:
+    status = 'in_transit'
+    updated_at = NOW()
+  
+  Insert trip_events:
+    event_type = 'started'
+    performed_by = req.user.userId
+    metadata = { previousStatus: 'created' }
+
+Response 200:
+{
+  "data": {
+    "tripId": "...",
+    "status": "in_transit",
+    "startedAt": "<timestamp of event>"
+  },
+  "message": "Trip started"
+}
+
+---
+
+PATCH /api/trips/:tripId/complete
+Protected: authenticateToken
+Allowed roles: driver only
+Logic:
+  Find trip by tripId where deleted_at IS NULL
+  Validate:
+    - Trip must exist, return 404 if not
+    - req.user.userId must match trip.driver_id
+      return 403 "You are not assigned to this trip"
+    - Trip status must be 'in_transit'
+      return 409 "Trip cannot be completed from 
+      its current status"
+  
+  Update trips:
+    status = 'completed'
+    updated_at = NOW()
+  
+  Insert trip_events:
+    event_type = 'completed'
+    performed_by = req.user.userId
+    metadata = { previousStatus: 'in_transit' }
+
+Response 200:
+{
+  "data": {
+    "tripId": "...",
+    "status": "completed",
+    "completedAt": "<timestamp of event>"
+  },
+  "message": "Trip completed"
+}
+
+---
+
+PATCH /api/trips/:tripId/cancel
+Protected: authenticateToken
+Allowed roles: super_admin only
+Logic:
+  Find trip by tripId where deleted_at IS NULL
+  Validate:
+    - Trip must exist, return 404 if not
+    - Trip status must NOT be 'cancelled' 
+      or 'completed'
+      return 409 "Trip cannot be cancelled from 
+      its current status"
+
+  Run everything below in a single transaction:
+
+  STEP A: Reverse all wallet credits for this trip
+    Find all wallet_ledger entries where:
+      trip_id = tripId
+      entry_type = 'credit'
+    
+    For each ledger entry:
+      1. INSERT new wallet_ledger row:
+           wallet_id = same wallet_id
+           trip_id = same trip_id
+           trip_fee_id = same trip_fee_id
+           amount = original amount as NEGATIVE integer
+           entry_type = 'reversal'
+           cleared = false
+      
+      2. UPDATE wallets:
+           total_collected = total_collected - 
+           original amount
+           updated_at = NOW()
+
+  STEP B: Soft delete the trip
+    UPDATE trips:
+      status = 'cancelled'
+      deleted_at = NOW()
+      updated_at = NOW()
+
+  STEP C: Insert trip_events:
+    event_type = 'cancelled'
+    performed_by = req.user.userId
+    metadata = { 
+      previousStatus: <status before cancel>,
+      reversedEntries: <count of ledger reversals>
+    }
+
+  On any failure: rollback entire transaction
+
+Response 200:
+{
+  "data": {
+    "tripId": "...",
+    "status": "cancelled",
+    "reversedEntries": 0,
+    "walletsRestored": 0
+  },
+  "message": "Trip cancelled and wallets reversed"
+}
+
+---
+
+IMPORTANT RULES FOR THIS TASK:
+- Cancel reversal must be wrapped in a 
+  single database transaction
+- Reversal amounts stored as negative integers 
+  in wallet_ledger (e.g. -500000 not 500000)
+- Do not hard delete anything
+- Do not modify wallet read endpoints
+- Do not modify auth system
+
+---
+
+After completing run these tests in order 
+and show actual responses:
+
+TEST 1: Start trip as driver
+PATCH /api/trips/<LAG-001-AA trip id>/start
+Use driver1 token
+Expected: 200, status: "in_transit"
+
+TEST 2: Try to start same trip again
+Expected: 409 "Trip cannot be started from 
+its current status"
+
+TEST 3: Try to start trip with wrong driver
+PATCH /api/trips/<LAG-002-AA trip id>/start
+Use driver1 token (who is not assigned to LAG-002-AA)
+Expected: 403 "You are not assigned to this trip"
+
+TEST 4: Complete the trip
+PATCH /api/trips/<LAG-001-AA trip id>/complete
+Use driver1 token
+Expected: 200, status: "completed"
+
+TEST 5: Cancel LAG-002-AA trip (still in 'created')
+PATCH /api/trips/<LAG-002-AA trip id>/cancel
+Use super_admin token
+Expected: 200, wallets reversed
+
+TEST 6: Verify wallet balances after cancellation
+GET /api/wallets/all with super_admin token
+Lagos should drop from 1,300,000 to 500,000
+(LAG-002-AA loading 500k + unloading 300k reversed)
+Kano should stay at 300,000
+Alpha should drop from 200,000 to 100,000
+Beta should drop from 150,000 to 75,000
+Grand total should drop from 1,950,000 to 975,000
+
+Show actual JSON for all 6 tests.
