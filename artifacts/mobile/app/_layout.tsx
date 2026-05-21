@@ -49,18 +49,25 @@ function RootLayoutNav() {
   useEffect(() => {
     if (isLoading) return;
 
-    const inAuthGroup = segments[0] === "(auth)";
-    const inPublicGroup = segments[0] === "(public)";
+    const currentGroup = segments[0] as string | undefined;
+    const inAuthGroup = currentGroup === "(auth)";
+    const inPublicGroup = currentGroup === "(public)";
 
-    if (!user && !inAuthGroup && !inPublicGroup) {
-      router.replace("/(auth)/login");
-    } else if (user && inAuthGroup) {
-      if (user.role === "super_admin") {
-        router.replace("/(superadmin)/");
-      } else if (user.role === "admin") {
-        router.replace("/(admin)/");
-      } else if (user.role === "driver") {
-        router.replace("/(driver)/");
+    if (!user) {
+      // Unauthenticated: only auth group and public lookup are allowed
+      if (!inAuthGroup && !inPublicGroup) {
+        router.replace("/(auth)/login");
+      }
+    } else {
+      // Authenticated: must be in the correct role group (public is also allowed)
+      const roleGroup =
+        user.role === "super_admin" ? "(superadmin)" :
+        user.role === "admin"       ? "(admin)"       : "(driver)";
+
+      if (currentGroup !== roleGroup && !inPublicGroup) {
+        if (user.role === "super_admin") router.replace("/(superadmin)");
+        else if (user.role === "admin")  router.replace("/(admin)");
+        else                             router.replace("/(driver)");
       }
     }
   }, [user, isLoading, segments]);

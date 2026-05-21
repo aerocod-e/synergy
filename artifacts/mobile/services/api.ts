@@ -32,27 +32,33 @@ export async function apiRequest(
   const response = await fetch(url, reqOptions);
 
   if (response.status === 401 && requiresAuth) {
+    // Step 1: attempt refresh — AUTH_EXPIRED only if the refresh call itself fails
     try {
       const refreshRes = await fetch(API_BASE_URL + '/api/auth/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
       });
-      if (!refreshRes.ok) throw new Error('Refresh failed');
+      if (!refreshRes.ok) {
+        clearTokens();
+        throw { error: 'AUTH_EXPIRED', message: 'Session expired' };
+      }
       const refreshJson = await refreshRes.json();
       setTokens(refreshJson.data.accessToken, refreshJson.data.refreshToken);
-
-      const retryHeaders = { ...headers, Authorization: `Bearer ${accessToken}` };
-      const retryRes = await fetch(url, { ...reqOptions, headers: retryHeaders });
-      const retryJson = await retryRes.json();
-      if (!retryRes.ok) {
-        throw { error: retryJson.error ?? 'REQUEST_FAILED', message: retryJson.message ?? 'Request failed' };
-      }
-      return retryJson.data;
-    } catch {
+    } catch (err: any) {
+      if (err?.error) throw err; // already structured, re-throw as-is
       clearTokens();
       throw { error: 'AUTH_EXPIRED', message: 'Session expired' };
     }
+
+    // Step 2: retry original request with new token; propagate errors normally
+    const retryHeaders = { ...headers, Authorization: `Bearer ${accessToken}` };
+    const retryRes = await fetch(url, { ...reqOptions, headers: retryHeaders });
+    const retryJson = await retryRes.json();
+    if (!retryRes.ok) {
+      throw { error: retryJson.error ?? 'REQUEST_FAILED', message: retryJson.message ?? 'Request failed' };
+    }
+    return retryJson.data;
   }
 
   const json = await response.json();
