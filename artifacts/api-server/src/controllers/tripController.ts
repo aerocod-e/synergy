@@ -305,3 +305,225 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
     client.release();
   }
 }
+
+export async function startTrip(req: Request, res: Response): Promise<void> {
+  const { tripId } = req.params as { tripId: string };
+  const callerId = req.user!.userId;
+
+  try {
+    const { rows } = await pool.query<{
+      id: string;
+      driver_id: string | null;
+      status: string;
+    }>(
+      `SELECT id, driver_id, status FROM trips WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+      [tripId]
+    );
+
+    if (rows.length === 0) {
+      res.status(404).json({ error: "NOT_FOUND", message: "Trip not found" });
+      return;
+    }
+
+    const trip = rows[0]!;
+
+    if (trip.driver_id !== callerId) {
+      res.status(403).json({ error: "FORBIDDEN", message: "You are not assigned to this trip" });
+      return;
+    }
+
+    if (trip.status !== "created") {
+      res.status(409).json({ error: "CONFLICT", message: "Trip cannot be started from its current status" });
+      return;
+    }
+
+    await pool.query(
+      `UPDATE trips SET status = 'in_transit', updated_at = NOW() WHERE id = $1`,
+      [tripId]
+    );
+
+    const { rows: [event] } = await pool.query<{ created_at: Date }>(
+      `INSERT INTO trip_events (trip_id, event_type, performed_by, metadata)
+       VALUES ($1, 'started', $2, $3::jsonb)
+       RETURNING created_at`,
+      [tripId, callerId, JSON.stringify({ previousStatus: "created" })]
+    );
+
+    res.json({
+      data: {
+        tripId,
+        status: "in_transit",
+        startedAt: event!.created_at,
+      },
+      message: "Trip started",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to start trip" });
+  }
+}
+
+export async function completeTrip(req: Request, res: Response): Promise<void> {
+  const { tripId } = req.params as { tripId: string };
+  const callerId = req.user!.userId;
+
+  try {
+    const { rows } = await pool.query<{
+      id: string;
+      driver_id: string | null;
+      status: string;
+    }>(
+      `SELECT id, driver_id, status FROM trips WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+      [tripId]
+    );
+
+    if (rows.length === 0) {
+      res.status(404).json({ error: "NOT_FOUND", message: "Trip not found" });
+      return;
+    }
+
+    const trip = rows[0]!;
+
+    if (trip.driver_id !== callerId) {
+      res.status(403).json({ error: "FORBIDDEN", message: "You are not assigned to this trip" });
+      return;
+    }
+
+    if (trip.status !== "in_transit") {
+      res.status(409).json({ error: "CONFLICT", message: "Trip cannot be completed from its current status" });
+      return;
+    }
+
+    await pool.query(
+      `UPDATE trips SET status = 'completed', updated_at = NOW() WHERE id = $1`,
+      [tripId]
+    );
+
+    const { rows: [event] } = await pool.query<{ created_at: Date }>(
+      `INSERT INTO trip_events (trip_id, event_type, performed_by, metadata)
+       VALUES ($1, 'completed', $2, $3::jsonb)
+       RETURNING created_at`,
+      [tripId, callerId, JSON.stringify({ previousStatus: "in_transit" })]
+    );
+
+    res.json({
+      data: {
+        tripId,
+        status: "completed",
+        completedAt: event!.created_at,
+      },
+      message: "Trip completed",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to complete trip" });
+  }
+}
+
+export async function cancelTrip(req: Request, res: Response): Promise<void> {
+  const { tripId } = req.params as { tripId: string };
+  const callerId = req.user!.userId;
+
+  const client = await pool.connect();
+  try {
+    const { rows } = await client.query<{
+      id: string;
+      status: string;
+    }>(
+      `SELECT id, status FROM trips WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+      [tripId]
+    );
+
+    if (rows.length === 0) {
+      res.status(404).json({ error: "NOT_FOUND", message: "Trip not found" });
+      return;
+    }
+
+    const trip = rows[0]!;
+
+    if (trip.status === "cancelled" || trip.status === "completed") {
+      res.status(409).json({ error: "CONFLICT", message: "Trip cannot be cancelled from its current status" });
+      return;
+    }
+
+    const previousStatus = trip.status;
+
+    // Fetch all credit ledger entries for this trip
+    const { rows: creditEntries } = await client.query<{
+      id: string;
+      wallet_id: string;
+      trip_fee_id: string;
+      amount: number;
+    }>(
+      `SELECT id, wallet_id, trip_fee_id, amount
+       FROM wallet_ledger
+       WHERE trip_id = $1 AND entry_type = 'credit'`,
+      [tripId]
+    );
+
+    await client.query("BEGIN");
+
+    let reversedEntries = 0;
+    let walletsRestored = 0;
+
+    // STEP A: Reverse each credit
+    for (const entry of creditEntries) {
+      await client.query(
+        `INSERT INTO wallet_ledger
+           (wallet_id, trip_id, trip_fee_id, amount, entry_type, cleared)
+         VALUES ($1, $2, $3, $4, 'reversal', false)`,
+        [entry.wallet_id, tripId, entry.trip_fee_id, -entry.amount]
+      );
+      reversedEntries++;
+
+      const walletRes = await client.query(
+        `UPDATE wallets
+         SET total_collected = total_collected - $1,
+             updated_at = NOW()
+         WHERE id = $2`,
+        [entry.amount, entry.wallet_id]
+      );
+      if ((walletRes.rowCount ?? 0) !== 1) {
+        throw new Error(`Wallet update failed for wallet ${entry.wallet_id}`);
+      }
+      walletsRestored += walletRes.rowCount ?? 0;
+    }
+
+    // STEP B: Soft-cancel the trip
+    await client.query(
+      `UPDATE trips
+       SET status = 'cancelled', deleted_at = NOW(), updated_at = NOW()
+       WHERE id = $1`,
+      [tripId]
+    );
+
+    // STEP C: Insert cancellation event
+    await client.query(
+      `INSERT INTO trip_events (trip_id, event_type, performed_by, metadata)
+       VALUES ($1, 'cancelled', $2, $3::jsonb)`,
+      [
+        tripId,
+        callerId,
+        JSON.stringify({ previousStatus, reversedEntries }),
+      ]
+    );
+
+    await client.query("COMMIT");
+
+    res.json({
+      data: {
+        tripId,
+        status: "cancelled",
+        reversedEntries,
+        walletsRestored,
+      },
+      message: "Trip cancelled and wallets reversed",
+    });
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to cancel trip" });
+  } finally {
+    client.release();
+  }
+}
