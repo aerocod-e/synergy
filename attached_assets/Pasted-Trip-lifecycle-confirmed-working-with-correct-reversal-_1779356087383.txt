@@ -1,0 +1,261 @@
+Trip lifecycle confirmed working with correct 
+reversal logic. Now build ONLY the final 
+backend endpoints: trip listing, the 
+unstarted trip notification flag, and the 
+public vehicle lookup. Do not touch any 
+existing endpoints.
+
+TASK 6: Trip List + Notification Flag + 
+Public Lookup
+
+Add to src/routes/trips.ts and
+src/controllers/tripController.ts
+
+Also create src/routes/lookup.ts and
+src/controllers/lookupController.ts
+
+---
+
+GET /api/trips
+Protected: authenticateToken
+Allowed roles: super_admin, driver
+
+Behavior differs by role:
+
+If super_admin:
+  Returns all trips where deleted_at IS NULL
+  Includes an "unstarted" flag on each trip
+  A trip is flagged unstarted if:
+    status = 'created'
+    AND created_at is more than 2 hours ago
+    (use current UTC time for comparison)
+
+If driver:
+  Returns only trips where 
+    driver_id = req.user.userId
+  No unstarted flag needed for driver view
+
+Query parameters (all optional):
+  status: 'created' | 'in_transit' | 
+          'completed' | 'cancelled'
+  page: number (default 1)
+  limit: number (default 20, max 100)
+
+Join trips with:
+  states AS loading_state ON loading_state_id
+  states AS unloading_state ON unloading_state_id
+  users AS driver ON driver_id
+
+Response:
+{
+  "data": {
+    "trips": [
+      {
+        "id": "...",
+        "vehicleNumber": "...",
+        "status": "...",
+        "loadingState": {
+          "id": "...",
+          "name": "...",
+          "code": "..."
+        },
+        "unloadingState": {
+          "id": "...",
+          "name": "...",
+          "code": "..."
+        },
+        "driver": {
+          "id": "...",
+          "email": "..."
+        },
+        "originDescription": "...",
+        "destinationDescription": "...",
+        "unstartedFlag": true | false | null,
+        "createdAt": "...",
+        "updatedAt": "..."
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 0,
+      "totalPages": 0
+    },
+    "unstartedCount": 0
+  },
+  "message": "Trips retrieved"
+}
+
+Note: unstartedFlag and unstartedCount are 
+only included in super_admin responses.
+For driver responses both fields are null.
+
+---
+
+GET /api/trips/:tripId
+Protected: authenticateToken
+Allowed roles: super_admin, driver
+
+Behavior differs by role:
+  super_admin: can fetch any trip
+  driver: can only fetch trips where 
+    driver_id = req.user.userId
+    return 403 if trip belongs to another driver
+
+Returns full trip detail including:
+  - All fields from trip list above
+  - fees: array of trip_fees records for this trip
+    each with recipientType, recipientId, 
+    feeType, amount, amountNaira
+  - events: array of trip_events ordered 
+    by created_at ASC
+    each with eventType, performedBy 
+    (user email), metadata, createdAt
+
+Response:
+{
+  "data": {
+    "trip": {
+      ...all list fields...,
+      "fees": [...],
+      "events": [...]
+    }
+  },
+  "message": "Trip retrieved"
+}
+
+---
+
+GET /api/lookup/vehicle/:vehicleNumber
+NO authentication required (public endpoint)
+Rate limited: 30 requests per minute per IP
+
+Logic:
+  Find trip where:
+    vehicle_number = vehicleNumber (case insensitive)
+    deleted_at IS NULL
+    status IN ('created', 'in_transit', 'completed')
+  
+  If multiple trips exist for same vehicle number
+  (which should not happen with active trips but 
+  could with completed ones) return the most 
+  recent one by created_at DESC
+
+  If no trip found: return 404
+    { "error": "NOT_FOUND", 
+      "message": "No active trip found for 
+      this vehicle" }
+
+Response 200:
+{
+  "data": {
+    "vehicleNumber": "...",
+    "status": "created" | "in_transit" | 
+              "completed",
+    "loadingState": {
+      "name": "...",
+      "code": "..."
+    },
+    "unloadingState": {
+      "name": "...",
+      "code": "..."
+    },
+    "driver": {
+      "id": "...",
+      "email": "..."
+    },
+    "fees": {
+      "loadingFeePaid": true,
+      "unloadingFeePaid": true
+    },
+    "createdAt": "..."
+  },
+  "message": "Vehicle trip status retrieved"
+}
+
+Note on fees.loadingFeePaid and 
+fees.unloadingFeePaid:
+  true if a trip_fees record exists for this 
+  trip with the matching fee_type
+  This indicates the fee was allocated at 
+  trip creation
+  For prototype scope this equals "paid"
+
+---
+
+Create src/middleware/rateLimiter.ts
+  Use the 'express-rate-limit' package
+  Create two limiters:
+
+  publicLookupLimiter:
+    windowMs: 60 * 1000 (1 minute)
+    max: 30
+    message: { 
+      error: "RATE_LIMITED",
+      message: "Too many requests, 
+      please try again later" 
+    }
+
+  apiLimiter (apply globally):
+    windowMs: 60 * 1000
+    max: 100
+    Apply this to all /api routes in app.ts
+
+---
+
+Register routes in app.ts:
+  app.use('/api/trips', tripsRouter)
+    (already registered, just add new routes)
+  app.use('/api/lookup', lookupRouter)
+  Apply apiLimiter globally to all /api routes
+  Apply publicLookupLimiter specifically to
+  GET /api/lookup/vehicle/:vehicleNumber
+
+---
+
+IMPORTANT RULES FOR THIS TASK:
+  - Public lookup endpoint has NO auth middleware
+  - Rate limiter must be applied before 
+    route handlers
+  - Do not modify any existing endpoints
+  - unstartedFlag threshold is 2 hours, 
+    hardcoded for prototype
+
+---
+
+After completing run these tests and show 
+actual responses:
+
+TEST 1: GET /api/trips as super_admin
+Expected: 2 trips returned (LAG-001-AA 
+completed, LAG-002-AA cancelled)
+Confirm loadingState and unloadingState 
+names are populated
+Confirm unstartedCount is in response
+
+TEST 2: GET /api/trips as driver1
+Expected: only LAG-001-AA visible 
+(driver1's trip)
+Confirm LAG-002-AA not visible 
+(assigned to driver2)
+
+TEST 3: GET /api/trips/:tripId for 
+LAG-001-AA as super_admin
+Expected: full detail with fees array 
+and events array
+Confirm events show: created, started, 
+completed in order
+
+TEST 4: GET /api/lookup/vehicle/LAG-001-AA
+No auth header
+Expected: 200 with payment status, 
+state names, driver details
+loadingFeePaid: true
+unloadingFeePaid: true
+
+TEST 5: GET /api/lookup/vehicle/FAKE-999
+No auth header
+Expected: 404 "No active trip found 
+for this vehicle"
+
+Show actual JSON for all 5 tests.
