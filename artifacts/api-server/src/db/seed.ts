@@ -72,9 +72,9 @@ async function seed(): Promise<void> {
         statesInserted++;
       }
     }
-    console.log(`✓ States seeded: ${statesInserted}`);
+    console.log(`✓ States upserted: ${statesInserted}`);
 
-    // ── Stakeholders ──────────────────────────────────────────────────────
+    // ── Stakeholders — conflict on name (UNIQUE constraint) ───────────────
     let stakeholdersInserted = 0;
     const stakeholderIds: string[] = [];
 
@@ -82,27 +82,17 @@ async function seed(): Promise<void> {
       const res = await client.query<{ id: string }>(
         `INSERT INTO stakeholders (name, description)
          VALUES ($1, $2)
-         ON CONFLICT DO NOTHING
+         ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description
          RETURNING id`,
         [sh.name, sh.description],
       );
-      if (res.rows.length > 0) {
-        const id = res.rows[0]?.id;
-        if (id) {
-          stakeholderIds.push(id);
-          stakeholdersInserted++;
-        }
-      } else {
-        // Already exists — fetch it
-        const existing = await client.query<{ id: string }>(
-          `SELECT id FROM stakeholders WHERE name = $1`,
-          [sh.name],
-        );
-        const id = existing.rows[0]?.id;
-        if (id) stakeholderIds.push(id);
+      const id = res.rows[0]?.id;
+      if (id) {
+        stakeholderIds.push(id);
+        stakeholdersInserted++;
       }
     }
-    console.log(`✓ Stakeholders seeded: ${stakeholdersInserted}`);
+    console.log(`✓ Stakeholders upserted: ${stakeholdersInserted}`);
 
     // ── Wallets (one per state + one per stakeholder) ─────────────────────
     let walletsInserted = 0;
