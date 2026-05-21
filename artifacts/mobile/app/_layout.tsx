@@ -9,6 +9,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { createContext, useContext, useEffect } from "react";
+import { ActivityIndicator, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -21,11 +22,12 @@ SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
-// ── Auth context (minimal — persistence added in next task) ─────────────────
+// ── Auth context ─────────────────────────────────────────────────────────────
 interface AuthContextValue {
   user: AuthUser | null;
   tokens: AuthTokens | null;
   isLoading: boolean;
+  isInitializing: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -34,6 +36,7 @@ export const AuthContext = createContext<AuthContextValue>({
   user: null,
   tokens: null,
   isLoading: false,
+  isInitializing: true,
   login: async () => {},
   logout: async () => {},
 });
@@ -42,11 +45,12 @@ export const useAuthContext = () => useContext(AuthContext);
 
 // ── Root navigator with auth-based redirect ─────────────────────────────────
 function RootLayoutNav() {
-  const { user, isLoading } = useContext(AuthContext);
+  const { user, isLoading, isInitializing } = useContext(AuthContext);
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
+    if (isInitializing) return;
     if (isLoading) return;
 
     const currentGroup = segments[0] as string | undefined;
@@ -54,12 +58,10 @@ function RootLayoutNav() {
     const inPublicGroup = currentGroup === "(public)";
 
     if (!user) {
-      // Unauthenticated: only auth group and public lookup are allowed
       if (!inAuthGroup && !inPublicGroup) {
         router.replace("/(auth)/login");
       }
     } else {
-      // Authenticated: must be in the correct role group (public is also allowed)
       const roleGroup =
         user.role === "super_admin" ? "(superadmin)" :
         user.role === "admin"       ? "(admin)"       : "(driver)";
@@ -70,7 +72,15 @@ function RootLayoutNav() {
         else                             router.replace("/(driver)");
       }
     }
-  }, [user, isLoading, segments]);
+  }, [user, isLoading, isInitializing, segments]);
+
+  if (isInitializing) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
 
   return (
     <Stack screenOptions={{ headerBackTitle: "Back" }}>
@@ -103,7 +113,6 @@ export default function RootLayout() {
   }, [fontsLoaded, fontError]);
 
   if (!fontsLoaded && !fontError) return null;
-  if (auth.isLoading) return null;
 
   return (
     <SafeAreaProvider>
