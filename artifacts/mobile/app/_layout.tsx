@@ -1,0 +1,116 @@
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  useFonts,
+} from "@expo-google-fonts/inter";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Stack, useRouter, useSegments } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
+import React, { createContext, useContext, useEffect } from "react";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { KeyboardProvider } from "react-native-keyboard-controller";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { useAuth } from "@/hooks/useAuth";
+import { AuthTokens, AuthUser } from "@/types";
+
+SplashScreen.preventAutoHideAsync();
+
+const queryClient = new QueryClient();
+
+// ── Auth context (minimal — persistence added in next task) ─────────────────
+interface AuthContextValue {
+  user: AuthUser | null;
+  tokens: AuthTokens | null;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+}
+
+export const AuthContext = createContext<AuthContextValue>({
+  user: null,
+  tokens: null,
+  isLoading: false,
+  login: async () => {},
+  logout: async () => {},
+});
+
+export const useAuthContext = () => useContext(AuthContext);
+
+// ── Root navigator with auth-based redirect ─────────────────────────────────
+function RootLayoutNav() {
+  const { user, isLoading } = useContext(AuthContext);
+  const segments = useSegments();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    const inAuthGroup = segments[0] === "(auth)";
+    const inPublicGroup = segments[0] === "(public)";
+
+    if (!user && !inAuthGroup && !inPublicGroup) {
+      router.replace("/(auth)/login");
+    } else if (user && inAuthGroup) {
+      if (user.role === "super_admin") {
+        router.replace("/(superadmin)/");
+      } else if (user.role === "admin") {
+        router.replace("/(admin)/");
+      } else if (user.role === "driver") {
+        router.replace("/(driver)/");
+      }
+    }
+  }, [user, isLoading, segments]);
+
+  return (
+    <Stack screenOptions={{ headerBackTitle: "Back" }}>
+      <Stack.Screen name="(auth)"        options={{ headerShown: false }} />
+      <Stack.Screen name="(superadmin)"  options={{ headerShown: false }} />
+      <Stack.Screen name="(admin)"       options={{ headerShown: false }} />
+      <Stack.Screen name="(driver)"      options={{ headerShown: false }} />
+      <Stack.Screen name="(public)"      options={{ headerShown: false }} />
+      <Stack.Screen name="(tabs)"        options={{ headerShown: false }} />
+      <Stack.Screen name="+not-found" />
+    </Stack>
+  );
+}
+
+// ── Root layout ─────────────────────────────────────────────────────────────
+export default function RootLayout() {
+  const auth = useAuth();
+
+  const [fontsLoaded, fontError] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
+
+  useEffect(() => {
+    if (fontsLoaded || fontError) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded, fontError]);
+
+  if (!fontsLoaded && !fontError) return null;
+  if (auth.isLoading) return null;
+
+  return (
+    <SafeAreaProvider>
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <KeyboardProvider>
+              <AuthContext.Provider value={auth}>
+                <RootLayoutNav />
+              </AuthContext.Provider>
+            </KeyboardProvider>
+          </GestureHandlerRootView>
+        </QueryClientProvider>
+      </ErrorBoundary>
+    </SafeAreaProvider>
+  );
+}
