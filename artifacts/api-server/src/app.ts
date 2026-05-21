@@ -1,6 +1,7 @@
 import express, { type Express, type Request, type Response } from "express";
 import authRouter from "./routes/auth.js";
 import tripsRouter from "./routes/trips.js";
+import walletsRouter from "./routes/wallets.js";
 
 const app: Express = express();
 
@@ -13,5 +14,6 @@ app.get("/health", (_req: Request, res: Response) => {
 
 app.use("/api/auth", authRouter);
 app.use("/api/trips", tripsRouter);
+app.use("/api/wallets", walletsRouter);
 
 export default app;
