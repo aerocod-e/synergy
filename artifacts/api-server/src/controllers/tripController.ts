@@ -68,7 +68,11 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const enabledStakeholders = (fees.stakeholders ?? []).filter((s) => s.enabled);
+  if (!Array.isArray(fees.stakeholders)) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "fees.stakeholders must be an array" });
+    return;
+  }
+  const enabledStakeholders = fees.stakeholders.filter((s) => s.enabled);
   for (const s of enabledStakeholders) {
     if (!s.stakeholderId || typeof s.stakeholderId !== "string") {
       res.status(400).json({ error: "BAD_REQUEST", message: "Each enabled stakeholder must have a valid stakeholderId" });
@@ -229,16 +233,21 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
 
       totalFees += entry.amount;
 
-      // STEP C: Credit wallet + ledger entry
-      await client.query(
+      // STEP C: Credit wallet + ledger entry — both must match exactly 1 row
+      const walletUpdate = await client.query(
         `UPDATE wallets
          SET total_collected = total_collected + $1,
              updated_at = NOW()
          WHERE owner_type = $2 AND owner_id = $3`,
         [entry.amount, entry.recipientType, entry.recipientId]
       );
+      if ((walletUpdate.rowCount ?? 0) !== 1) {
+        throw new Error(
+          `Wallet not found for ${entry.recipientType} ${entry.recipientId} — cannot credit fee`
+        );
+      }
 
-      await client.query(
+      const ledgerInsert = await client.query(
         `INSERT INTO wallet_ledger
            (wallet_id, trip_id, trip_fee_id, amount, entry_type, cleared)
          SELECT w.id, $1, $2, $3, 'credit', false
@@ -246,8 +255,13 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
          WHERE w.owner_type = $4 AND w.owner_id = $5`,
         [trip.id, fee.id, entry.amount, entry.recipientType, entry.recipientId]
       );
+      if ((ledgerInsert.rowCount ?? 0) !== 1) {
+        throw new Error(
+          `Ledger insert failed for ${entry.recipientType} ${entry.recipientId}`
+        );
+      }
 
-      walletsUpdated++;
+      walletsUpdated += walletUpdate.rowCount ?? 0;
     }
 
     // STEP D: Trip event
