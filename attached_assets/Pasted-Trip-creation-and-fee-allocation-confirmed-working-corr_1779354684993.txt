@@ -1,0 +1,186 @@
+Trip creation and fee allocation confirmed 
+working correctly. Now build ONLY the wallet 
+read endpoints. Do not touch trips, auth, 
+or any other existing code.
+
+TASK 4: Wallet Read Endpoints
+
+Create src/routes/wallets.ts and
+src/controllers/walletController.ts
+
+All endpoints in this task are READ ONLY.
+No data is modified in any of these endpoints.
+
+---
+
+GET /api/wallets/my
+Protected: authenticateToken
+Allowed roles: admin only
+Logic:
+  Read req.user.entityType and req.user.entityId
+  Find the wallet where:
+    owner_type = entityType
+    owner_id = entityId
+  Return wallet with total_collected
+  Return 404 if wallet not found
+
+Response:
+{
+  "data": {
+    "wallet": {
+      "id": "...",
+      "ownerType": "state" | "stakeholder",
+      "ownerId": "...",
+      "totalCollected": 0,
+      "totalCollectedNaira": "0.00"
+    }
+  },
+  "message": "Wallet retrieved"
+}
+
+Note: totalCollectedNaira is totalCollected 
+divided by 100, formatted to 2 decimal places.
+This is the ONLY place in the backend where 
+kobo is converted to Naira. All other responses 
+keep amounts in kobo.
+
+---
+
+GET /api/wallets/my/ledger
+Protected: authenticateToken
+Allowed roles: admin only
+Query parameters (all optional):
+  startDate: ISO date string (e.g. 2026-05-21)
+  endDate: ISO date string
+  feeType: 'loading' | 'unloading' | 
+           'stakeholder_fee'
+  page: number (default 1)
+  limit: number (default 20, max 100)
+
+Logic:
+  Find wallet by req.user.entityType 
+  and req.user.entityId
+  
+  Query wallet_ledger joined with trip_fees 
+  and trips:
+    WHERE wallet_ledger.wallet_id = wallet.id
+    AND wallet_ledger entries ordered by 
+        created_at DESC
+    Apply date filter on wallet_ledger.created_at
+    Apply feeType filter on trip_fees.fee_type
+    Apply pagination
+
+Response:
+{
+  "data": {
+    "entries": [
+      {
+        "ledgerId": "...",
+        "tripId": "...",
+        "vehicleNumber": "...",
+        "feeType": "loading" | "unloading" | 
+                   "stakeholder_fee",
+        "amount": 0,
+        "amountNaira": "0.00",
+        "entryType": "credit" | "reversal",
+        "cleared": false,
+        "clearedAt": null,
+        "createdAt": "..."
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 0,
+      "totalPages": 0
+    },
+    "summary": {
+      "totalCredits": 0,
+      "totalReversals": 0,
+      "netTotal": 0
+    }
+  },
+  "message": "Ledger retrieved"
+}
+
+---
+
+GET /api/wallets/all
+Protected: authenticateToken
+Allowed roles: super_admin only
+Logic:
+  Return all wallets with their owner details
+  Join states or stakeholders table based 
+  on owner_type to get owner name
+  Order by owner_type ASC, then owner name ASC
+
+Response:
+{
+  "data": {
+    "wallets": [
+      {
+        "id": "...",
+        "ownerType": "state" | "stakeholder",
+        "ownerId": "...",
+        "ownerName": "...",
+        "totalCollected": 0,
+        "totalCollectedNaira": "0.00"
+      }
+    ],
+    "summary": {
+      "totalStates": 0,
+      "totalStakeholders": 0,
+      "grandTotal": 0,
+      "grandTotalNaira": "0.00"
+    }
+  },
+  "message": "All wallets retrieved"
+}
+
+---
+
+Register wallets router in src/index.ts 
+or src/app.ts:
+  app.use('/api/wallets', walletsRouter)
+
+---
+
+IMPORTANT RULES FOR THIS TASK:
+- No data modification whatsoever
+- Do not modify any existing files except 
+  to register the new router
+- Naira conversion (divide by 100) only in 
+  response formatting, never in DB queries
+- All monetary values in DB queries and 
+  calculations stay in kobo
+
+---
+
+After completing, run these tests and 
+show actual responses:
+
+TEST 1: GET /api/wallets/my
+Use the Lagos admin token
+Expected: Lagos wallet with 
+  totalCollected: 1300000
+  totalCollectedNaira: "13000.00"
+
+TEST 2: GET /api/wallets/my/ledger
+Use the Lagos admin token, no filters
+Expected: 3 ledger entries
+(2 from same-state trip, 1 from inter-state)
+Confirm entries show correct vehicleNumber, 
+feeType, and amount for each
+
+TEST 3: GET /api/wallets/my/ledger?feeType=loading
+Use Lagos admin token
+Expected: 2 entries only (both loading fees)
+
+TEST 4: GET /api/wallets/all
+Use super_admin token
+Expected: 40 wallets total
+Confirm Lagos, Kano, Alpha, Beta balances 
+match what we verified in Step 3
+Confirm all other wallets show 0
+
+Show actual JSON for all 4 tests.
