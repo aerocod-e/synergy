@@ -1,0 +1,196 @@
+Your first task is ONLY the following. Do not build 
+any routes, controllers, or auth logic yet.
+
+TASK 1: Database Schema + Migration + Seed
+
+Create /src/db/migrate.js that creates these tables 
+in this exact order (respect foreign key dependencies):
+
+TABLE: users
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  email VARCHAR(255) UNIQUE NOT NULL
+  password_hash TEXT NOT NULL
+  role VARCHAR(50) NOT NULL 
+    -- allowed values: 'super_admin', 'admin', 'driver'
+  entity_type VARCHAR(50) 
+    -- allowed values: 'state', 'stakeholder', null
+    -- null for super_admin and driver roles
+  entity_id UUID 
+    -- references states.id or stakeholders.id 
+       depending on entity_type
+    -- null for super_admin and driver roles
+  is_active BOOLEAN DEFAULT true
+  deleted_at TIMESTAMP
+  created_at TIMESTAMP DEFAULT NOW()
+  updated_at TIMESTAMP DEFAULT NOW()
+
+TABLE: states
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  name VARCHAR(100) NOT NULL
+  code VARCHAR(10) UNIQUE NOT NULL
+  created_at TIMESTAMP DEFAULT NOW()
+  updated_at TIMESTAMP DEFAULT NOW()
+
+TABLE: stakeholders
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  name VARCHAR(100) NOT NULL
+  description TEXT
+  is_active BOOLEAN DEFAULT true
+  created_at TIMESTAMP DEFAULT NOW()
+  updated_at TIMESTAMP DEFAULT NOW()
+
+TABLE: trips
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  vehicle_number VARCHAR(50) NOT NULL
+  driver_id UUID REFERENCES users(id)
+  loading_state_id UUID REFERENCES states(id)
+  unloading_state_id UUID REFERENCES states(id)
+  origin_description TEXT
+  destination_description TEXT
+  status VARCHAR(50) NOT NULL DEFAULT 'created'
+    -- allowed values: 'created', 'in_transit', 
+       'completed', 'cancelled'
+  created_by UUID REFERENCES users(id)
+  deleted_at TIMESTAMP
+  created_at TIMESTAMP DEFAULT NOW()
+  updated_at TIMESTAMP DEFAULT NOW()
+
+TABLE: trip_fees
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  trip_id UUID REFERENCES trips(id)
+  recipient_type VARCHAR(50) NOT NULL
+    -- allowed values: 'state', 'stakeholder'
+  recipient_id UUID NOT NULL
+    -- references states.id or stakeholders.id
+  fee_type VARCHAR(50) NOT NULL
+    -- allowed values: 'loading', 'unloading', 
+       'stakeholder_fee'
+  amount INTEGER NOT NULL
+    -- stored in kobo, never floats
+  created_at TIMESTAMP DEFAULT NOW()
+  updated_at TIMESTAMP DEFAULT NOW()
+
+TABLE: wallets
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  owner_type VARCHAR(50) NOT NULL
+    -- allowed values: 'state', 'stakeholder'
+  owner_id UUID NOT NULL
+  total_collected INTEGER NOT NULL DEFAULT 0
+    -- running total in kobo
+  created_at TIMESTAMP DEFAULT NOW()
+  updated_at TIMESTAMP DEFAULT NOW()
+  UNIQUE(owner_type, owner_id)
+
+TABLE: wallet_ledger
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  wallet_id UUID REFERENCES wallets(id)
+  trip_id UUID REFERENCES trips(id)
+  trip_fee_id UUID REFERENCES trip_fees(id)
+  amount INTEGER NOT NULL
+    -- positive for credit, negative for reversal
+  entry_type VARCHAR(50) NOT NULL
+    -- allowed values: 'credit', 'reversal'
+  cleared BOOLEAN DEFAULT false
+  cleared_at TIMESTAMP
+  created_at TIMESTAMP DEFAULT NOW()
+  updated_at TIMESTAMP DEFAULT NOW()
+
+TABLE: trip_events
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  trip_id UUID REFERENCES trips(id)
+  event_type VARCHAR(50) NOT NULL
+    -- allowed values: 'created', 'started', 
+       'completed', 'cancelled', 'edited'
+  performed_by UUID REFERENCES users(id)
+  metadata JSONB
+  created_at TIMESTAMP DEFAULT NOW()
+
+---
+
+Create /src/db/seed.js that inserts exactly this data:
+
+STATES: All 37 Nigerian states + FCT with their 
+correct 2-3 letter codes. Example format:
+  { name: 'Lagos', code: 'LG' }
+  { name: 'Kano', code: 'KN' }
+  { name: 'FCT Abuja', code: 'FCT' }
+  (fill all 37)
+
+STAKEHOLDERS: 3 placeholder records:
+  { name: 'Stakeholder Alpha', 
+    description: 'Placeholder stakeholder 1' }
+  { name: 'Stakeholder Beta', 
+    description: 'Placeholder stakeholder 2' }
+  { name: 'Stakeholder Gamma', 
+    description: 'Placeholder stakeholder 3' }
+
+WALLETS: Create one wallet record for each of the 
+37 states and each of the 3 stakeholders immediately 
+after seeding them. total_collected = 0 for all.
+
+USERS:
+  1 super_admin:
+    email: superadmin@synergy.com
+    password: Admin@1234
+    role: super_admin
+    entity_type: null
+    entity_id: null
+
+  3 admin accounts, one per stakeholder:
+    email: alpha.admin@synergy.com
+    email: beta.admin@synergy.com  
+    email: gamma.admin@synergy.com
+    password: Admin@1234 for all
+    role: admin
+    entity_type: stakeholder
+
+  5 state admin accounts for demo 
+  (pick Lagos, Kano, Rivers, FCT, Ogun):
+    email: lagos.admin@synergy.com
+    email: kano.admin@synergy.com
+    email: rivers.admin@synergy.com
+    email: fct.admin@synergy.com
+    email: ogun.admin@synergy.com
+    password: Admin@1234 for all
+    role: admin
+    entity_type: state
+
+  2 driver accounts:
+    email: driver1@synergy.com
+    email: driver2@synergy.com
+    password: Driver@1234 for all
+    role: driver
+    entity_type: null
+    entity_id: null
+
+Hash all passwords with bcrypt before inserting.
+
+---
+
+Create /src/db/connection.js:
+  PostgreSQL connection pool using pg library.
+  Read connection string from process.env.DATABASE_URL
+
+Create index.js:
+  Express app setup only.
+  Body parser middleware (json).
+  A single GET /health route that returns 
+  { status: 'ok', timestamp: new Date() }
+  Listen on process.env.PORT or 3000.
+  Do not add any other routes yet.
+
+Create .env.example:
+  DATABASE_URL=
+  JWT_SECRET=
+  JWT_REFRESH_SECRET=
+  PORT=3000
+
+---
+
+After creating all files, run migrate.js then 
+seed.js and confirm in the console that all tables 
+were created and all seed records were inserted.
+
+DO NOT build any auth routes, trip routes, 
+or any other endpoints yet. Only what is listed 
+above.
