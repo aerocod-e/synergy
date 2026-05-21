@@ -1,0 +1,121 @@
+The database and server are confirmed working. 
+Now build ONLY the authentication layer. 
+Do not touch any other routes or features.
+
+TASK 2: Auth Endpoints + Middleware
+
+Create src/utils/tokenUtils.ts
+  Two functions:
+  
+  generateTokens(userId: string, role: string, 
+    entityType: string | null, entityId: string | null)
+    Returns:
+      accessToken: JWT signed with JWT_SECRET, 
+        expires in 15 minutes
+        payload: { userId, role, entityType, entityId }
+      refreshToken: JWT signed with JWT_REFRESH_SECRET, 
+        expires in 7 days
+        payload: { userId }
+
+  verifyAccessToken(token: string)
+    Returns decoded payload or throws error
+
+---
+
+Create src/middleware/auth.ts
+  Middleware function: authenticateToken
+    Reads Authorization header: "Bearer <token>"
+    Verifies token using verifyAccessToken
+    Attaches decoded payload to req.user
+    Returns 401 if token missing or invalid
+
+---
+
+Create src/middleware/roleGuard.ts
+  Middleware factory: requireRole(...roles: string[])
+    Returns middleware that checks req.user.role 
+    is included in the allowed roles array
+    Returns 403 if role not allowed
+    Usage example: 
+      router.get('/something', 
+        authenticateToken, 
+        requireRole('super_admin'), 
+        controller)
+
+---
+
+Create src/routes/auth.ts and 
+src/controllers/authController.ts
+
+POST /api/auth/login
+  Body: { email: string, password: string }
+  Logic:
+    Find user by email in users table
+    Check is_active = true, deleted_at IS NULL
+    Compare password with bcrypt
+    If valid: return accessToken, refreshToken, 
+      and user object (id, email, role, 
+      entityType, entityId)
+    If invalid: return 401 with message 
+      "Invalid credentials"
+
+POST /api/auth/refresh
+  Body: { refreshToken: string }
+  Logic:
+    Verify refreshToken with JWT_REFRESH_SECRET
+    Look up user by id from token payload
+    Check user still exists and is_active = true
+    Generate new accessToken only (not new refreshToken)
+    Return new accessToken
+
+POST /api/auth/logout
+  Protected: authenticateToken required
+  Body: { refreshToken: string }
+  Logic: 
+    For prototype scope, just return 
+    { success: true, message: 'Logged out' }
+    Note in a comment that production would 
+    maintain a token blacklist or refresh 
+    token table
+
+GET /api/auth/me
+  Protected: authenticateToken required
+  Returns: req.user payload (userId, role, 
+    entityType, entityId)
+
+---
+
+Register auth routes in src/index.ts:
+  app.use('/api/auth', authRouter)
+
+---
+
+IMPORTANT RULES FOR THIS TASK:
+- Do not create any other routes
+- Do not modify any database tables or 
+  seed data
+- All error responses must follow this shape:
+  { error: string, message: string }
+- All success responses must follow this shape:
+  { data: any, message: string }
+- Add appropriate try/catch blocks in 
+  all controllers
+
+After completing, test these manually 
+and confirm results:
+
+1. POST /api/auth/login with 
+   { "email": "superadmin@synergy.com", 
+     "password": "Admin@1234" }
+   Should return tokens and user object 
+   with role: "super_admin"
+
+2. POST /api/auth/login with wrong password
+   Should return 401
+
+3. GET /api/auth/me with the access token 
+   from step 1 in Authorization header
+   Should return the user payload
+
+Show me the actual responses from all 
+3 tests.
