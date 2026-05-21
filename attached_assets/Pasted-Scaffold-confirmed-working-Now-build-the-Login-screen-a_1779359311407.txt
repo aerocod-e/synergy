@@ -1,0 +1,119 @@
+Scaffold confirmed working. Now build the 
+Login screen and add AsyncStorage token 
+persistence to the auth layer. 
+Do not build any other screens yet.
+
+TASK: Login Screen + Auth Persistence
+
+PART 1 — Add AsyncStorage persistence 
+to hooks/useAuth.ts
+
+Install @react-native-async-storage/async-storage
+
+Update hooks/useAuth.ts:
+  On successful login:
+    Store accessToken and refreshToken 
+    in AsyncStorage under keys:
+      '@synergy/accessToken'
+      '@synergy/refreshToken'
+    Store user object as JSON string under:
+      '@synergy/user'
+
+  Add a new boolean state: 
+    isInitializing: boolean (starts true)
+
+  On hook mount (useEffect with []):
+    Read all 3 keys from AsyncStorage
+    If tokens and user exist:
+      Call api.setTokens(accessToken, refreshToken)
+      Set user state from parsed JSON
+    Set isInitializing to false when done
+    Wrap in try/catch, on error just 
+    set isInitializing to false
+
+  On logout:
+    Remove all 3 AsyncStorage keys
+    Clear in-memory tokens via api.clearTokens()
+    Set user and tokens state to null
+
+  Export isInitializing from the hook
+
+Update app/_layout.tsx:
+  Import isInitializing from useAuth
+  While isInitializing is true:
+    Show a centered ActivityIndicator 
+    (use React Native's built-in one)
+    Do not redirect yet
+  Only run role-based redirect logic 
+  after isInitializing is false
+
+---
+
+PART 2 — Build the Login Screen
+
+Replace app/(auth)/login.tsx with a 
+real login screen.
+
+UI Requirements:
+  - App name at top: "Synergy Cargo Tax"
+    Subtitle: "Fleet Management System"
+  - Email input field
+    placeholder: "Email address"
+    keyboardType: email-address
+    autoCapitalize: none
+  - Password input field
+    placeholder: "Password"
+    secureTextEntry: true
+  - Login button
+    Text: "Sign In"
+    Shows ActivityIndicator while loading
+    Disabled while loading
+  - Error message display
+    Shows below the button in red
+    Only visible when there is an error
+  - No "Forgot password" or "Sign up" links
+    This is an internal system
+
+Behaviour:
+  On Sign In press:
+    Validate email and password are not empty
+    If empty: show "Please enter your email 
+    and password"
+    Call useAuth login(email, password)
+    On success: _layout.tsx handles redirect 
+    automatically based on role, login screen 
+    does not navigate manually
+    On error: show the error message from 
+    the API response
+    Always clear the error when user 
+    starts typing again
+
+Styling:
+  Use React Native StyleSheet only
+  No external UI libraries
+  Clean, minimal, professional
+  White background
+  Input fields with a light border
+  Primary button color: #1a6ec8 (blue)
+  Error text color: #c8401a (red)
+  Centered layout with padding
+
+---
+
+IMPORTANT RULES:
+  - No navigation logic inside login screen
+    _layout.tsx handles all redirects
+  - Do not modify services/api.ts
+  - Do not modify types/index.ts
+  - Do not build any other screens
+
+After completing, confirm:
+1. TypeScript compiles with zero errors
+2. Show me a screenshot or description 
+   of the login screen UI
+3. Confirm AsyncStorage keys are being 
+   set on login by adding a temporary 
+   console.log after storing tokens 
+   that prints "Tokens persisted to 
+   AsyncStorage" -- show me this appears 
+   in Metro logs when login is called
