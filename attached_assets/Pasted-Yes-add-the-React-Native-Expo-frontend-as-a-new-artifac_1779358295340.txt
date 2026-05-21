@@ -1,0 +1,204 @@
+Yes, add the React Native Expo frontend as a 
+new artifact in this monorepo at artifacts/mobile/
+
+Before you plan anything, confirm these details 
+about the existing structure:
+1. What is the exact path to the backend entry point?
+2. What port does the backend run on?
+3. What is the public URL of the backend on Replit?
+
+Then plan ONLY the following for the 
+artifacts/mobile/ setup. Do not build any 
+screens yet.
+
+TASK: Expo Frontend Scaffold
+
+1. Initialize a new Expo project with:
+   - TypeScript template
+   - Expo Router for navigation
+   - Located at artifacts/mobile/
+
+2. Create this folder structure inside 
+   artifacts/mobile/:
+   /app
+     /(auth)
+       login.tsx
+     /(superadmin)
+       index.tsx        
+     /(admin)
+       index.tsx        
+     /(driver)
+       index.tsx        
+     /(public)
+       lookup.tsx       
+     _layout.tsx        
+   /components
+     (empty, placeholder)
+   /services
+     api.ts             
+   /hooks
+     useAuth.ts         
+   /types
+     index.ts           
+   /constants
+     config.ts          
+
+3. Create constants/config.ts:
+   export const API_BASE_URL = 
+     process.env.EXPO_PUBLIC_API_URL ?? 
+     "http://localhost:3000"
+
+4. Create types/index.ts with these 
+   TypeScript types:
+
+   export type UserRole = 
+     'super_admin' | 'admin' | 'driver'
+
+   export type EntityType = 
+     'state' | 'stakeholder' | null
+
+   export interface AuthUser {
+     id: string
+     email: string
+     role: UserRole
+     entityType: EntityType
+     entityId: string | null
+   }
+
+   export interface AuthTokens {
+     accessToken: string
+     refreshToken: string
+   }
+
+   export type TripStatus = 
+     'created' | 'in_transit' | 
+     'completed' | 'cancelled'
+
+   export type FeeType = 
+     'loading' | 'unloading' | 
+     'stakeholder_fee'
+
+   export type RecipientType = 
+     'state' | 'stakeholder'
+
+   export interface Trip {
+     id: string
+     vehicleNumber: string
+     status: TripStatus
+     loadingState: { id: string; name: string; code: string }
+     unloadingState: { id: string; name: string; code: string }
+     driver: { id: string; email: string }
+     originDescription: string
+     destinationDescription: string
+     unstartedFlag: boolean | null
+     createdAt: string
+     updatedAt: string
+   }
+
+   export interface WalletLedgerEntry {
+     ledgerId: string
+     tripId: string
+     vehicleNumber: string
+     feeType: FeeType
+     amount: number
+     amountNaira: string
+     entryType: 'credit' | 'reversal'
+     cleared: boolean
+     clearedAt: string | null
+     createdAt: string
+   }
+
+5. Create services/api.ts:
+   A base API client with these functions:
+
+   - Store accessToken and refreshToken 
+     in memory (not AsyncStorage yet, 
+     we will add persistence in the 
+     auth step)
+
+   - async function apiRequest(
+       path: string,
+       options?: RequestInit,
+       requiresAuth = true
+     ): Promise<any>
+     
+     Builds full URL from API_BASE_URL + path
+     Adds Content-Type: application/json header
+     If requiresAuth adds Authorization: 
+       Bearer <accessToken> header
+     On 401 response: attempt one token 
+       refresh via POST /api/auth/refresh
+       If refresh succeeds: retry original 
+         request with new token
+       If refresh fails: clear tokens and 
+         throw error with code 'AUTH_EXPIRED'
+     Returns response.data from parsed JSON
+     Throws on non-2xx responses with the 
+       error and message from response body
+
+   - Export named functions that wrap 
+     apiRequest for each endpoint:
+
+     auth:
+       login(email, password)
+       logout(refreshToken)
+       getMe()
+
+     trips:
+       getTrips(params?)
+       getTripById(tripId)
+       createTrip(body)
+       startTrip(tripId)
+       completeTrip(tripId)
+       cancelTrip(tripId)
+
+     wallets:
+       getMyWallet()
+       getMyLedger(params?)
+       getAllWallets()
+
+     lookup:
+       lookupVehicle(vehicleNumber)
+
+6. Create hooks/useAuth.ts:
+   A React hook that provides:
+     user: AuthUser | null
+     tokens: AuthTokens | null
+     isLoading: boolean
+     login(email, password): Promise<void>
+     logout(): Promise<void>
+   
+   Use React state only for now.
+   We will add AsyncStorage persistence 
+   in the next step.
+
+7. Create app/_layout.tsx:
+   Root layout that:
+   - Wraps app in a simple auth context
+   - Checks if user is logged in
+   - If not logged in: redirects to 
+     /(auth)/login
+   - If logged in: redirects to correct 
+     home based on role:
+       super_admin → /(superadmin)/
+       admin       → /(admin)/
+       driver      → /(driver)/
+
+8. Each screen file (login, superadmin index, 
+   admin index, driver index, lookup) should 
+   just render a placeholder View with a Text 
+   showing the screen name. No real UI yet.
+
+9. Create a .env.example in artifacts/mobile/:
+   EXPO_PUBLIC_API_URL=https://your-backend-url
+
+DO NOT build any real screen UI yet.
+DO NOT add any navigation components beyond 
+the root layout redirect logic.
+DO NOT install any UI libraries yet.
+
+After completing confirm:
+1. The folder structure matches exactly
+2. TypeScript compiles without errors 
+   in artifacts/mobile/
+3. The Expo dev server starts successfully

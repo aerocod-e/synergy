@@ -1,0 +1,72 @@
+We are restructuring this project into a monorepo 
+to accommodate a React Native Expo frontend 
+alongside the existing backend.
+
+TASK: Restructure into monorepo layout.
+Do not change any backend logic, endpoints, 
+or database connections. Only move files 
+and update paths.
+
+TARGET STRUCTURE:
+/
+├── package.json         (new root package.json)
+├── .env.example         (move existing one here)
+└── backend/
+    ├── package.json     (existing package.json)
+    ├── tsconfig.json    (existing tsconfig.json)
+    └── src/
+        ├── db/
+        ├── middleware/
+        ├── routes/
+        ├── controllers/
+        ├── utils/
+        └── app.ts / index.ts
+
+STEPS TO FOLLOW IN ORDER:
+
+1. Create a /backend folder
+
+2. Move everything currently at root into 
+   /backend EXCEPT:
+   - .env (leave at root, Replit reads it there)
+   - .env.example (move to root)
+   - node_modules (do not touch)
+
+3. Create a new root package.json:
+{
+  "name": "synergy-cargo-tax-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "backend": "cd backend && npx ts-node src/app.ts",
+    "dev": "npm run backend"
+  }
+}
+
+We will add frontend and concurrently to this 
+root package.json in the next step. For now 
+only add the backend script.
+
+4. Update any internal import paths inside 
+   backend files if they broke due to the move. 
+   All imports inside /backend/src should be 
+   relative (../../db/connection etc) and should 
+   not need changes if they were already relative.
+
+5. Verify the backend still works after moving:
+   - Run the backend from the new location
+   - Hit GET /health and confirm it returns
+     { "status": "ok", "timestamp": "..." }
+   - Hit POST /api/auth/login with 
+     superadmin@synergy.com / Admin@1234
+     and confirm it returns tokens
+
+DO NOT:
+- Change any backend logic
+- Change any database queries
+- Change any environment variables
+- Create the frontend folder yet
+- Install any new packages yet
+
+Show me the /health and /login responses 
+after restructure to confirm nothing broke.
