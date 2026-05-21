@@ -1,0 +1,216 @@
+Auth is confirmed working. Now build ONLY the 
+trip creation endpoint and fee allocation logic. 
+Nothing else.
+
+TASK 3: Trip Creation + Fee Allocation
+
+Create src/routes/trips.ts and 
+src/controllers/tripController.ts
+
+---
+
+POST /api/trips
+Protected: authenticateToken + requireRole('super_admin')
+
+Request body shape:
+{
+  vehicleNumber: string,
+  driverId: string,          // UUID of a driver user
+  loadingStateId: string,    // UUID of a state
+  unloadingStateId: string,  // UUID of a state
+  originDescription: string,
+  destinationDescription: string,
+  fees: {
+    loadingFee: number,      // amount in kobo
+    unloadingFee: number,    // amount in kobo
+    stakeholders: [
+      {
+        stakeholderId: string,  // UUID
+        amount: number,         // amount in kobo
+        enabled: boolean
+      }
+    ]
+  }
+}
+
+Validation (return 400 if any fail):
+  - vehicleNumber must not be empty
+  - driverId must reference an existing user 
+    with role 'driver'
+  - loadingStateId must reference an existing state
+  - unloadingStateId must reference an existing state
+  - loadingFee must be a positive integer
+  - unloadingFee must be a positive integer
+  - For each stakeholder entry where enabled = true:
+      stakeholderId must reference an existing 
+      stakeholder, amount must be a positive integer
+  - Check no active trip exists for this vehicleNumber
+    (active = status IN ('created', 'in_transit'))
+    If one exists return 409 with message:
+    "Vehicle already has an active trip"
+
+Core logic (run inside a single database transaction):
+
+  STEP A: Insert into trips table
+    status = 'created'
+    created_by = req.user.userId
+
+  STEP B: Insert trip_fees records
+    Always insert one record for loading fee:
+      recipient_type = 'state'
+      recipient_id = loadingStateId
+      fee_type = 'loading'
+      amount = fees.loadingFee
+
+    Always insert one record for unloading fee:
+      recipient_type = 'state'
+      recipient_id = unloadingStateId
+      fee_type = 'unloading'
+      amount = fees.unloadingFee
+
+    NOTE: If loadingStateId === unloadingStateId,
+    still insert TWO separate trip_fees records 
+    (one loading, one unloading) both pointing 
+    to the same state. Do not merge them.
+
+    For each stakeholder where enabled = true:
+      Insert one trip_fees record:
+        recipient_type = 'stakeholder'
+        recipient_id = stakeholderId
+        fee_type = 'stakeholder_fee'
+        amount = stakeholder.amount
+
+    Skip stakeholders where enabled = false.
+    No record inserted for disabled stakeholders.
+
+  STEP C: Wallet credits
+    For each trip_fees record just inserted,
+    find the wallet where:
+      owner_type = trip_fees.recipient_type
+      owner_id = trip_fees.recipient_id
+    
+    Then:
+      1. UPDATE wallets SET 
+           total_collected = total_collected + amount,
+           updated_at = NOW()
+         WHERE owner_type = ... AND owner_id = ...
+
+      2. INSERT into wallet_ledger:
+           wallet_id = found wallet id
+           trip_id = new trip id
+           trip_fee_id = trip_fees record id
+           amount = fee amount (positive integer)
+           entry_type = 'credit'
+           cleared = false
+
+    IMPORTANT: If loadingStateId === unloadingStateId,
+    the same wallet gets TWO credit entries and 
+    total_collected increases by BOTH amounts.
+    This is correct behaviour.
+
+  STEP D: Insert trip_events record
+    event_type = 'created'
+    performed_by = req.user.userId
+    metadata = {
+      vehicleNumber,
+      loadingStateId,
+      unloadingStateId,
+      totalFees: sum of all fee amounts inserted
+    }
+
+  If any step fails, roll back the entire 
+  transaction. Return 500 with error details.
+
+Success response (201):
+{
+  "data": {
+    "trip": {
+      "id": "...",
+      "vehicleNumber": "...",
+      "status": "created",
+      "loadingStateId": "...",
+      "unloadingStateId": "...",
+      "createdAt": "..."
+    },
+    "feesAllocated": [
+      {
+        "recipientType": "state" | "stakeholder",
+        "recipientId": "...",
+        "feeType": "loading" | "unloading" | 
+                   "stakeholder_fee",
+        "amount": 0
+      }
+    ],
+    "walletsUpdated": number
+  },
+  "message": "Trip created and fees allocated"
+}
+
+---
+
+Register trips router in src/index.ts:
+  app.use('/api/trips', tripsRouter)
+
+---
+
+After completing, test these 3 scenarios 
+and show me the actual responses:
+
+TEST 1: Valid inter-state trip
+POST /api/trips with superadmin token
+{
+  "vehicleNumber": "LAG-001-AA",
+  "driverId": "<driver1 uuid>",
+  "loadingStateId": "<Lagos state uuid>",
+  "unloadingStateId": "<Kano state uuid>",
+  "originDescription": "Lagos Island Port",
+  "destinationDescription": "Kano Central Market",
+  "fees": {
+    "loadingFee": 500000,
+    "unloadingFee": 300000,
+    "stakeholders": [
+      {
+        "stakeholderId": "<Stakeholder Alpha uuid>",
+        "amount": 100000,
+        "enabled": true
+      },
+      {
+        "stakeholderId": "<Stakeholder Beta uuid>",
+        "amount": 75000,
+        "enabled": true
+      },
+      {
+        "stakeholderId": "<Stakeholder Gamma uuid>",
+        "amount": 0,
+        "enabled": false
+      }
+    ]
+  }
+}
+Expected: 201, 4 fee records, 4 wallet credits
+
+TEST 2: Same state trip 
+Same body but set both loadingStateId and 
+unloadingStateId to Lagos uuid
+Expected: 201, Lagos wallet gets 2 separate 
+ledger entries, total_collected increases 
+by both amounts
+
+TEST 3: Duplicate active vehicle
+Try to create another trip with 
+vehicleNumber "LAG-001-AA"
+Expected: 409 "Vehicle already has an active trip"
+
+Show actual JSON responses for all 3 tests
+and confirm wallet total_collected values 
+after TEST 1 and TEST 2.
+
+---
+
+IMPORTANT RULES FOR THIS TASK:
+- The entire trip creation must be wrapped 
+  in a single PostgreSQL transaction
+- Never use floats for any money calculation
+- Do not build any other endpoints
+- Do not modify the auth system
+- Do not modify database tables
