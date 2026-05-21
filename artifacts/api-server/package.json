@@ -8,8 +8,8 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "migrate": "node --loader ts-node/esm src/db/migrate.ts",
-    "seed": "node --loader ts-node/esm src/db/seed.ts"
+    "migrate": "ts-node --project tsconfig.scripts.json --transpile-only src/db/migrate.ts",
+    "seed": "ts-node --project tsconfig.scripts.json --transpile-only src/db/seed.ts"
   },
   "dependencies": {
     "@workspace/api-zod": "workspace:*",

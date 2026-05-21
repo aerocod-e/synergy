@@ -1,5 +1,5 @@
 import bcrypt from 'bcrypt';
-import pool from './connection.js';
+import pool from './connection';
 
 const SALT_ROUNDS = 12;
 
@@ -55,7 +55,7 @@ async function seed(): Promise<void> {
   const client = await pool.connect();
   try {
     // ── States ────────────────────────────────────────────────────────────
-    let statesInserted = 0;
+    let statesUpserted = 0;
     const stateIdMap: Record<string, string> = {};
 
     for (const s of STATES) {
@@ -69,13 +69,13 @@ async function seed(): Promise<void> {
       const id = res.rows[0]?.id;
       if (id) {
         stateIdMap[s.code] = id;
-        statesInserted++;
+        statesUpserted++;
       }
     }
-    console.log(`✓ States upserted: ${statesInserted}`);
+    console.log(`✓ States upserted: ${statesUpserted}`);
 
     // ── Stakeholders — conflict on name (UNIQUE constraint) ───────────────
-    let stakeholdersInserted = 0;
+    let stakeholdersUpserted = 0;
     const stakeholderIds: string[] = [];
 
     for (const sh of STAKEHOLDERS) {
@@ -89,10 +89,10 @@ async function seed(): Promise<void> {
       const id = res.rows[0]?.id;
       if (id) {
         stakeholderIds.push(id);
-        stakeholdersInserted++;
+        stakeholdersUpserted++;
       }
     }
-    console.log(`✓ Stakeholders upserted: ${stakeholdersInserted}`);
+    console.log(`✓ Stakeholders upserted: ${stakeholdersUpserted}`);
 
     // ── Wallets (one per state + one per stakeholder) ─────────────────────
     let walletsInserted = 0;
@@ -116,20 +116,20 @@ async function seed(): Promise<void> {
       );
       walletsInserted += res.rowCount ?? 0;
     }
-    console.log(`✓ Wallets seeded: ${walletsInserted}`);
+    console.log(`✓ Wallets inserted: ${walletsInserted}`);
 
     // ── Hash passwords ────────────────────────────────────────────────────
     const adminHash  = await bcrypt.hash('Admin@1234',  SALT_ROUNDS);
     const driverHash = await bcrypt.hash('Driver@1234', SALT_ROUNDS);
 
     // ── Super admin ───────────────────────────────────────────────────────
-    await client.query(
+    const superAdminRes = await client.query(
       `INSERT INTO users (email, password_hash, role, entity_type, entity_id)
        VALUES ($1, $2, 'super_admin', NULL, NULL)
        ON CONFLICT (email) DO NOTHING`,
       ['superadmin@synergy.com', adminHash],
     );
-    console.log('✓ Super admin seeded: 1');
+    console.log(`✓ Super admin inserted: ${superAdminRes.rowCount ?? 0}`);
 
     // ── Stakeholder admins (one per stakeholder) ──────────────────────────
     const stakeholderAdmins = [
@@ -150,7 +150,7 @@ async function seed(): Promise<void> {
       );
       shAdminsInserted += res.rowCount ?? 0;
     }
-    console.log(`✓ Stakeholder admins seeded: ${shAdminsInserted}`);
+    console.log(`✓ Stakeholder admins inserted: ${shAdminsInserted}`);
 
     // ── State admins (5 demo states) ──────────────────────────────────────
     const stateAdmins = [
@@ -173,7 +173,7 @@ async function seed(): Promise<void> {
       );
       stateAdminsInserted += res.rowCount ?? 0;
     }
-    console.log(`✓ State admins seeded: ${stateAdminsInserted}`);
+    console.log(`✓ State admins inserted: ${stateAdminsInserted}`);
 
     // ── Drivers ───────────────────────────────────────────────────────────
     const drivers = [
@@ -191,7 +191,7 @@ async function seed(): Promise<void> {
       );
       driversInserted += res.rowCount ?? 0;
     }
-    console.log(`✓ Drivers seeded: ${driversInserted}`);
+    console.log(`✓ Drivers inserted: ${driversInserted}`);
 
     console.log('\n✅ Seed complete.');
   } finally {

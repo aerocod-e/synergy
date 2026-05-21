@@ -1,4 +1,4 @@
-import pool from './connection.js';
+import pool from './connection';
 
 async function migrate(): Promise<void> {
   const client = await pool.connect();
