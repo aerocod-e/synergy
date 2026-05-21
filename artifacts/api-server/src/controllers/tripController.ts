@@ -527,3 +527,265 @@ export async function cancelTrip(req: Request, res: Response): Promise<void> {
     client.release();
   }
 }
+
+export async function listTrips(req: Request, res: Response): Promise<void> {
+  const role   = req.user!.role;
+  const userId = req.user!.userId;
+
+  const statusFilter = typeof req.query.status === "string" ? req.query.status : undefined;
+  const rawPage  = parseInt((req.query.page  as string) ?? "1",  10);
+  const rawLimit = parseInt((req.query.limit as string) ?? "20", 10);
+  const page   = Number.isFinite(rawPage)  && rawPage  > 0 ? rawPage            : 1;
+  const limit  = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100) : 20;
+  const offset = (page - 1) * limit;
+
+  const validStatuses = ["created", "in_transit", "completed", "cancelled"];
+  if (statusFilter && !validStatuses.includes(statusFilter)) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "Invalid status filter" });
+    return;
+  }
+
+  try {
+    const isSuperAdmin = role === "super_admin";
+    const params: unknown[] = [];
+    let idx = 1;
+    const conditions: string[] = [];
+
+    if (!isSuperAdmin) {
+      params.push(userId);
+      conditions.push(`t.driver_id = $${idx++}`);
+    }
+    if (statusFilter) {
+      params.push(statusFilter);
+      conditions.push(`t.status = $${idx++}`);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+    const baseFrom = `
+      FROM trips t
+      JOIN states ls ON t.loading_state_id   = ls.id
+      JOIN states us ON t.unloading_state_id = us.id
+      LEFT JOIN users d ON t.driver_id = d.id
+      ${whereClause}`;
+
+    const [countRes, unstartedRes, rowsRes] = await Promise.all([
+      pool.query<{ total: string }>(
+        `SELECT COUNT(*) AS total ${baseFrom}`,
+        params
+      ),
+      isSuperAdmin
+        ? pool.query<{ count: string }>(
+            `SELECT COUNT(*) AS count
+             FROM trips
+             WHERE status = 'created'
+               AND created_at < NOW() - INTERVAL '2 hours'`
+          )
+        : Promise.resolve(null),
+      pool.query<{
+        id:                    string;
+        vehicle_number:        string;
+        status:                string;
+        origin_description:    string | null;
+        destination_description: string | null;
+        created_at:            Date;
+        updated_at:            Date;
+        loading_state_id:      string;
+        loading_state_name:    string;
+        loading_state_code:    string;
+        unloading_state_id:    string;
+        unloading_state_name:  string;
+        unloading_state_code:  string;
+        driver_id:             string | null;
+        driver_email:          string | null;
+        unstarted_flag:        boolean | null;
+      }>(
+        `SELECT
+           t.id,
+           t.vehicle_number,
+           t.status,
+           t.origin_description,
+           t.destination_description,
+           t.created_at,
+           t.updated_at,
+           ls.id   AS loading_state_id,
+           ls.name AS loading_state_name,
+           ls.code AS loading_state_code,
+           us.id   AS unloading_state_id,
+           us.name AS unloading_state_name,
+           us.code AS unloading_state_code,
+           d.id    AS driver_id,
+           d.email AS driver_email,
+           ${isSuperAdmin
+             ? "(t.status = 'created' AND t.created_at < NOW() - INTERVAL '2 hours')"
+             : "NULL"
+           } AS unstarted_flag
+         ${baseFrom}
+         ORDER BY t.created_at DESC
+         LIMIT $${idx} OFFSET $${idx + 1}`,
+        [...params, limit, offset]
+      ),
+    ]);
+
+    const total        = parseInt(countRes.rows[0]!.total, 10);
+    const totalPages   = Math.ceil(total / limit);
+    const unstartedCount = isSuperAdmin
+      ? parseInt(unstartedRes!.rows[0]!.count, 10)
+      : null;
+
+    res.json({
+      data: {
+        trips: rowsRes.rows.map((r) => ({
+          id:              r.id,
+          vehicleNumber:   r.vehicle_number,
+          status:          r.status,
+          loadingState:    { id: r.loading_state_id,   name: r.loading_state_name,   code: r.loading_state_code   },
+          unloadingState:  { id: r.unloading_state_id, name: r.unloading_state_name, code: r.unloading_state_code },
+          driver:          r.driver_id ? { id: r.driver_id, email: r.driver_email } : null,
+          originDescription:      r.origin_description,
+          destinationDescription: r.destination_description,
+          unstartedFlag:   isSuperAdmin ? (r.unstarted_flag ?? false) : null,
+          createdAt:       r.created_at,
+          updatedAt:       r.updated_at,
+        })),
+        pagination:    { page, limit, total, totalPages },
+        unstartedCount,
+      },
+      message: "Trips retrieved",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to retrieve trips" });
+  }
+}
+
+export async function getTripById(req: Request, res: Response): Promise<void> {
+  const { tripId } = req.params as { tripId: string };
+  const role   = req.user!.role;
+  const userId = req.user!.userId;
+
+  try {
+    const { rows } = await pool.query<{
+      id:                    string;
+      vehicle_number:        string;
+      status:                string;
+      origin_description:    string | null;
+      destination_description: string | null;
+      created_at:            Date;
+      updated_at:            Date;
+      driver_id:             string | null;
+      driver_email:          string | null;
+      loading_state_id:      string;
+      loading_state_name:    string;
+      loading_state_code:    string;
+      unloading_state_id:    string;
+      unloading_state_name:  string;
+      unloading_state_code:  string;
+      unstarted_flag:        boolean;
+    }>(
+      `SELECT
+         t.id,
+         t.vehicle_number,
+         t.status,
+         t.origin_description,
+         t.destination_description,
+         t.created_at,
+         t.updated_at,
+         d.id    AS driver_id,
+         d.email AS driver_email,
+         ls.id   AS loading_state_id,
+         ls.name AS loading_state_name,
+         ls.code AS loading_state_code,
+         us.id   AS unloading_state_id,
+         us.name AS unloading_state_name,
+         us.code AS unloading_state_code,
+         (t.status = 'created' AND t.created_at < NOW() - INTERVAL '2 hours') AS unstarted_flag
+       FROM trips t
+       JOIN states ls ON t.loading_state_id   = ls.id
+       JOIN states us ON t.unloading_state_id = us.id
+       LEFT JOIN users d ON t.driver_id = d.id
+       WHERE t.id = $1
+       LIMIT 1`,
+      [tripId]
+    );
+
+    if (rows.length === 0) {
+      res.status(404).json({ error: "NOT_FOUND", message: "Trip not found" });
+      return;
+    }
+
+    const trip = rows[0]!;
+
+    if (role === "driver" && trip.driver_id !== userId) {
+      res.status(403).json({ error: "FORBIDDEN", message: "You are not assigned to this trip" });
+      return;
+    }
+
+    const [feesRes, eventsRes] = await Promise.all([
+      pool.query<{
+        id:             string;
+        recipient_type: string;
+        recipient_id:   string;
+        fee_type:       string;
+        amount:         number;
+      }>(
+        `SELECT id, recipient_type, recipient_id, fee_type, amount
+         FROM trip_fees
+         WHERE trip_id = $1
+         ORDER BY fee_type`,
+        [tripId]
+      ),
+      pool.query<{
+        id:                  string;
+        event_type:          string;
+        performed_by_email:  string | null;
+        metadata:            Record<string, unknown>;
+        created_at:          Date;
+      }>(
+        `SELECT te.id, te.event_type, u.email AS performed_by_email, te.metadata, te.created_at
+         FROM trip_events te
+         LEFT JOIN users u ON te.performed_by = u.id
+         WHERE te.trip_id = $1
+         ORDER BY te.created_at ASC`,
+        [tripId]
+      ),
+    ]);
+
+    res.json({
+      data: {
+        trip: {
+          id:              trip.id,
+          vehicleNumber:   trip.vehicle_number,
+          status:          trip.status,
+          loadingState:    { id: trip.loading_state_id,   name: trip.loading_state_name,   code: trip.loading_state_code   },
+          unloadingState:  { id: trip.unloading_state_id, name: trip.unloading_state_name, code: trip.unloading_state_code },
+          driver:          trip.driver_id ? { id: trip.driver_id, email: trip.driver_email } : null,
+          originDescription:      trip.origin_description,
+          destinationDescription: trip.destination_description,
+          unstartedFlag:   role === "super_admin" ? trip.unstarted_flag : null,
+          createdAt:       trip.created_at,
+          updatedAt:       trip.updated_at,
+          fees: feesRes.rows.map((f) => ({
+            id:            f.id,
+            recipientType: f.recipient_type,
+            recipientId:   f.recipient_id,
+            feeType:       f.fee_type,
+            amount:        f.amount,
+            amountNaira:   (f.amount / 100).toFixed(2),
+          })),
+          events: eventsRes.rows.map((e) => ({
+            id:          e.id,
+            eventType:   e.event_type,
+            performedBy: e.performed_by_email,
+            metadata:    e.metadata,
+            createdAt:   e.created_at,
+          })),
+        },
+      },
+      message: "Trip retrieved",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to retrieve trip" });
+  }
+}

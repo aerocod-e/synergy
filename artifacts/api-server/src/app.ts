@@ -1,7 +1,9 @@
 import express, { type Express, type Request, type Response } from "express";
-import authRouter from "./routes/auth.js";
-import tripsRouter from "./routes/trips.js";
+import { apiLimiter } from "./middleware/rateLimiter.js";
+import authRouter    from "./routes/auth.js";
+import tripsRouter   from "./routes/trips.js";
 import walletsRouter from "./routes/wallets.js";
+import lookupRouter  from "./routes/lookup.js";
 
 const app: Express = express();
 
@@ -12,8 +14,10 @@ app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok", timestamp: new Date() });
 });
 
-app.use("/api/auth", authRouter);
-app.use("/api/trips", tripsRouter);
+app.use("/api", apiLimiter);
+app.use("/api/auth",    authRouter);
+app.use("/api/trips",   tripsRouter);
 app.use("/api/wallets", walletsRouter);
+app.use("/api/lookup",  lookupRouter);
 
 export default app;
