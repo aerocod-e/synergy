@@ -1,0 +1,233 @@
+Navigation shell confirmed working for all 
+roles. Now build the Super Admin user 
+management screen and the state/stakeholder 
+configuration list. These are the final 
+two screens for Phase 1.
+
+TASK: Super Admin — User Management + 
+Config Screens
+
+PART 1 — User Management Screen
+Replace app/(superadmin)/index.tsx with 
+a real screen.
+
+This is the Trips tab home for Super Admin 
+so rename the current index to trips later.
+For now build user management at a new file:
+app/(superadmin)/users.tsx
+
+Add a third tab to app/(superadmin)/_layout.tsx:
+  Tab 3: Users
+    icon: people-outline
+    screen: (superadmin)/users.tsx
+    label: "Users"
+
+UI for users.tsx:
+  Header section:
+    Title: "User Management"
+    Subtitle: "Manage system users"
+
+  User list:
+    Fetch from GET /api/users on mount
+    Show ActivityIndicator while loading
+    Each user row shows:
+      - Email address (bold)
+      - Role badge:
+          super_admin → dark gray badge
+          admin → blue (#1a6ec8) badge
+          state admin → blue badge with 
+            entity name if available
+          stakeholder admin → blue badge
+          driver → green (#2a8a4a) badge
+      - Active/inactive status dot
+        green dot = active
+        red dot = inactive
+
+  Empty state:
+    "No users found" centered text
+
+  Error state:
+    "Failed to load users" in red
+    with a Retry button
+
+  Pull to refresh support
+
+IMPORTANT: We need a GET /api/users 
+endpoint on the backend first.
+Add this to artifacts/api-server/src/
+routes/users.ts and 
+artifacts/api-server/src/controllers/
+userController.ts:
+
+GET /api/users
+Protected: authenticateToken + 
+  requireRole('super_admin')
+
+Logic:
+  Return all users where deleted_at IS NULL
+  Join with states or stakeholders table 
+  based on entity_type to get entity name
+  Order by role ASC then email ASC
+
+Response:
+{
+  "data": {
+    "users": [
+      {
+        "id": "...",
+        "email": "...",
+        "role": "...",
+        "entityType": "state" | 
+          "stakeholder" | null,
+        "entityId": "...",
+        "entityName": "...",
+        "isActive": true,
+        "createdAt": "..."
+      }
+    ]
+  },
+  "message": "Users retrieved"
+}
+
+Register route in app.ts:
+  app.use('/api/users', usersRouter)
+
+---
+
+PART 2 — Config Screen
+Replace app/(superadmin)/wallets.tsx 
+placeholder with a config screen.
+Rename wallets.tsx to config.tsx and 
+update the tab accordingly.
+
+Update tab in app/(superadmin)/_layout.tsx:
+  Tab 2: Config
+    icon: settings-outline
+    screen: (superadmin)/config.tsx
+    label: "Config"
+
+UI for config.tsx:
+  Two sections on same screen:
+
+  SECTION 1: States
+    Title: "States (37 + FCT)"
+    Fetch from GET /api/states on mount
+    List each state showing:
+      - State name
+      - State code badge (e.g. "LG")
+    No edit functionality yet, read only
+    Show count of states at top
+
+  SECTION 2: Stakeholders  
+    Title: "Stakeholders"
+    Fetch from GET /api/stakeholders on mount
+    List each stakeholder showing:
+      - Name
+      - Description
+      - Active/inactive status dot
+    No edit functionality yet, read only
+
+  Show ActivityIndicator while loading
+  Show error state with retry if fetch fails
+
+We need two backend endpoints:
+
+GET /api/states
+Protected: authenticateToken
+Allowed roles: super_admin
+Returns all states ordered by name ASC
+Response:
+{
+  "data": {
+    "states": [
+      { "id": "...", "name": "...", 
+        "code": "..." }
+    ]
+  },
+  "message": "States retrieved"
+}
+
+GET /api/stakeholders
+Protected: authenticateToken  
+Allowed roles: super_admin
+Returns all stakeholders where 
+  is_active is not filtered 
+  (return all, show status in UI)
+Order by name ASC
+Response:
+{
+  "data": {
+    "stakeholders": [
+      { "id": "...", "name": "...", 
+        "description": "...",
+        "isActive": true }
+    ]
+  },
+  "message": "Stakeholders retrieved"
+}
+
+Add these to existing route files or 
+create new ones as appropriate.
+Register in app.ts.
+
+---
+
+Add to types/index.ts:
+
+export interface User {
+  id: string
+  email: string
+  role: UserRole
+  entityType: EntityType
+  entityId: string | null
+  entityName: string | null
+  isActive: boolean
+  createdAt: string
+}
+
+export interface State {
+  id: string
+  name: string
+  code: string
+}
+
+export interface Stakeholder {
+  id: string
+  name: string
+  description: string | null
+  isActive: boolean
+}
+
+Add to services/api.ts:
+
+export const getUsers = () => 
+  apiRequest('/api/users')
+
+export const getStates = () => 
+  apiRequest('/api/states')
+
+export const getStakeholders = () => 
+  apiRequest('/api/stakeholders')
+
+---
+
+STYLING for both screens:
+  Use React Native StyleSheet only
+  No external UI libraries
+  White background
+  Light gray (#f5f5f5) for list item 
+  backgrounds
+  Subtle border (#e0e0e0) between items
+  Role/status badges as small rounded 
+  rectangles with colored backgrounds
+  Consistent padding: 16px horizontal
+
+---
+
+IMPORTANT RULES:
+  - Both backend endpoints must be built 
+    AND working before frontend fetches them
+  - Do not modify existing endpoints
+  - Do not modify useAuth.ts or useLogout.ts
+  - Pull to refresh on user list only, 
+    not required on config screen
