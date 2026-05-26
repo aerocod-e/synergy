@@ -9,6 +9,7 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 import { getStates, getStakeholders } from '@/services/api';
 import type { State, Stakeholder } from '@/types/index';
+import { theme } from '@/constants/theme';
 
 export default function ConfigScreen() {
   const [states, setStates] = useState<State[]>([]);
@@ -37,7 +38,7 @@ export default function ConfigScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#1a6ec8" />
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
@@ -57,8 +58,11 @@ export default function ConfigScreen() {
   }
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-      <Text style={styles.sectionTitle}>States ({states.length})</Text>
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={styles.scrollContent}
+    >
+      <Text style={styles.sectionLabel}>States ({states.length})</Text>
       {states.map((state) => (
         <View key={state.id} style={styles.item}>
           <Text style={styles.itemName}>{state.name}</Text>
@@ -68,7 +72,7 @@ export default function ConfigScreen() {
         </View>
       ))}
 
-      <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>Stakeholders</Text>
+      <Text style={[styles.sectionLabel, styles.sectionLabelSpaced]}>Stakeholders</Text>
       {stakeholders.length === 0 ? (
         <Text style={styles.emptyText}>No stakeholders found</Text>
       ) : (
@@ -89,55 +93,89 @@ export default function ConfigScreen() {
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: '#ffffff' },
-  scrollContent: { paddingVertical: 12, paddingBottom: 32 },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#ffffff', padding: 24 },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#6b7280',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    paddingHorizontal: 16,
-    marginBottom: 6,
+  scroll: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
   },
-  sectionTitleSpaced: { marginTop: 24 },
+  scrollContent: {
+    paddingBottom: 88,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: theme.colors.background,
+    padding: 24,
+  },
+  sectionLabel: {
+    ...theme.typography.sectionLabel,
+    marginTop: 20,
+    marginHorizontal: 20,
+    marginBottom: 12,
+  },
+  sectionLabelSpaced: {
+    marginTop: 28,
+  },
   item: {
-    backgroundColor: '#f5f5f5',
-    marginHorizontal: 16,
-    marginVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    backgroundColor: theme.colors.white,
+    marginHorizontal: 20,
+    marginBottom: 10,
+    borderRadius: 16,
+    padding: 16,
+    ...theme.shadows.card,
   },
-  itemName: { fontSize: 14, fontWeight: '600', color: '#111111' },
+  itemName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.colors.black,
+  },
   codeBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: '#e0e0e0',
-    borderRadius: 4,
+    backgroundColor: theme.colors.background,
+    borderRadius: 6,
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    marginTop: 4,
+    paddingVertical: 3,
+    marginTop: 8,
   },
-  codeText: { fontSize: 12, fontWeight: '600', color: '#374151' },
+  codeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.colors.grey2,
+  },
   stakeholderHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  statusDot: { width: 10, height: 10, borderRadius: 5 },
-  dotActive: { backgroundColor: '#22c55e' },
-  dotInactive: { backgroundColor: '#d1d5db' },
-  description: { fontSize: 13, color: '#6b7280', marginTop: 4 },
-  errorText: { fontSize: 15, color: '#dc2626', marginBottom: 16, textAlign: 'center' },
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  dotActive: { backgroundColor: theme.colors.green },
+  dotInactive: { backgroundColor: theme.colors.inactive },
+  description: {
+    fontSize: 13,
+    color: theme.colors.grey1,
+    marginTop: 6,
+  },
+  errorText: {
+    fontSize: 15,
+    color: theme.colors.error,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
   retryButton: {
-    backgroundColor: '#1a6ec8',
+    backgroundColor: theme.colors.primary,
     paddingHorizontal: 24,
     paddingVertical: 10,
     borderRadius: 8,
   },
-  retryText: { color: '#ffffff', fontWeight: '600', fontSize: 14 },
-  emptyText: { fontSize: 14, color: '#6b7280', paddingHorizontal: 16, paddingVertical: 8 },
+  retryText: { color: theme.colors.white, fontWeight: '600', fontSize: 14 },
+  emptyText: {
+    fontSize: 14,
+    color: theme.colors.grey1,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+  },
 });

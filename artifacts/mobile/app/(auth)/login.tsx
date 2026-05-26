@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthContext } from '@/app/_layout';
+import { theme } from '@/constants/theme';
 
 interface DemoAccount {
   label: string;
@@ -109,6 +110,8 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [demoOpen, setDemoOpen] = useState(false);
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
 
   const handleEmailChange = (value: string) => {
     setEmail(value);
@@ -125,7 +128,6 @@ export default function LoginScreen() {
       setError('Please enter your email and password');
       return;
     }
-
     try {
       await login(email.trim(), password);
     } catch (err: any) {
@@ -148,33 +150,37 @@ export default function LoginScreen() {
       >
         <View style={styles.inner}>
           <View style={styles.header}>
-            <Text style={styles.appName}>Synergy Cargo</Text>
-            <Text style={styles.subtitle}>Fleet management, simplified</Text>
+            <Text style={styles.appName}>Synergy Systems</Text>
+            <Text style={styles.subtitle}>Cargo Tax Management</Text>
           </View>
 
-          <View style={styles.form}>
+          <View style={styles.formCard}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, emailFocused && styles.inputFocused]}
               placeholder="Email"
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={theme.colors.placeholder}
               value={email}
               onChangeText={handleEmailChange}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
               editable={!isLoading}
+              onFocus={() => setEmailFocused(true)}
+              onBlur={() => setEmailFocused(false)}
             />
 
             <TextInput
-              style={styles.input}
+              style={[styles.input, passwordFocused && styles.inputFocused]}
               placeholder="Password"
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={theme.colors.placeholder}
               value={password}
               onChangeText={handlePasswordChange}
               secureTextEntry
               autoCapitalize="none"
               autoCorrect={false}
               editable={!isLoading}
+              onFocus={() => setPasswordFocused(true)}
+              onBlur={() => setPasswordFocused(false)}
             />
 
             {error ? (
@@ -188,7 +194,7 @@ export default function LoginScreen() {
               activeOpacity={0.8}
             >
               {isLoading ? (
-                <ActivityIndicator color="#FFFFFF" />
+                <ActivityIndicator color={theme.colors.white} />
               ) : (
                 <Text style={styles.buttonText}>Sign In</Text>
               )}
@@ -199,8 +205,7 @@ export default function LoginScreen() {
               onPress={() => setDemoOpen(true)}
               activeOpacity={0.7}
             >
-              <Text style={styles.demoTriggerText}>Demo account</Text>
-              <Ionicons name="chevron-down" size={16} color="#6B7280" />
+              <Text style={styles.demoTriggerText}>Use a demo account</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -221,7 +226,7 @@ export default function LoginScreen() {
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>Demo accounts</Text>
               <TouchableOpacity onPress={() => setDemoOpen(false)}>
-                <Ionicons name="close" size={20} color="#6B7280" />
+                <Ionicons name="close" size={20} color={theme.colors.grey1} />
               </TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
@@ -236,8 +241,8 @@ export default function LoginScreen() {
                     <Text style={styles.demoLabel}>{account.label}</Text>
                     <Text style={styles.demoEmail}>{account.email}</Text>
                   </View>
-                  <View style={[styles.badge, { backgroundColor: account.badgeColor + '1A' }]}>
-                    <Text style={[styles.badgeText, { color: account.badgeColor }]}>
+                  <View style={[styles.demoBadge, { backgroundColor: account.badgeColor + '1A' }]}>
+                    <Text style={[styles.demoBadgeText, { color: account.badgeColor }]}>
                       {account.badge}
                     </Text>
                   </View>
@@ -254,7 +259,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: theme.colors.background,
   },
   container: {
     flex: 1,
@@ -262,73 +267,73 @@ const styles = StyleSheet.create({
   inner: {
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 24,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 32,
+    paddingHorizontal: 24,
   },
   appName: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: '700',
-    color: '#111827',
-    fontFamily: 'Inter_700Bold',
+    color: theme.colors.black,
     marginBottom: 8,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
-    color: '#6B7280',
-    fontFamily: 'Inter_400Regular',
+    color: theme.colors.grey1,
+    textAlign: 'center',
   },
-  form: {
+  formCard: {
+    backgroundColor: theme.colors.white,
+    borderRadius: 24,
+    padding: 28,
+    marginHorizontal: 24,
     gap: 12,
+    ...theme.shadows.card,
   },
   input: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 10,
+    backgroundColor: theme.colors.background,
+    borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    height: 52,
     fontSize: 16,
-    color: '#111827',
-    fontFamily: 'Inter_400Regular',
+    color: theme.colors.black,
+    borderWidth: 0,
+  },
+  inputFocused: {
+    backgroundColor: theme.colors.grey3,
   },
   errorText: {
-    color: '#DC2626',
+    color: theme.colors.error,
     fontSize: 14,
-    fontFamily: 'Inter_400Regular',
     textAlign: 'center',
   },
   button: {
-    backgroundColor: '#1D4ED8',
-    borderRadius: 10,
-    paddingVertical: 15,
+    backgroundColor: theme.colors.primary,
+    borderRadius: 12,
+    height: 52,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 4,
-    minHeight: 52,
+    ...theme.shadows.strong,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   buttonText: {
-    color: '#FFFFFF',
+    color: theme.colors.white,
     fontSize: 16,
     fontWeight: '600',
-    fontFamily: 'Inter_600SemiBold',
   },
   demoTrigger: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 10,
+    paddingVertical: 8,
   },
   demoTriggerText: {
-    fontSize: 14,
-    color: '#6B7280',
-    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: theme.colors.grey1,
   },
   overlay: {
     flex: 1,
@@ -336,7 +341,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.colors.white,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingTop: 16,
@@ -350,14 +355,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: theme.colors.separator,
     marginBottom: 4,
   },
   sheetTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
-    fontFamily: 'Inter_600SemiBold',
+    color: theme.colors.black,
   },
   demoRow: {
     flexDirection: 'row',
@@ -366,7 +370,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#F9FAFB',
+    borderBottomColor: theme.colors.separator,
   },
   demoRowLeft: {
     flex: 1,
@@ -375,23 +379,20 @@ const styles = StyleSheet.create({
   demoLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#111827',
-    fontFamily: 'Inter_500Medium',
+    color: theme.colors.black,
     marginBottom: 2,
   },
   demoEmail: {
     fontSize: 12,
-    color: '#6B7280',
-    fontFamily: 'Inter_400Regular',
+    color: theme.colors.grey1,
   },
-  badge: {
+  demoBadge: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
   },
-  badgeText: {
+  demoBadgeText: {
     fontSize: 11,
     fontWeight: '600',
-    fontFamily: 'Inter_600SemiBold',
   },
 });
