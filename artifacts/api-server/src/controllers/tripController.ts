@@ -661,6 +661,7 @@ export async function listTrips(req: Request, res: Response): Promise<void> {
 
 export async function getTripById(req: Request, res: Response): Promise<void> {
   const { tripId } = req.params as { tripId: string };
+  console.log(`[getTripById] path=${req.path} originalUrl=${req.originalUrl} tripId=${tripId}`);
   const role   = req.user!.role;
   const userId = req.user!.userId;
 

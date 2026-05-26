@@ -47,3 +47,27 @@ export interface WalletLedgerEntry {
   clearedAt: string | null;
   createdAt: string;
 }
+
+export interface User {
+  id: string;
+  email: string;
+  role: string;
+  entityType: string | null;
+  entityId: string | null;
+  entityName: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface State {
+  id: string;
+  name: string;
+  code: string;
+}
+
+export interface Stakeholder {
+  id: string;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+}

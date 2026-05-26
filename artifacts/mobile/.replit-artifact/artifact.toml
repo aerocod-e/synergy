@@ -25,3 +25,4 @@ run = [ "pnpm", "--filter", "@workspace/mobile", "run", "serve" ]
 [services.env]
 PORT = "18115"
 BASE_PATH = "/mobile/"
+EXPO_PUBLIC_API_URL = "https://2f2a3156-e178-45fc-95e3-f3726442355f-00-2f9hl4ag0p8j2-mqo0pmtc.kirk.replit.dev"

@@ -41,11 +41,20 @@ export default function SuperAdminLayout() {
         }}
       />
       <Tabs.Screen
-        name="wallets"
+        name="config"
         options={{
-          title: 'Wallets',
+          title: 'Config',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="wallet-outline" size={size} color={color} />
+            <Ionicons name="settings-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="users"
+        options={{
+          title: 'Users',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="people-outline" size={size} color={color} />
           ),
         }}
       />

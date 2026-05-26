@@ -109,3 +109,12 @@ export const getAllWallets = () =>
 // ── Lookup ──────────────────────────────────────────────────────────────────
 export const lookupVehicle = (vehicleNumber: string) =>
   apiRequest(`/api/lookup/vehicle/${encodeURIComponent(vehicleNumber)}`, {}, false);
+
+// ── Users (Super Admin) ──────────────────────────────────────────────────────
+export const getUsers = () => apiRequest('/api/users');
+
+// ── States (Super Admin) ─────────────────────────────────────────────────────
+export const getStates = () => apiRequest('/api/states');
+
+// ── Stakeholders (Super Admin) ───────────────────────────────────────────────
+export const getStakeholders = () => apiRequest('/api/stakeholders');
