@@ -102,6 +102,7 @@ export default function RootLayout() {
 
   const [fontsLoaded, fontError] = useFonts({
     ...Ionicons.font,
+    Ionicons: require("../assets/fonts/Ionicons.ttf"),
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
