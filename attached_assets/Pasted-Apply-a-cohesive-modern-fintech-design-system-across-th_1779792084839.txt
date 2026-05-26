@@ -1,0 +1,150 @@
+Apply a cohesive modern fintech design system 
+across the entire mobile app. This is a visual 
+polish pass only. Do not change any business 
+logic, API calls, navigation, or data handling.
+
+DESIGN SYSTEM
+
+Color palette:
+  Primary: #1a6ec8 (blue - already in use)
+  Primary dark: #145aa0
+  Primary light: #e8f0fb
+  Success: #2a8a4a
+  Success light: #e8f5ec
+  Danger: #c8401a
+  Danger light: #fdf0ed
+  Neutral 900: #0d0d0d (primary text)
+  Neutral 600: #4a4a4a (secondary text)
+  Neutral 400: #888888 (muted text)
+  Neutral 100: #f5f7fa (screen background)
+  Neutral 50: #ffffff (card background)
+  Border: #e4e8ef
+
+Typography:
+  Screen titles: 22px bold, Neutral 900
+  Section headers: 13px bold uppercase, 
+    letter spacing 0.8, Neutral 400
+  Body: 15px regular, Neutral 900
+  Secondary body: 14px regular, Neutral 600
+  Caption: 12px regular, Neutral 400
+  Amounts/numbers: use tabular figures, 
+    monospaced feel where possible
+
+Spacing:
+  Screen horizontal padding: 20px
+  Card padding: 16px
+  Between cards: 10px
+  Between sections: 28px
+
+Cards and surfaces:
+  All list items and content blocks 
+  become cards:
+    background: white
+    border radius: 12px
+    subtle shadow: 
+      shadowColor #000, shadowOffset 0 1, 
+      shadowOpacity 0.06, shadowRadius 4,
+      elevation 2 (Android)
+    no visible border
+
+Badges and pills:
+  Role badges, state code badges, 
+  status indicators:
+    border radius: 6px
+    padding: 3px 8px
+    font size: 12px bold
+    use the color palette above for 
+    background/text combinations:
+      super_admin: Neutral 900 bg, white text
+      admin/state/stakeholder: 
+        Primary light bg, Primary text
+      driver: Success light bg, Success text
+      active status dot: Success color
+      inactive status dot: Danger color
+
+Buttons:
+  Primary button (Sign In, Create Trip etc):
+    background: Primary
+    border radius: 12px
+    height: 52px
+    font size: 16px bold white
+    no border
+  
+  Destructive button (Cancel Trip):
+    background: Danger
+    same dimensions as primary
+
+Tab bar:
+  background: white
+  border top: 1px #e4e8ef
+  active color: Primary
+  inactive color: Neutral 400
+  label font size: 11px
+
+Headers:
+  background: white
+  border bottom: 1px #e4e8ef
+  title: 17px bold Neutral 900
+  right icon buttons: Primary color
+
+Screen backgrounds:
+  All screens: Neutral 100 (#f5f7fa)
+  Creates contrast with white cards
+
+Input fields (login screen and future forms):
+  background: white
+  border: 1.5px #e4e8ef
+  border radius: 12px
+  height: 52px
+  padding horizontal: 16px
+  font size: 15px
+  focused border color: Primary
+  placeholder color: Neutral 400
+
+---
+
+LOGIN SCREEN CHANGES:
+  Heading: "Synergy Systems"
+    font size: 32px bold
+    color: Neutral 900
+  Byline: "Cargo Tax Management"
+    font size: 15px
+    color: Neutral 600
+
+---
+
+Apply these changes across:
+  app/(auth)/login.tsx
+  app/(superadmin)/users.tsx
+  app/(superadmin)/config.tsx
+  app/(superadmin)/_layout.tsx
+  app/(admin)/_layout.tsx
+  app/(driver)/_layout.tsx
+
+Create a shared file:
+  constants/theme.ts
+  
+  Export all colors, spacing, and 
+  typography values as a single theme 
+  object so every screen imports from 
+  one place instead of hardcoding values.
+  All existing color values in the screens 
+  above should be replaced with references 
+  to this theme object after it is created.
+
+---
+
+IMPORTANT RULES:
+  - No business logic changes
+  - No navigation changes  
+  - No API or data changes
+  - StyleSheet only, no UI libraries
+  - All future screens we build will 
+    import from constants/theme.ts
+  - TypeScript must compile with zero errors
+
+After completing show screenshots of:
+  1. Login screen
+  2. Super Admin dashboard (Trips tab)
+  3. Config screen
+  4. Users screen

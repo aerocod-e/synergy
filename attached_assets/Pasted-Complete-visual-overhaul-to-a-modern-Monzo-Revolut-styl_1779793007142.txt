@@ -1,0 +1,250 @@
+Complete visual overhaul to a modern 
+Monzo/Revolut-style fintech aesthetic.
+No business logic, navigation, or API 
+changes. Style only.
+
+PART 1 — FLOATING PILL TAB BAR
+
+Replace the standard bottom tab bar with 
+a custom floating pill tab bar in all 
+role layouts:
+  app/(superadmin)/_layout.tsx
+  app/(admin)/_layout.tsx
+
+Implementation:
+  Use tabBar prop on the Tab.Navigator 
+  to render a fully custom component.
+
+Custom tab bar component:
+  Create components/PillTabBar.tsx
+
+  Container:
+    position: absolute
+    bottom: 24px
+    left: 20px
+    right: 20px
+    height: 64px
+    background: white
+    border radius: 32px
+    shadow:
+      shadowColor: #000
+      shadowOffset: 0 8
+      shadowOpacity: 0.12
+      shadowRadius: 16
+      elevation: 12
+    flex row, items centered, 
+    space evenly
+
+  Each tab item:
+    flex: 1
+    height: 48px
+    border radius: 24px
+    centered icon + label
+
+  Active tab:
+    background: #1a6ec8 (primary blue)
+    icon color: white
+    label color: white
+    label font size: 12px bold
+
+  Inactive tab:
+    background: transparent
+    icon color: #888888
+    label color: #888888
+    label font size: 12px
+
+  Active tab transitions smoothly
+  Use Animated or just direct style,
+  no third party animation libraries
+
+  Add padding bottom to all screen 
+  content to account for floating 
+  tab bar height (88px padding bottom 
+  on ScrollView/FlatList content)
+
+---
+
+PART 2 — GLOBAL VISUAL OVERHAUL
+
+Update constants/theme.ts with these 
+additional values:
+
+  shadows: {
+    card: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 8,
+      elevation: 3
+    },
+    strong: {
+      shadowColor: '#1a6ec8',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 12,
+      elevation: 6
+    }
+  }
+
+---
+
+LOGIN SCREEN
+app/(auth)/login.tsx
+
+  Full screen background: #f5f7fa
+  
+  Top section (40% of screen):
+    Large bold wordmark:
+      "Synergy Systems"
+      font size: 36px bold
+      color: #0d0d0d
+    Subtitle below:
+      "Cargo Tax Management"
+      font size: 16px
+      color: #888888
+      margin top: 8px
+
+  Form card (floating):
+    background: white
+    border radius: 24px
+    padding: 28px
+    shadow: card shadow from theme
+    margin horizontal: 24px
+    
+    Inputs inside card:
+      background: #f5f7fa
+      border: none (no border on inputs)
+      border radius: 12px
+      height: 52px
+      padding horizontal: 16px
+      font size: 15px
+      margin bottom: 12px
+      focused state: 
+        background: #e8f0fb
+        no border, just background change
+
+    Sign In button:
+      background: #1a6ec8
+      border radius: 12px
+      height: 52px
+      shadow: strong shadow from theme
+      full width inside card
+      font size: 16px bold white
+      margin top: 8px
+
+  Demo account picker stays but 
+  style it as a subtle text button:
+    color: #888888
+    font size: 13px
+    centered below the card
+    margin top: 16px
+
+---
+
+USERS SCREEN
+app/(superadmin)/users.tsx
+
+  Screen background: #f5f7fa
+
+  Each user card:
+    background: white
+    border radius: 16px
+    padding: 16px
+    margin horizontal: 20px
+    margin bottom: 10px
+    shadow: card shadow from theme
+    
+    Layout inside card:
+      Top row:
+        Email bold 15px left
+        Active dot right (10px circle)
+      Bottom row:
+        Role badge left
+
+  Role badges:
+    border radius: 8px
+    padding: 4px 10px
+    font size: 12px bold
+    super_admin: #0d0d0d bg, white text
+    admin/state/stakeholder: 
+      #e8f0fb bg, #1a6ec8 text
+    driver: #e8f5ec bg, #2a8a4a text
+
+  Section above list:
+    "ALL USERS" label:
+      13px bold uppercase
+      letter spacing: 1
+      color: #888888
+      margin: 20px 20px 12px
+
+---
+
+CONFIG SCREEN  
+app/(superadmin)/config.tsx
+
+  Screen background: #f5f7fa
+
+  Section headers:
+    "STATES (37)" and "STAKEHOLDERS"
+    13px bold uppercase
+    letter spacing: 1
+    color: #888888
+    margin: 20px 20px 12px 20px
+
+  State cards:
+    background: white
+    border radius: 16px
+    padding: 14px 16px
+    margin horizontal: 20px
+    margin bottom: 8px
+    shadow: card shadow
+    
+    Layout: 
+      State name left, 15px bold
+      Code badge right:
+        background: #f5f7fa
+        border radius: 6px
+        padding: 4px 8px
+        font size: 12px bold
+        color: #4a4a4a
+
+  Stakeholder cards:
+    Same card style as states
+    Layout:
+      Name bold 15px
+      Description 13px #888888 below
+      Active dot top right
+
+---
+
+HEADERS (all screens)
+
+  Replace plain headers with:
+    background: white
+    border bottom: none
+    shadow: subtle (shadowOpacity 0.04)
+    title: 17px bold #0d0d0d centered
+    logout button: 
+      #1a6ec8 color
+      use exit icon (log-out-outline)
+
+---
+
+IMPORTANT RULES:
+  - components/PillTabBar.tsx must be 
+    reusable across superadmin and 
+    admin layouts
+  - No third party libraries
+  - No business logic changes
+  - No navigation or routing changes
+  - No API changes
+  - TypeScript zero errors
+  - All color values must reference 
+    constants/theme.ts
+
+After completing show screenshots of:
+  1. Login screen
+  2. Super Admin trips tab 
+     (show floating pill tab bar)
+  3. Config screen
+  4. Users screen
