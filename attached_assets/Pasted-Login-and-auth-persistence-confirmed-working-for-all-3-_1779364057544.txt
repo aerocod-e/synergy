@@ -1,0 +1,142 @@
+Login and auth persistence confirmed working 
+for all 3 roles. Now build the navigation 
+shell for all role-based layouts. 
+Do not build any real screen content yet.
+
+TASK: Navigation Shell + Role Layouts
+
+PART 1 — Super Admin Shell
+Update app/(superadmin)/_layout.tsx
+Create it if it does not exist.
+
+Tab navigator with these tabs:
+  Tab 1: Trips
+    icon: list (use @expo/vector-icons Ionicons)
+    screen: (superadmin)/index.tsx
+    label: "Trips"
+  
+  Tab 2: Wallets
+    icon: wallet-outline
+    screen: (superadmin)/wallets.tsx
+    label: "Wallets"
+
+Create placeholder for 
+app/(superadmin)/wallets.tsx:
+  Just render "All Wallets" text centered
+
+Header on every Super Admin screen:
+  Title: "Synergy Cargo Tax"
+  Right side: logout icon button
+    icon: log-out-outline from Ionicons
+    On press: call logout from useAuth
+    then router.replace('/(auth)/login')
+
+Tab bar styling:
+  Active color: #1a6ec8
+  Inactive color: #888888
+  Background: white
+
+---
+
+PART 2 — Admin Shell
+Update app/(admin)/_layout.tsx
+Create it if it does not exist.
+
+Tab navigator with these tabs:
+  Tab 1: Wallet
+    icon: wallet-outline
+    screen: (admin)/index.tsx
+    label: "My Wallet"
+  
+  Tab 2: Ledger
+    icon: receipt-outline
+    screen: (admin)/ledger.tsx
+    label: "Ledger"
+
+Create placeholder for 
+app/(admin)/ledger.tsx:
+  Just render "Ledger" text centered
+
+Header on every Admin screen:
+  Title: "Synergy Cargo Tax"
+  Right side: logout icon button
+    same behavior as Super Admin
+
+Tab bar styling: same as Super Admin
+
+---
+
+PART 3 — Driver Shell
+Update app/(driver)/_layout.tsx
+Create it if it does not exist.
+
+No tab bar needed for driver.
+Driver has a single stack layout.
+
+Header:
+  Title: "My Trip"
+  Right side: logout icon button
+    same behavior as above
+
+Stack screens:
+  (driver)/index.tsx → main trip view
+
+---
+
+PART 4 — Public Shell
+Update app/(public)/_layout.tsx
+Create it if it does not exist.
+
+No header, no tab bar, no logout.
+Simple stack layout.
+This is unauthenticated, no auth context needed.
+
+---
+
+PART 5 — Shared logout handler
+
+Create hooks/useLogout.ts:
+
+import { useRouter } from 'expo-router'
+import { useAuth } from './useAuth'
+
+export function useLogout() {
+  const { logout } = useAuth()
+  const router = useRouter()
+  
+  const handleLogout = async () => {
+    await logout()
+    router.replace('/(auth)/login')
+  }
+  
+  return { handleLogout }
+}
+
+Use this hook in all 3 role layout 
+logout buttons.
+
+---
+
+IMPORTANT RULES:
+- Do not build real screen content
+- Placeholder screens already exist, 
+  do not replace their content
+- Do not modify useAuth.ts
+- Do not modify services/api.ts
+- Install @expo/vector-icons only if 
+  not already included in Expo SDK
+  (it usually is, check first)
+
+---
+
+After completing confirm:
+1. TypeScript compiles with zero errors
+2. Super Admin sees 2 tabs after login
+3. Admin sees 2 tabs after login
+4. Driver sees single screen with header
+5. Logout button on each role returns 
+   to login screen and clears session
+   (test by logging back in after logout 
+   and confirming AsyncStorage is cleared)
+6. Public lookup screen has no header 
+   or tab bar
