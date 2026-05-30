@@ -107,7 +107,7 @@ export default function PillTabBar(props: any) {
               <Pressable
                 key={route.key}
                 onPress={onPress}
-                style={styles.tabItem}
+                style={[styles.tabItem, isFocused && styles.tabItemActive]}
                 accessibilityRole="button"
                 accessibilityState={isFocused ? { selected: true } : {}}
                 accessibilityLabel={options.tabBarAccessibilityLabel}
@@ -117,9 +117,9 @@ export default function PillTabBar(props: any) {
                   size={20}
                   color={isFocused ? theme.colors.white : theme.colors.grey1}
                 />
-                <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>
-                  {label}
-                </Text>
+                {isFocused && (
+                  <Text style={styles.tabLabelActive}>{label}</Text>
+                )}
               </Pressable>
             );
           })}
@@ -157,15 +157,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
     zIndex: 1,
   },
-  tabLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.colors.grey1,
+  tabItemActive: {
+    gap: 6,
   },
   tabLabelActive: {
+    fontSize: 13,
+    fontWeight: '600',
     color: theme.colors.white,
   },
 });

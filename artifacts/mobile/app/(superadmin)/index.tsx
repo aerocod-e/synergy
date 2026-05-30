@@ -158,70 +158,74 @@ export default function SuperAdminTrips() {
         </View>
       </View>
 
-      {/* Filter pills */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.pillsScroll}
-        contentContainerStyle={styles.pillsContainer}
-      >
-        {FILTER_OPTIONS.map((f) => {
-          const active = activeFilter === f;
-          return (
-            <TouchableOpacity
-              key={f}
-              onPress={() => setActiveFilter(f)}
-              activeOpacity={0.75}
-              style={[styles.pill, active ? styles.pillActive : styles.pillInactive]}
-            >
-              <Text style={[styles.pillText, active ? styles.pillTextActive : styles.pillTextInactive]}>
-                {f}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+      {/* Pills + content share the remaining space so nothing pushes them around */}
+      <View style={styles.contentArea}>
+        {/* Filter pills */}
+        <View style={styles.pillsWrapper}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.pillsContainer}
+          >
+            {FILTER_OPTIONS.map((f) => {
+              const active = activeFilter === f;
+              return (
+                <TouchableOpacity
+                  key={f}
+                  onPress={() => setActiveFilter(f)}
+                  activeOpacity={0.75}
+                  style={[styles.pill, active ? styles.pillActive : styles.pillInactive]}
+                >
+                  <Text style={[styles.pillText, active ? styles.pillTextActive : styles.pillTextInactive]}>
+                    {f}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
 
-      {/* Content */}
-      {loading && !refreshing ? (
-        <View style={styles.listContent}>
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
-        </View>
-      ) : error ? (
-        <View style={styles.centeredState}>
-          <Text style={styles.errorText}>Failed to load trips</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={() => fetchTrips()}>
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <FlatList
-          style={styles.list}
-          data={filteredTrips}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={filteredTrips.length === 0 ? styles.emptyList : styles.listContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => fetchTrips(true)} />
-          }
-          renderItem={({ item }) => (
-            <TripCard
-              trip={item}
-              onPress={() => router.push(`/(superadmin)/trip-detail?id=${item.id}`)}
-            />
-          )}
-          ListEmptyComponent={
-            <View style={styles.centeredState}>
-              <Text style={styles.emptyIcon}>○</Text>
-              <Text style={styles.emptyText}>No trips found</Text>
-              {activeFilter !== 'All' && (
-                <Text style={styles.emptySubText}>Try selecting a different filter</Text>
-              )}
-            </View>
-          }
-        />
-      )}
+        {/* List content */}
+        {loading && !refreshing ? (
+          <View style={styles.skeletonArea}>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </View>
+        ) : error ? (
+          <View style={styles.centeredState}>
+            <Text style={styles.errorText}>Failed to load trips</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={() => fetchTrips()}>
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <FlatList
+            style={styles.list}
+            data={filteredTrips}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={filteredTrips.length === 0 ? styles.emptyList : styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={() => fetchTrips(true)} />
+            }
+            renderItem={({ item }) => (
+              <TripCard
+                trip={item}
+                onPress={() => router.push(`/(superadmin)/trip-detail?id=${item.id}`)}
+              />
+            )}
+            ListEmptyComponent={
+              <View style={styles.centeredState}>
+                <Text style={styles.emptyIcon}>○</Text>
+                <Text style={styles.emptyText}>No trips found</Text>
+                {activeFilter !== 'All' && (
+                  <Text style={styles.emptySubText}>Try selecting a different filter</Text>
+                )}
+              </View>
+            }
+          />
+        )}
+      </View>
 
       {/* FAB */}
       <TouchableOpacity
@@ -272,12 +276,20 @@ const styles = StyleSheet.create({
     color: theme.colors.grey1,
     marginTop: 2,
   },
-  pillsScroll: {
-    height: 44,
+  contentArea: {
+    flex: 1,
+  },
+  pillsWrapper: {
+    height: 50,
+    justifyContent: 'center',
   },
   pillsContainer: {
     paddingHorizontal: 20,
     alignItems: 'center',
+  },
+  skeletonArea: {
+    flex: 1,
+    paddingTop: 8,
   },
   pill: {
     paddingHorizontal: 14,
