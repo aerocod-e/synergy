@@ -50,6 +50,14 @@ export default function SuperAdminLayout() {
           title: 'Users',
         }}
       />
+      <Tabs.Screen
+        name="create-trip"
+        options={{
+          title: 'Create Trip',
+          href: null,
+          headerRight: () => null,
+        }}
+      />
     </Tabs>
   );
 }

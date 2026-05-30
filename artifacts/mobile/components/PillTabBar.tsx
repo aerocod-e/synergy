@@ -16,6 +16,8 @@ const TAB_ICONS: Record<string, { active: IoniconsName; inactive: IoniconsName }
 const PILL_PADDING = 6;
 const SLIDER_VERTICAL_INSET = 6;
 
+const HIDDEN_ROUTES = new Set(['create-trip']);
+
 export default function PillTabBar(props: any) {
   const { state, descriptors, navigation } = props as {
     state: { index: number; routes: Array<{ key: string; name: string }> };
@@ -24,10 +26,10 @@ export default function PillTabBar(props: any) {
   };
 
   const insets = useSafeAreaInsets();
-  const tabCount = state.routes.length;
-
   const [pillWidth, setPillWidth] = useState(0);
   const sliderAnim = useRef(new Animated.Value(state.index)).current;
+
+  const tabCount = state.routes.length;
 
   useEffect(() => {
     Animated.spring(sliderAnim, {
@@ -38,6 +40,9 @@ export default function PillTabBar(props: any) {
       mass: 0.7,
     }).start();
   }, [state.index, sliderAnim]);
+
+  const currentRouteName = state.routes[state.index]?.name;
+  if (HIDDEN_ROUTES.has(currentRouteName)) return null;
 
   const slotWidth = pillWidth > 0 ? (pillWidth - PILL_PADDING * 2) / tabCount : 0;
 
