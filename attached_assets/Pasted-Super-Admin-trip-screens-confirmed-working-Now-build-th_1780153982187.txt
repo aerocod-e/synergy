@@ -1,0 +1,280 @@
+Super Admin trip screens confirmed working.
+Now build the Admin wallet and ledger screens.
+These replace the placeholders on the Admin's
+two tabs.
+
+TASK: Admin Wallet + Ledger Screens
+
+PART 1 — Wallet Screen
+Replace app/(admin)/index.tsx with a real 
+wallet balance screen.
+
+DATA FETCHING
+On mount: call getMyWallet()
+On pull to refresh: call getMyWallet()
+
+SCREEN LAYOUT
+Screen background: #f5f7fa
+
+HERO BALANCE CARD
+Large prominent card at top:
+  White background
+  border radius: 20px
+  shadow: strong shadow from theme
+  margin: 20px
+  padding: 24px
+
+  Top row:
+    "MY WALLET" label
+    13px bold uppercase
+    letter spacing: 1
+    color: #888888
+
+  Balance section:
+    "Total Collected" label
+    13px #888888
+    margin top: 8px
+    
+    Balance amount large:
+      "₦" prefix 20px bold #1a6ec8
+      Amount: 36px bold #0d0d0d
+      Use totalCollectedNaira from API
+      formatted with commas:
+        "13,000.00" not "13000.00"
+      Both on same baseline row
+
+  Divider line margin top 16px
+
+  Bottom row:
+    Left:
+      "Cleared" label 12px #888888
+      "₦0.00" below 15px bold #2a8a4a
+      (hardcoded for now, 
+      payment gateway future scope)
+    Right:
+      "Pending" label 12px #888888
+      Same as total collected below
+      15px bold #f59e0b
+      (all collected is pending 
+      until gateway clears)
+
+ENTITY INFO CARD
+Below hero card:
+  White card, border radius 16, shadow
+  margin: 0px 20px 16px
+  padding: 16px
+  
+  Two rows:
+    Row 1:
+      Label: "Entity Type" 12px #888888
+      Value: ownerType capitalized 
+      15px bold #0d0d0d
+      (e.g. "State" or "Stakeholder")
+    
+    Row 2 (margin top 10px):
+      Label: "Entity" 12px #888888
+      Value: entity name from 
+      req.user -- but we don't have 
+      entity name in the token.
+      
+      Instead show entityId for now
+      with label "Entity ID"
+      We will improve this in Phase 3
+
+QUICK ACTION BUTTON
+Below entity card:
+  Full width button
+  margin horizontal: 20px
+  background: #1a6ec8
+  border radius: 12px
+  height: 48px
+  Text: "View Full Ledger →"
+  On press: switch to Ledger tab
+    Use router.push('/(admin)/ledger')
+
+ERROR STATE
+If getMyWallet fails:
+  "Failed to load wallet" red centered
+  Retry button
+
+LOADING STATE
+While fetching:
+  Skeleton hero card same dimensions
+  opacity 0.15 gray rectangles
+
+---
+
+PART 2 — Ledger Screen
+Replace app/(admin)/ledger.tsx with 
+a real ledger screen.
+
+DATA FETCHING
+On mount: call getMyLedger() 
+  with no params (default page 1)
+Store entries and pagination in state
+
+---
+
+SCREEN LAYOUT
+Screen background: #f5f7fa
+
+SUMMARY BAR
+At top, white card:
+  margin: 16px 20px 8px
+  padding: 16px
+  border radius: 16px
+  shadow: card shadow
+
+  Three stats in a row:
+    Credits:
+      Value: summary.totalCredits 
+      formatted as Naira with commas
+      14px bold #2a8a4a
+      Label: "Credits" 11px #888888
+    
+    Reversals:
+      Value: summary.totalReversals
+      formatted as Naira with commas
+      14px bold #c8401a
+      Label: "Reversals" 11px #888888
+    
+    Net:
+      Value: summary.netTotal
+      formatted as Naira with commas
+      14px bold #0d0d0d
+      Label: "Net Total" 11px #888888
+
+FILTER ROW
+Below summary bar:
+  Same pill style as trip list
+  Pills: "All" | "Loading" | 
+         "Unloading" | "Stakeholder Fee"
+  Client-side filtering on feeType field
+  Default: "All"
+
+LEDGER ENTRY LIST
+FlatList below filters
+
+Each entry card:
+  White card
+  border radius: 14px
+  shadow: card shadow
+  margin: 5px 20px
+  padding: 14px 16px
+
+  ROW 1:
+    Left:
+      Fee type label:
+        'loading' → "Loading Fee"
+        'unloading' → "Unloading Fee"
+        'stakeholder_fee' → "Stakeholder Fee"
+      15px bold #0d0d0d
+    Right:
+      Amount with sign:
+        credit: "+₦X,XXX.XX" 
+          color: #2a8a4a
+        reversal: "-₦X,XXX.XX"
+          color: #c8401a
+      16px bold
+
+  ROW 2:
+    Left:
+      Vehicle number
+      13px #4a4a4a
+    Right:
+      Cleared badge if cleared = true:
+        "Cleared" small badge
+        #e8f5ec bg, #2a8a4a text
+        border radius: 6px
+        padding: 2px 8px
+        font size: 11px
+      Or "Pending" badge if false:
+        #fff8e1 bg, #f59e0b text
+        same dimensions
+
+  ROW 3:
+    Date and time
+    13px #888888
+    Format: "21 May, 9:05 AM"
+
+EMPTY STATE
+"No ledger entries yet" centered
+with supporting text:
+"Entries appear when trips are 
+created with fees allocated to 
+your wallet"
+
+ERROR STATE
+"Failed to load ledger" red
+Retry button
+
+LOADING STATE
+3 skeleton entry cards
+
+---
+
+NAIRA FORMATTING HELPER
+Create utils/formatCurrency.ts:
+
+export function formatNaira(
+  kobo: number
+): string {
+  const naira = kobo / 100
+  return naira.toLocaleString('en-NG', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })
+}
+
+export function formatNairaWithSign(
+  kobo: number, 
+  entryType: 'credit' | 'reversal'
+): string {
+  const formatted = formatNaira(
+    Math.abs(kobo)
+  )
+  return entryType === 'credit' 
+    ? '+₦' + formatted 
+    : '-₦' + formatted
+}
+
+Use this utility in BOTH the wallet 
+screen and ledger screen and in any 
+future screens that display money.
+
+---
+
+IMPORTANT RULES:
+  - getMyWallet and getMyLedger are 
+    already in services/api.ts, 
+    do not modify them
+  - Client-side filtering on ledger,
+    no extra API calls per filter
+  - formatNaira utility must be used 
+    for ALL currency display, 
+    never manual division in JSX
+  - Do not modify any backend
+  - Do not modify useAuth or useLogout
+  - Do not modify Super Admin screens
+  - TypeScript zero errors
+
+After completing confirm:
+1. TypeScript zero errors
+2. Wallet screen loads correctly 
+   for lagos.admin@synergy.com
+   Shows ₦13,000.00 total collected
+   (from our earlier test data)
+3. Ledger screen shows 3 entries 
+   for Lagos admin
+   (2 from same-state trip LAG-002-AA,
+   1 from inter-state LAG-001-AA)
+   Note: LAG-002-AA was cancelled so 
+   those entries may show as reversals
+4. Filter pills work client-side:
+   tap "Loading" shows only 
+   loading fee entries
+5. Amount signs correct:
+   credits show green +₦
+   reversals show red -₦
+6. formatNaira utility is used 
+   in both screens
