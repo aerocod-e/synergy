@@ -1,0 +1,2 @@
+- [Playwright session freeze](playwright-session-freeze.md) — runTest browser gets stuck on an early snapshot; localStorage/reload/logout instructions have no effect.
+- [Driver screen refresh pattern](driver-screen-refresh.md) — use fetchTrips(true) after startTrip/completeTrip for inline RefreshControl update; fetchTrips() (no arg) shows skeleton and blocks observation.
