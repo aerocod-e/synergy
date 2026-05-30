@@ -58,6 +58,13 @@ export default function SuperAdminLayout() {
           headerRight: () => null,
         }}
       />
+      <Tabs.Screen
+        name="trip-detail"
+        options={{
+          title: 'Trip Detail',
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }
