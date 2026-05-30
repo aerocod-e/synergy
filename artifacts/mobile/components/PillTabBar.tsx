@@ -16,7 +16,7 @@ const TAB_ICONS: Record<string, { active: IoniconsName; inactive: IoniconsName }
 const PILL_PADDING = 6;
 const SLIDER_VERTICAL_INSET = 6;
 
-const HIDDEN_ROUTES = new Set(['create-trip']);
+const HIDDEN_ROUTES = new Set(['create-trip', 'trip-detail']);
 
 export default function PillTabBar(props: any) {
   const { state, descriptors, navigation } = props as {
@@ -27,19 +27,26 @@ export default function PillTabBar(props: any) {
 
   const insets = useSafeAreaInsets();
   const [pillWidth, setPillWidth] = useState(0);
-  const sliderAnim = useRef(new Animated.Value(state.index)).current;
 
-  const tabCount = state.routes.length;
+  const visibleRoutes = state.routes.filter((r) => !HIDDEN_ROUTES.has(r.name));
+  const tabCount = visibleRoutes.length;
+
+  const focusedVisibleIndex = visibleRoutes.findIndex(
+    (r) => r.key === state.routes[state.index]?.key,
+  );
+
+  const sliderAnim = useRef(new Animated.Value(Math.max(focusedVisibleIndex, 0))).current;
 
   useEffect(() => {
+    if (focusedVisibleIndex < 0) return;
     Animated.spring(sliderAnim, {
-      toValue: state.index,
+      toValue: focusedVisibleIndex,
       useNativeDriver: true,
       damping: 22,
       stiffness: 220,
       mass: 0.7,
     }).start();
-  }, [state.index, sliderAnim]);
+  }, [focusedVisibleIndex, sliderAnim]);
 
   const currentRouteName = state.routes[state.index]?.name;
   if (HIDDEN_ROUTES.has(currentRouteName)) return null;
@@ -47,70 +54,76 @@ export default function PillTabBar(props: any) {
   const slotWidth = pillWidth > 0 ? (pillWidth - PILL_PADDING * 2) / tabCount : 0;
 
   const sliderTranslateX = sliderAnim.interpolate({
-    inputRange: state.routes.map((_, i) => i),
-    outputRange: state.routes.map((_, i) => PILL_PADDING + i * slotWidth),
+    inputRange: visibleRoutes.map((_, i) => i),
+    outputRange: visibleRoutes.map((_, i) => PILL_PADDING + i * slotWidth),
     extrapolate: 'clamp',
   });
 
+  const pillBottom = Math.max(insets.bottom, 8);
+
   return (
-    <View style={[styles.wrapper, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-      <View
-        style={styles.pill}
-        onLayout={(e) => setPillWidth(e.nativeEvent.layout.width)}
-      >
-        {pillWidth > 0 && (
-          <Animated.View
-            style={[
-              styles.slider,
-              {
-                width: slotWidth,
-                transform: [{ translateX: sliderTranslateX }],
-              },
-            ]}
-          />
-        )}
+    // Full-screen transparent overlay — pointerEvents="box-none" lets touches
+    // pass through the transparent area but still hit the pill bar itself.
+    <View style={StyleSheet.absoluteFillObject} pointerEvents="box-none">
+      <View style={[styles.wrapper, { bottom: pillBottom }]} pointerEvents="box-none">
+        <View
+          style={styles.pill}
+          onLayout={(e) => setPillWidth(e.nativeEvent.layout.width)}
+        >
+          {pillWidth > 0 && (
+            <Animated.View
+              style={[
+                styles.slider,
+                {
+                  width: slotWidth,
+                  transform: [{ translateX: sliderTranslateX }],
+                },
+              ]}
+            />
+          )}
 
-        {state.routes.map((route, index) => {
-          const { options } = descriptors[route.key];
-          const label =
-            typeof options.tabBarLabel === 'string'
-              ? options.tabBarLabel
-              : options.title ?? route.name;
-          const isFocused = state.index === index;
+          {visibleRoutes.map((route) => {
+            const { options } = descriptors[route.key];
+            const label =
+              typeof options.tabBarLabel === 'string'
+                ? options.tabBarLabel
+                : options.title ?? route.name;
+            const isFocused = state.routes[state.index]?.key === route.key;
 
-          const iconSet = TAB_ICONS[route.name] ?? {
-            active: 'ellipse' as IoniconsName,
-            inactive: 'ellipse-outline' as IoniconsName,
-          };
-          const iconName: IoniconsName = isFocused ? iconSet.active : iconSet.inactive;
+            const iconSet = TAB_ICONS[route.name] ?? {
+              active: 'ellipse' as IoniconsName,
+              inactive: 'ellipse-outline' as IoniconsName,
+            };
+            const iconName: IoniconsName = isFocused ? iconSet.active : iconSet.inactive;
 
-          const onPress = () => {
-            const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name);
-            }
-          };
+            const onPress = () => {
+              const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+              if (!isFocused && !event.defaultPrevented) {
+                navigation.navigate(route.name);
+              }
+            };
 
-          return (
-            <Pressable
-              key={route.key}
-              onPress={onPress}
-              style={styles.tabItem}
-              accessibilityRole="button"
-              accessibilityState={isFocused ? { selected: true } : {}}
-              accessibilityLabel={options.tabBarAccessibilityLabel}
-            >
-              <Ionicons
-                name={iconName}
-                size={20}
-                color={isFocused ? theme.colors.white : theme.colors.grey1}
-              />
-              <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>
-                {label}
-              </Text>
-            </Pressable>
-          );
-        })}
+            return (
+              <Pressable
+                key={route.key}
+                onPress={onPress}
+                style={styles.tabItem}
+                accessibilityRole="button"
+                accessibilityState={isFocused ? { selected: true } : {}}
+                accessibilityLabel={options.tabBarAccessibilityLabel}
+              >
+                <Ionicons
+                  name={iconName}
+                  size={20}
+                  color={isFocused ? theme.colors.white : theme.colors.grey1}
+                />
+                <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
     </View>
   );
@@ -119,7 +132,6 @@ export default function PillTabBar(props: any) {
 const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
-    bottom: 24,
     left: 20,
     right: 20,
   },

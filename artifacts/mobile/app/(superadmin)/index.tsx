@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
 import { getTrips } from '@/services/api';
 
@@ -103,6 +104,7 @@ function TripCard({ trip, onPress }: { trip: Trip; onPress: () => void }) {
 
 export default function SuperAdminTrips() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -160,6 +162,7 @@ export default function SuperAdminTrips() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={styles.pillsScroll}
         contentContainerStyle={styles.pillsContainer}
       >
         {FILTER_OPTIONS.map((f) => {
@@ -195,6 +198,7 @@ export default function SuperAdminTrips() {
         </View>
       ) : (
         <FlatList
+          style={styles.list}
           data={filteredTrips}
           keyExtractor={(item) => item.id}
           contentContainerStyle={filteredTrips.length === 0 ? styles.emptyList : styles.listContent}
@@ -221,7 +225,7 @@ export default function SuperAdminTrips() {
 
       {/* FAB */}
       <TouchableOpacity
-        style={styles.fab}
+        style={[styles.fab, { bottom: Math.max(insets.bottom, 8) + 64 + 16 }]}
         onPress={() => router.push('/(superadmin)/create-trip')}
         activeOpacity={0.85}
       >
@@ -268,9 +272,12 @@ const styles = StyleSheet.create({
     color: theme.colors.grey1,
     marginTop: 2,
   },
+  pillsScroll: {
+    height: 44,
+  },
   pillsContainer: {
-    paddingVertical: 8,
     paddingHorizontal: 20,
+    alignItems: 'center',
   },
   pill: {
     paddingHorizontal: 14,
@@ -280,6 +287,8 @@ const styles = StyleSheet.create({
   },
   pillActive: {
     backgroundColor: theme.colors.primary,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
   pillInactive: {
     backgroundColor: theme.colors.white,
@@ -288,6 +297,7 @@ const styles = StyleSheet.create({
   },
   pillText: {
     fontSize: 13,
+    lineHeight: 18,
   },
   pillTextActive: {
     color: theme.colors.white,
@@ -297,7 +307,7 @@ const styles = StyleSheet.create({
     color: theme.colors.grey1,
   },
   listContent: {
-    paddingBottom: 120,
+    paddingBottom: 140,
   },
   card: {
     backgroundColor: theme.colors.white,
@@ -381,8 +391,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
   },
-  emptyList: {
+  list: {
     flex: 1,
+  },
+  emptyList: {
+    flexGrow: 1,
   },
   emptyIcon: {
     fontSize: 40,
@@ -400,7 +413,6 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: 100,
     right: 20,
     width: 56,
     height: 56,
