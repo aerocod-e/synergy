@@ -1,0 +1,208 @@
+Trip creation confirmed working. Now build 
+the Super Admin trip list screen to replace 
+the placeholder on the Trips tab.
+
+TASK: Super Admin Trip List Screen
+
+Replace app/(superadmin)/index.tsx with 
+a real trip list screen.
+
+---
+
+DATA FETCHING
+On mount: call getTrips() with no filters
+On pull to refresh: call getTrips() again
+Store trips in local state
+
+---
+
+SCREEN LAYOUT
+
+Screen background: #f5f7fa
+
+HEADER SUMMARY CARD
+At the top above the list:
+  White card, border radius 16, shadow
+  margin: 16px 20px 8px
+  padding: 16px
+  
+  Two stats side by side:
+    Left:
+      Large number: count of active trips
+      (status === 'created' or 'in_transit')
+      font size: 28px bold #0d0d0d
+      Label below: "Active Trips"
+      font size: 12px #888888
+    
+    Right:
+      Large number: count of unstarted trips
+      (unstartedFlag === true)
+      font size: 28px bold
+      Color: #c8401a if count > 0, 
+             #0d0d0d if 0
+      Label below: "Unstarted"
+      font size: 12px #888888
+    
+    Divider line between them
+
+FILTER ROW
+Below summary card:
+  Horizontal ScrollView, no scrollbar
+  padding: 8px 20px
+  Filter pills (small tappable chips):
+    "All" | "Created" | "In Transit" | 
+    "Completed" | "Cancelled"
+    
+    Each pill:
+      padding: 6px 14px
+      border radius: 20px
+      margin right: 8px
+      font size: 13px
+      
+    Active pill:
+      background: #1a6ec8
+      text: white
+    
+    Inactive pill:
+      background: white
+      text: #888888
+      border: 1px #e4e8ef
+    
+    On tap: filter the trips list locally
+    (no new API call, just filter 
+    the already-fetched array)
+    Default selected: "All"
+
+TRIP LIST
+FlatList below filter row
+Pull to refresh enabled
+
+Each trip card:
+  White card
+  border radius: 16px
+  shadow: card shadow from theme
+  margin: 6px 20px
+  padding: 16px
+  
+  ROW 1 (top):
+    Left: Vehicle number
+      font size: 17px bold #0d0d0d
+    Right: Status badge
+      'created'    → #e8f0fb bg, 
+                     #1a6ec8 text, 
+                     "Created"
+      'in_transit' → #fff8e1 bg, 
+                     #f59e0b text, 
+                     "In Transit"
+      'completed'  → #e8f5ec bg, 
+                     #2a8a4a text, 
+                     "Completed"
+      'cancelled'  → #fdf0ed bg, 
+                     #c8401a text, 
+                     "Cancelled"
+      border radius: 8px
+      padding: 4px 10px
+      font size: 12px bold
+
+  ROW 2:
+    Route text:
+      "[Loading State code] → 
+       [Unloading State code]"
+      font size: 14px #4a4a4a
+      Example: "LG → KN"
+
+  ROW 3:
+    Left: Driver email
+      font size: 13px #888888
+      truncated if too long 
+      (numberOfLines: 1)
+    Right: Date
+      font size: 13px #888888
+      Format: "21 May" 
+      (day + short month, no year)
+
+  UNSTARTED WARNING BANNER
+  If unstartedFlag === true:
+    A row below the card content 
+    (inside the card, below row 3):
+      border top: 1px #fdf0ed
+      margin top: 10px
+      padding top: 10px
+      background: transparent
+      
+      "⚠ Not started yet" text
+      font size: 12px
+      color: #c8401a
+      bold
+
+  The entire card is tappable:
+    On press: router.push(
+      '/(superadmin)/trip-detail?id=' 
+      + trip.id)
+    We will build trip-detail in 
+    Phase 3, for now the route 
+    just needs to exist as a 
+    placeholder screen
+
+EMPTY STATE
+If no trips match the current filter:
+  Centered in remaining space:
+    "○" character, 40px, #888888
+    "No trips found" 14px #888888 below
+    If filter is not "All":
+      "Try selecting a different filter"
+      13px #888888
+
+ERROR STATE
+If fetch fails:
+  "Failed to load trips" red centered
+  Retry button in blue below
+
+LOADING STATE
+While fetching on first load:
+  3 skeleton placeholder cards
+  Each is a white card same size 
+  as a trip card but with gray 
+  rounded rectangles where text 
+  would be (use opacity 0.15 on 
+  a #0d0d0d background view)
+
+---
+
+CREATE PLACEHOLDER SCREEN
+Create app/(superadmin)/trip-detail.tsx:
+  Just render "Trip Detail" centered
+  We will replace this in Phase 3
+
+---
+
+IMPORTANT RULES:
+  - Filtering is client-side only
+    no additional API calls per filter
+  - unstartedFlag comes from the API
+    do not compute it on the frontend
+  - Do not modify the FAB or 
+    create-trip screen
+  - Do not modify any backend
+  - All colors from constants/theme.ts
+  - TypeScript zero errors
+
+After completing confirm:
+1. TypeScript zero errors
+2. Trip list loads and shows 
+   the TESTCAR2233 trip from 
+   the earlier test
+3. Summary card shows correct 
+   active count and unstarted count
+4. Filter pills work correctly:
+   tap "Completed" shows only 
+   completed trips
+   tap "All" shows all trips again
+5. Unstarted warning shows on 
+   any trip where unstartedFlag 
+   is true (create a test trip 
+   and wait or manually check 
+   the flag value from the API)
+6. Tapping a trip card navigates 
+   to the placeholder trip detail 
+   screen
