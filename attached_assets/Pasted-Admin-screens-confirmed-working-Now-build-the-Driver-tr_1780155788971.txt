@@ -1,0 +1,234 @@
+Admin screens confirmed working. Now build 
+the Driver trip view screen. This replaces 
+the placeholder on the Driver's single screen.
+
+TASK: Driver Trip View + Start/Complete
+
+Replace app/(driver)/index.tsx with a 
+real screen.
+
+---
+
+DATA FETCHING
+On mount: call getTrips() 
+  Driver role automatically scopes 
+  this to their own trips only.
+  
+Find the active trip:
+  The trip where status is 'created' 
+  or 'in_transit'
+  If multiple exist take the first one
+  (should not happen but handle it)
+
+Also fetch all trips for history section.
+
+---
+
+SCREEN LAYOUT
+Screen background: #f5f7fa
+Full ScrollView, no tab bar 
+(driver has stack layout)
+
+---
+
+STATE 1: NO ACTIVE TRIP
+When no trip has status 'created' 
+or 'in_transit':
+
+  Centered in top half of screen:
+    "○" 40px #888888
+    "No Active Trip" 20px bold #0d0d0d 
+    below
+    "You have no assigned trip 
+    at the moment." 
+    14px #888888 below that
+
+  If there are completed trips, 
+  show history section below 
+  (see History section at bottom)
+
+---
+
+STATE 2: ACTIVE TRIP CARD
+When an active trip exists:
+
+TRIP STATUS CARD
+White card, border radius 20, 
+strong shadow from theme
+margin: 20px
+padding: 20px
+
+  TOP SECTION:
+    Row:
+      "ACTIVE TRIP" label
+      13px bold uppercase #888888
+      left
+      Status badge right:
+        same colors as trip list
+
+    Vehicle number:
+      28px bold #0d0d0d
+      margin top: 8px
+
+    Route row:
+      "[Loading State name]" 
+      " → " 
+      "[Unloading State name]"
+      16px #4a4a4a
+      margin top: 4px
+
+  DIVIDER
+
+  MIDDLE SECTION: Fee Payment Status
+    Title: "Fee Status"
+    13px bold uppercase #888888
+    margin bottom: 12px
+
+    Two rows:
+      Loading Fee row:
+        Left: "Loading Fee" 14px #0d0d0d
+        Right: "PAID" badge
+          #e8f5ec bg, #2a8a4a text
+          border radius: 6px
+          padding: 4px 10px
+          12px bold
+      
+      Unloading Fee row:
+        Same pattern as loading fee
+        "PAID" badge
+
+    Note: both always show PAID 
+    because fees are allocated at 
+    trip creation. This is the 
+    checkpoint display card.
+
+  DIVIDER
+
+  BOTTOM SECTION: Trip Info
+    Two rows:
+      Origin:
+        Label: "From" 12px #888888
+        Value: originDescription 
+        14px #0d0d0d
+      
+      Destination:
+        Label: "To" 12px #888888
+        Value: destinationDescription
+        14px #0d0d0d
+
+ACTION BUTTON
+Below the trip card:
+  margin horizontal: 20px
+
+  If status === 'created':
+    Primary button full width:
+    background: #1a6ec8
+    Text: "Start Trip"
+    On press:
+      Show confirmation Alert:
+        Title: "Start Trip"
+        Message: "Confirm you are 
+        starting this trip?"
+        Buttons: "Cancel" | "Start"
+      On confirm: call startTrip(tripId)
+      Show ActivityIndicator while loading
+      On success: refresh trip data
+      On error: show error message 
+        in red below button
+
+  If status === 'in_transit':
+    Primary button full width:
+    background: #2a8a4a (green)
+    Text: "Mark as Complete"
+    On press:
+      Show confirmation Alert:
+        Title: "Complete Trip"
+        Message: "Confirm you have 
+        completed this trip?"
+        Buttons: "Cancel" | "Complete"
+      On confirm: call completeTrip(tripId)
+      Show ActivityIndicator while loading
+      On success: refresh trip data
+      On error: show error message below
+
+---
+
+TRIP HISTORY SECTION
+Below the active trip card 
+(or below the empty state):
+
+Section header:
+  "TRIP HISTORY" 
+  13px bold uppercase #888888
+  margin: 24px 20px 12px
+
+List of completed/cancelled trips:
+  Each as a smaller card:
+    White card, border radius 14
+    card shadow
+    margin: 5px 20px
+    padding: 14px 16px
+    
+    Row 1:
+      Vehicle number 15px bold left
+      Status badge right
+    Row 2:
+      Route "[Loading] → [Unloading]"
+      13px #4a4a4a
+    Row 3:
+      Date "21 May" right
+      13px #888888
+
+If no history:
+  "No completed trips yet"
+  13px #888888
+  centered in the section
+
+---
+
+PULL TO REFRESH
+Refresh entire screen data on pull
+
+---
+
+LOADING STATE
+While fetching on first load:
+  Skeleton active trip card 
+  same dimensions as the card
+  Gray rectangles at opacity 0.15
+
+ERROR STATE
+"Failed to load trip data" red
+Retry button centered
+
+---
+
+IMPORTANT RULES:
+  - startTrip and completeTrip are 
+    already in services/api.ts
+  - Always use Alert.alert for 
+    confirmation dialogs, 
+    no custom modal needed
+  - After successful start or complete,
+    re-fetch trips (call getTrips() again)
+    do not manually update state
+  - All currency values use formatNaira
+    from utils/formatCurrency.ts
+  - Do not modify any backend
+  - Do not modify Super Admin or 
+    Admin screens
+  - TypeScript zero errors
+
+After completing confirm:
+1. TypeScript zero errors
+2. Driver1 login shows active trip 
+   card for their assigned trip
+3. "Start Trip" button shows 
+   confirmation alert
+4. After confirming start: status 
+   updates to "In Transit" and button 
+   changes to "Mark as Complete"
+5. After confirming complete: trip 
+   moves to history section and 
+   empty state shows for active trip
+6. Fee status shows both fees as PAID
