@@ -1,0 +1,336 @@
+Phase 2 begins. Build the trip creation 
+form for Super Admin. This is the most 
+complex screen in the app.
+
+TASK: Super Admin Trip Creation Form
+
+Create app/(superadmin)/create-trip.tsx
+
+Add a "Create Trip" button to the Trips 
+tab (app/(superadmin)/index.tsx):
+  Floating action button (FAB):
+    position: absolute
+    bottom: 100px (above pill tab bar)
+    right: 20px
+    width: 56px, height: 56px
+    border radius: 28px
+    background: #1a6ec8
+    shadow: strong shadow from theme
+    Shows a "+" character in white 
+    24px bold
+    On press: router.push(
+      '/(superadmin)/create-trip')
+
+---
+
+REUSABLE MODAL PICKER COMPONENT
+Create components/SearchablePicker.tsx
+
+Props:
+  visible: boolean
+  title: string
+  items: Array<{ id: string, label: string, 
+    sublabel?: string }>
+  selectedId: string | null
+  onSelect: (id: string, label: string) => void
+  onClose: () => void
+
+UI:
+  Modal (transparent, animationType slide)
+  Overlay: semi-transparent black background
+  Sheet slides up from bottom:
+    background: white
+    border radius top: 24px
+    max height: 75% of screen
+    
+    Header row:
+      Title text left, 17px bold
+      Close button right (✕ character)
+    
+    Search input below header:
+      background: #f5f7fa
+      border radius: 12px
+      height: 44px
+      padding horizontal: 12px
+      placeholder: "Search..."
+      filters items in real time as 
+      user types (case insensitive match 
+      on label and sublabel)
+    
+    FlatList below search:
+      Each item row:
+        padding: 14px 20px
+        border bottom: 1px #f0f0f0
+        label: 15px bold #0d0d0d
+        sublabel if present: 12px #888888
+        Selected item shows a ✓ on right
+        in #1a6ec8
+      Empty state:
+        "No results found" centered gray text
+
+---
+
+CREATE TRIP SCREEN
+app/(superadmin)/create-trip.tsx
+
+Header:
+  Back button left (← character)
+  Title: "New Trip"
+  No logout button on this screen
+
+Screen background: #f5f7fa
+Wrapped in KeyboardAvoidingView
+Full screen ScrollView with 
+  contentContainerStyle padding 
+  bottom 120px
+
+Form sections as cards 
+(white, border radius 16, shadow, 
+margin horizontal 20, margin bottom 16):
+
+CARD 1: Vehicle & Driver
+  Section label: "VEHICLE & DRIVER"
+  
+  Vehicle Number input:
+    Label: "Vehicle Number"
+    Placeholder: "e.g. LAG-001-AA"
+    autoCapitalize: characters
+    Value stored as uppercase
+  
+  Driver selector:
+    Label: "Assign Driver"
+    Renders as a tappable row 
+    (not a TextInput):
+      Shows selected driver email or 
+      "Select a driver" placeholder
+      Right arrow (→) character
+      On tap: opens SearchablePicker
+        title: "Select Driver"
+        items: fetched from getUsers() 
+        filtered to role === 'driver'
+        label: driver email
+    Loads driver list on screen mount
+
+CARD 2: Route
+  Section label: "ROUTE"
+  
+  Loading State selector:
+    Label: "Loading State"
+    Tappable row, same pattern as driver
+    On tap: opens SearchablePicker
+      title: "Loading State"
+      items: fetched from getStates()
+      label: state name
+      sublabel: state code
+  
+  Unloading State selector:
+    Label: "Unloading State"  
+    Same as loading state picker
+    Different state variable
+  
+  Origin description input:
+    Label: "Origin Description"
+    Placeholder: "e.g. Lagos Island Port"
+    multiline: false
+  
+  Destination description input:
+    Label: "Destination Description"
+    Placeholder: "e.g. Kano Central Market"
+    multiline: false
+
+CARD 3: State Fees
+  Section label: "STATE FEES"
+  Note text below label:
+    "Amounts in Naira — converted 
+    automatically"
+    12px #888888 italic
+  
+  Loading Fee input:
+    Label: "Loading State Fee (₦)"
+    keyboardType: numeric
+    Placeholder: "0.00"
+    Shows selected loading state name 
+    as helper text below input if 
+    a state is selected:
+      "→ Lagos" in 12px #1a6ec8
+  
+  Unloading Fee input:
+    Label: "Unloading State Fee (₦)"
+    keyboardType: numeric
+    Placeholder: "0.00"
+    Shows selected unloading state name
+    as helper text below if selected
+
+CARD 4: Stakeholder Fees
+  Section label: "STAKEHOLDER FEES"
+  Note text: same as card 3
+  
+  Fetch stakeholders from 
+  getStakeholders() on mount
+  
+  For each stakeholder render a row:
+    Left side:
+      Toggle switch (React Native Switch)
+        default: false (disabled)
+      Stakeholder name 15px bold
+      "Placeholder stakeholder X" 
+      13px #888888 below name
+    Right side (only visible when 
+    toggle is ON):
+      Amount input
+        width: 120px
+        keyboardType: numeric
+        Placeholder: "0.00"
+        Label above: "₦"
+
+SUBMIT BUTTON:
+  Outside cards, margin horizontal 20
+  margin bottom 32
+  Full width primary button
+  Text: "Create Trip"
+  Shows ActivityIndicator when loading
+  Disabled when loading
+
+---
+
+FORM VALIDATION
+On submit, validate in this order.
+Show first failing error in a red 
+text below the form, above submit button:
+
+  1. "Vehicle number is required"
+     if vehicleNumber is empty
+  
+  2. "Please assign a driver"
+     if no driver selected
+  
+  3. "Please select a loading state"
+     if no loading state selected
+  
+  4. "Please select an unloading state"
+     if no unloading state selected
+  
+  5. "Loading fee must be greater than 0"
+     if loadingFee is 0 or empty
+  
+  6. "Unloading fee must be greater than 0"
+     if unloadingFee is 0 or empty
+  
+  7. For each enabled stakeholder:
+     "Enter amount for [name]"
+     if toggle is on but amount is 0 
+     or empty
+
+---
+
+NAIRA TO KOBO CONVERSION
+Before calling createTrip API:
+  Convert all fee amounts:
+    kobo = Math.round(
+      parseFloat(nairaInput) * 100
+    )
+  
+  Build the request body:
+  {
+    vehicleNumber: vehicleNumber.toUpperCase(),
+    driverId: selectedDriverId,
+    loadingStateId: selectedLoadingStateId,
+    unloadingStateId: selectedUnloadingStateId,
+    originDescription,
+    destinationDescription,
+    fees: {
+      loadingFee: loadingFeeKobo,
+      unloadingFee: unloadingFeeKobo,
+      stakeholders: allThreeStakeholders.map(s => ({
+        stakeholderId: s.id,
+        amount: s.enabled 
+          ? Math.round(parseFloat(s.amount) * 100) 
+          : 0,
+        enabled: s.enabled
+      }))
+    }
+  }
+
+---
+
+ON SUCCESS:
+  Show a success state briefly:
+    Green checkmark (✓) large centered
+    "Trip Created Successfully" 
+    Trip ID below in small gray text
+    After 2 seconds: 
+      router.replace('/(superadmin)/')
+      which returns to trips list
+
+ON API ERROR:
+  Show the error message from API 
+  response in red below the form
+  Do not navigate away
+  Common error to handle explicitly:
+    409: "This vehicle already has 
+    an active trip"
+
+---
+
+ADD TO services/api.ts if not present:
+  Confirm createTrip, getUsers, 
+  getStates, getStakeholders are 
+  all exported correctly.
+  No changes needed if already there.
+
+---
+
+STYLING RULES:
+  All colors from constants/theme.ts
+  Form field labels: 
+    13px bold #4a4a4a
+    margin bottom 6px
+  Tappable selector rows:
+    height: 52px
+    background: #f5f7fa
+    border radius: 12px
+    padding horizontal: 16px
+    flex row, space between, centered
+  Text inputs:
+    same style as selector rows
+    but with cursor
+  Card section labels:
+    13px bold uppercase
+    letter spacing: 1
+    color: #888888
+    margin bottom: 12px
+
+---
+
+IMPORTANT RULES:
+  - SearchablePicker must be a 
+    standalone reusable component
+  - All 3 data fetches (drivers, states, 
+    stakeholders) happen in parallel 
+    on screen mount using Promise.all
+  - Naira to kobo conversion ONLY 
+    happens at submit time, never 
+    stored in state as kobo
+  - Do not modify any backend endpoints
+  - Do not modify useAuth or useLogout
+  - TypeScript zero errors
+
+After completing confirm:
+1. TypeScript zero errors
+2. SearchablePicker opens and filters 
+   correctly for states (search "Lag" 
+   shows Lagos)
+3. All 3 stakeholder toggles work 
+   independently
+4. Submit with valid data creates a 
+   trip and returns to trips list
+5. Submit with missing vehicle number 
+   shows validation error
+6. 409 duplicate vehicle error 
+   displays correctly
+
+Show screenshots of:
+  - The create trip form (Card 1 + 2 visible)
+  - SearchablePicker open with states list
+  - Stakeholder fees card with one 
+    toggle enabled
