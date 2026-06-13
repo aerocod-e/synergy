@@ -29,6 +29,8 @@ async function migrate(): Promise<void> {
     console.log('✓ Table created: stakeholders');
 
     // users — polymorphic entity_id (states or stakeholders)
+    // Valid role values: super_admin | state_admin | trip_admin | stakeholder
+    // Deprecated (no longer valid): admin, driver
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -44,6 +46,22 @@ async function migrate(): Promise<void> {
       )
     `);
     console.log('✓ Table created: users');
+
+    // drivers — references users(id) via created_by
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS drivers (
+        id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        full_name      VARCHAR(255) NOT NULL,
+        license_number VARCHAR(100) NOT NULL UNIQUE,
+        phone_number   VARCHAR(20) NOT NULL,
+        created_by     UUID REFERENCES users(id),
+        is_active      BOOLEAN NOT NULL DEFAULT true,
+        deleted_at     TIMESTAMP WITH TIME ZONE,
+        created_at     TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at     TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )
+    `);
+    console.log('✓ Table created: drivers');
 
     // trips — references users and states; soft-delete via deleted_at
     await client.query(`
@@ -124,7 +142,7 @@ async function migrate(): Promise<void> {
     `);
     console.log('✓ Table created: trip_events');
 
-    console.log('\n✅ All 8 tables created successfully.');
+    console.log('\n✅ All 9 tables created successfully.');
   } finally {
     client.release();
     await pool.end();
