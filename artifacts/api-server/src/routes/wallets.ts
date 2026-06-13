@@ -5,8 +5,10 @@ import { getMyWallet, getMyLedger, getAllWallets } from "../controllers/walletCo
 
 const router = Router();
 
-router.get("/my",        authenticateToken, requireRole("admin"), getMyWallet);
-router.get("/my/ledger", authenticateToken, requireRole("admin"), getMyLedger);
+// TODO: clarify if state_admin or trip_admin
+router.get("/my",        authenticateToken, requireRole("trip_admin"), getMyWallet);
+// TODO: clarify if state_admin or trip_admin
+router.get("/my/ledger", authenticateToken, requireRole("trip_admin"), getMyLedger);
 router.get("/all",       authenticateToken, requireRole("super_admin"), getAllWallets);
 
 export default router;
