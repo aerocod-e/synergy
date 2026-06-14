@@ -63,14 +63,20 @@ function RootLayoutNav() {
         router.replace("/(auth)/login");
       }
     } else {
-      const roleGroup =
-        user.role === "super_admin" ? "(superadmin)" :
-        user.role === "admin"       ? "(admin)"       : "(driver)";
+      const role = user.role as string;
+      const roleGroupMap: Record<string, string> = {
+        super_admin: "(superadmin)",
+        state_admin: "(stateadmin)",
+        trip_admin:  "(tripadmin)",
+        stakeholder: "(stakeholder)",
+      };
+      const roleGroup = roleGroupMap[role] ?? "(stakeholder)";
 
       if (currentGroup !== roleGroup && !inPublicGroup) {
-        if (user.role === "super_admin") router.replace("/(superadmin)");
-        else if (user.role === "admin")  router.replace("/(admin)");
-        else                             router.replace("/(driver)");
+        if (role === "super_admin")      router.replace("/(superadmin)");
+        else if (role === "state_admin") router.replace("/(stateadmin)");
+        else if (role === "trip_admin")  router.replace("/(tripadmin)");
+        else                             router.replace("/(stakeholder)");
       }
     }
   }, [user, isLoading, isInitializing, segments]);
@@ -85,10 +91,11 @@ function RootLayoutNav() {
 
   return (
     <Stack screenOptions={{ headerBackTitle: "Back" }}>
-      <Stack.Screen name="(auth)"        options={{ headerShown: false }} />
+      <Stack.Screen name="(auth)"         options={{ headerShown: false }} />
       <Stack.Screen name="(superadmin)"  options={{ headerShown: false }} />
-      <Stack.Screen name="(admin)"       options={{ headerShown: false }} />
-      <Stack.Screen name="(driver)"      options={{ headerShown: false }} />
+      <Stack.Screen name="(stateadmin)"  options={{ headerShown: false }} />
+      <Stack.Screen name="(tripadmin)"   options={{ headerShown: false }} />
+      <Stack.Screen name="(stakeholder)" options={{ headerShown: false }} />
       <Stack.Screen name="(public)"      options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)"        options={{ headerShown: false }} />
       <Stack.Screen name="+not-found" />
