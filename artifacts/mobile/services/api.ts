@@ -113,6 +113,9 @@ export const lookupVehicle = (vehicleNumber: string) =>
 // ── Users (Super Admin) ──────────────────────────────────────────────────────
 export const getUsers = () => apiRequest('/api/users');
 
+export const createUser = (body: unknown) =>
+  apiRequest('/api/users', { method: 'POST', body: JSON.stringify(body) });
+
 // ── States (Super Admin) ─────────────────────────────────────────────────────
 export const getStates = () => apiRequest('/api/states');
 
