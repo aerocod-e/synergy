@@ -1,0 +1,56 @@
+I need you to run both backend API tests and frontend end-to-end app tests for the user onboarding feature. Do not make any changes -- testing only.
+PART 1 -- Backend API Tests
+Start the backend server if it is not already running. Get tokens by logging in with the seed credentials.
+Run these tests and report status, response code, and response body for each:
+Test 1 -- Super Admin creates a State Admin:
+
+POST /api/users with role: "state_admin", valid state entity_id, new email. Expected: 201.
+Test 2 -- Super Admin tries to create a Trip Admin:
+
+POST /api/users with role: "trip_admin". Expected: 403.
+Test 3 -- Duplicate email rejected:
+
+POST /api/users with same email as Test 1. Expected: 409.
+Test 4 -- Missing entity_id rejected:
+
+POST /api/users with role: "state_admin" but no entity_id. Expected: 400.
+Test 5 -- State Admin creates a Trip Admin in their own state:
+
+Login as lagos.admin@synergy.com, POST /api/users with role: "trip_admin" linked to Lagos state id. Expected: 201.
+Test 6 -- State Admin cannot create Trip Admin in another state:
+
+Using Lagos State Admin token, POST /api/users with role: "trip_admin" but Kano's state id. Expected: 403.
+Test 7 -- State Admin cannot create a State Admin:
+
+Using Lagos State Admin token, POST /api/users with role: "state_admin". Expected: 403.
+PART 2 -- Frontend End-to-End App Tests
+Start the Expo app. Navigate through the following flows and report what you see on screen at each step:
+Test 8 -- Login as Super Admin:
+
+Open the app
+Enter superadmin@synergy.com credentials on the login screen
+Confirm the app navigates to the Super Admin home screen
+Confirm the tab bar shows the correct tabs (Trips, Config, Users)
+
+Test 9 -- Users screen loads correctly:
+
+Tap the Users tab
+Confirm the user list loads and shows the 9 active users with correct role badges
+Confirm no admin or driver badges appear anywhere
+
+Test 10 -- Create user flow works:
+
+On the Users screen, tap the Create User button
+Confirm the modal opens with email field, password field, role picker, and entity dropdown
+Select State Admin role and confirm the states dropdown appears
+Select a state, enter a test email and password
+Submit the form
+Confirm the modal closes and the new user appears in the list
+
+Test 11 -- Login as State Admin:
+
+Log out and log back in as lagos.admin@synergy.com
+Confirm the app navigates to the State Admin placeholder home screen
+Confirm no Super Admin tabs or screens are accessible
+
+Report every test with pass or fail and exactly what was seen on screen. If any test fails, describe the error in full.
