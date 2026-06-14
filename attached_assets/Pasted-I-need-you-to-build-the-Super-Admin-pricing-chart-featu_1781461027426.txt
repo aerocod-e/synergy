@@ -1,0 +1,63 @@
+I need you to build the Super Admin pricing chart feature. This is a greenfield addition -- no existing pricing tables, routes, or screens exist. Follow these steps exactly and in order.
+Step 1 -- Database migration
+Open artifacts/api-server/src/db/migrate.ts. Add two new tables after the stakeholders table block:
+sqlCREATE TABLE IF NOT EXISTS pricing_charts (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  loading_fee     INTEGER NOT NULL,
+  unloading_fee   INTEGER NOT NULL,
+  is_active       BOOLEAN NOT NULL DEFAULT false,
+  created_by      UUID REFERENCES users(id),
+  created_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS pricing_chart_stakeholder_rates (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  pricing_chart_id UUID NOT NULL REFERENCES pricing_charts(id),
+  stakeholder_id   UUID NOT NULL REFERENCES stakeholders(id),
+  amount           INTEGER NOT NULL,
+  created_at       TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  UNIQUE(pricing_chart_id, stakeholder_id)
+);
+Update the final success log from All 9 tables to All 11 tables. Then run the migration:
+pnpm --filter @workspace/api-server run migrate
+Confirm both tables are created successfully.
+Step 2 -- Backend controller
+Create a new file at artifacts/api-server/src/controllers/pricingController.ts with four functions:
+createPricingChart -- POST handler. Accepts loading_fee, unloading_fee, and stakeholder_rates (array of { stakeholder_id, amount }). All amounts arrive in kobo as integers. Inserts into pricing_charts with is_active = false, then inserts one row per stakeholder into pricing_chart_stakeholder_rates. Returns the created chart with its stakeholder rates.
+updatePricingChart -- PUT handler. Accepts same body as create. Updates the chart row and upserts the stakeholder rates. Only allowed if the chart is not currently active.
+getActivePricingChart -- GET handler. Returns the single chart where is_active = true, joined with all its stakeholder rates. Also join the stakeholder name from the stakeholders table. Returns 404 if no active chart exists.
+activatePricingChart -- POST handler for /pricing/:id/activate. Sets the specified chart to is_active = true and sets all other charts to is_active = false. Returns the activated chart.
+All amounts must remain as integers in kobo throughout -- no conversion to Naira in the backend.
+Step 3 -- Backend route
+Create artifacts/api-server/src/routes/pricing.ts with these endpoints:
+POST   /pricing            authenticateToken + requireRole("super_admin")  → createPricingChart
+PUT    /pricing/:id        authenticateToken + requireRole("super_admin")  → updatePricingChart
+POST   /pricing/:id/activate  authenticateToken + requireRole("super_admin")  → activatePricingChart
+GET    /pricing/active     authenticateToken + requireRole("super_admin", "trip_admin")  → getActivePricingChart
+Register this router in artifacts/api-server/src/routes/index.ts under the /pricing prefix.
+Step 4 -- Frontend pricing management screen
+Replace the content of artifacts/mobile/app/(superadmin)/config.tsx with a proper pricing management screen. The screen should:
+
+On load, fetch GET /pricing/active and display the current active chart if one exists, showing loading fee, unloading fee, and each stakeholder rate in a readable card format. Amounts should be displayed in Naira using the existing utils/formatCurrency.ts utility.
+Show a form below (or on a separate tab within the screen) where Super Admin can:
+
+Enter loading fee in Naira (convert to kobo on submit via Math.round(val * 100))
+Enter unloading fee in Naira (same conversion)
+For each stakeholder fetched from GET /api/stakeholders, enter a rate in Naira
+Submit to POST /pricing to create a new chart
+
+
+Show an Activate button next to any inactive chart to call POST /pricing/:id/activate
+Follow the existing design system: white background, primary color #1a6ec8, card-based layout, bold typography. Match the visual style of the existing users.tsx screen for consistency.
+
+Do not modify the tab bar or navigation -- config.tsx is already registered as the Config tab in (superadmin)/_layout.tsx.
+Step 5 -- TypeScript check
+Run pnpm --filter @workspace/api-server exec tsc --noEmit and pnpm --filter @workspace/mobile exec tsc --noEmit. Both must return zero errors.
+Once done, confirm:
+
+Migration ran successfully with all 11 tables
+Every new file created with its exact path
+Every existing file modified with what changed
+Both TypeScript checks pass with zero errors
