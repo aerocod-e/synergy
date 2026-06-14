@@ -9,7 +9,6 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
 import { getTrips } from '@/services/api';
@@ -227,14 +226,6 @@ export default function SuperAdminTrips() {
         )}
       </View>
 
-      {/* FAB */}
-      <TouchableOpacity
-        style={[styles.fab, { bottom: Math.max(insets.bottom, 8) + 64 + 16 }]}
-        onPress={() => router.push('/(superadmin)/create-trip')}
-        activeOpacity={0.85}
-      >
-        <Ionicons name="add" size={28} color={theme.colors.white} />
-      </TouchableOpacity>
     </View>
   );
 }
@@ -422,16 +413,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.colors.grey1,
     marginTop: 4,
-  },
-  fab: {
-    position: 'absolute',
-    right: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: theme.colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...theme.shadows.strong,
   },
 });

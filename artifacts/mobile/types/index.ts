@@ -1,4 +1,4 @@
-export type UserRole = 'super_admin' | 'admin' | 'driver';
+export type UserRole = 'super_admin' | 'state_admin' | 'trip_admin' | 'stakeholder';
 
 export type EntityType = 'state' | 'stakeholder' | null;
 

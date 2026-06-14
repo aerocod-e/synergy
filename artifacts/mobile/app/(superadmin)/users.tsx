@@ -14,20 +14,17 @@ import { theme } from '@/constants/theme';
 
 function getRoleBadgeColors(role: string): { bg: string; text: string } {
   if (role === 'super_admin') return theme.colors.roleColors.super_admin;
-  if (role === 'driver') return theme.colors.roleColors.driver;
-  return theme.colors.roleColors.admin;
+  if (role === 'state_admin') return theme.colors.roleColors.state_admin;
+  if (role === 'trip_admin') return theme.colors.roleColors.trip_admin;
+  return theme.colors.roleColors.stakeholder;
 }
 
 function roleLabel(user: User): string {
   if (user.role === 'super_admin') return 'Super Admin';
-  if (user.role === 'driver') return 'Driver';
-  if (user.role === 'admin' && user.entityType === 'state' && user.entityName) {
-    return `State Admin — ${user.entityName}`;
-  }
-  if (user.role === 'admin' && user.entityType === 'stakeholder' && user.entityName) {
-    return `Stakeholder Admin — ${user.entityName}`;
-  }
-  return 'Admin';
+  if (user.role === 'state_admin') return user.entityName ? `State Admin — ${user.entityName}` : 'State Admin';
+  if (user.role === 'trip_admin') return user.entityName ? `Trip Admin — ${user.entityName}` : 'Trip Admin';
+  if (user.role === 'stakeholder') return user.entityName ? `Stakeholder — ${user.entityName}` : 'Stakeholder';
+  return user.role;
 }
 
 function UserRow({ user }: { user: User }) {

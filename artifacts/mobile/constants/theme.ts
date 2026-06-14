@@ -21,8 +21,9 @@ export const theme = {
     separator: '#f3f4f6',
     roleColors: {
       super_admin: { bg: '#374151', text: '#ffffff' },
-      admin: { bg: '#dbeafe', text: '#1a6ec8' },
-      driver: { bg: '#d1fae5', text: '#15803d' },
+      state_admin: { bg: '#dbeafe', text: '#1a6ec8' },
+      trip_admin: { bg: '#fef3c7', text: '#d97706' },
+      stakeholder: { bg: '#d1fae5', text: '#15803d' },
     },
   },
   shadows: {

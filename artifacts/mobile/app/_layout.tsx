@@ -63,7 +63,7 @@ function RootLayoutNav() {
         router.replace("/(auth)/login");
       }
     } else {
-      const role = user.role as string;
+      const role = user.role;
       const roleGroupMap: Record<string, string> = {
         super_admin: "(superadmin)",
         state_admin: "(stateadmin)",
