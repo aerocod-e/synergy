@@ -118,3 +118,16 @@ export const getStates = () => apiRequest('/api/states');
 
 // ── Stakeholders (Super Admin) ───────────────────────────────────────────────
 export const getStakeholders = () => apiRequest('/api/stakeholders');
+
+// ── Pricing (Super Admin / Trip Admin) ───────────────────────────────────────
+export const getActivePricingChart = () =>
+  apiRequest('/api/pricing/active');
+
+export const createPricingChart = (body: unknown) =>
+  apiRequest('/api/pricing', { method: 'POST', body: JSON.stringify(body) });
+
+export const updatePricingChart = (id: string, body: unknown) =>
+  apiRequest(`/api/pricing/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+
+export const activatePricingChart = (id: string) =>
+  apiRequest(`/api/pricing/${id}/activate`, { method: 'POST' });

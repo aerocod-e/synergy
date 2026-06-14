@@ -47,6 +47,34 @@ async function migrate(): Promise<void> {
     `);
     console.log('✓ Table created: users');
 
+    // pricing_charts — reusable rate schedule; amounts in kobo
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS pricing_charts (
+        id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        loading_fee     INTEGER NOT NULL,
+        unloading_fee   INTEGER NOT NULL,
+        is_active       BOOLEAN NOT NULL DEFAULT false,
+        created_by      UUID REFERENCES users(id),
+        created_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )
+    `);
+    console.log('✓ Table created: pricing_charts');
+
+    // pricing_chart_stakeholder_rates — per-stakeholder rates for a chart
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS pricing_chart_stakeholder_rates (
+        id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        pricing_chart_id UUID NOT NULL REFERENCES pricing_charts(id),
+        stakeholder_id   UUID NOT NULL REFERENCES stakeholders(id),
+        amount           INTEGER NOT NULL,
+        created_at       TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at       TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        UNIQUE(pricing_chart_id, stakeholder_id)
+      )
+    `);
+    console.log('✓ Table created: pricing_chart_stakeholder_rates');
+
     // drivers — references users(id) via created_by
     await client.query(`
       CREATE TABLE IF NOT EXISTS drivers (
@@ -142,7 +170,7 @@ async function migrate(): Promise<void> {
     `);
     console.log('✓ Table created: trip_events');
 
-    console.log('\n✅ All 9 tables created successfully.');
+    console.log('\n✅ All 11 tables created successfully.');
   } finally {
     client.release();
     await pool.end();

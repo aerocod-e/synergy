@@ -1,0 +1,224 @@
+import { type Request, type Response } from "express";
+import pool from "../db/connection.js";
+
+interface StakeholderRateInput {
+  stakeholder_id: string;
+  amount: number;
+}
+
+interface PricingChartBody {
+  loading_fee?: unknown;
+  unloading_fee?: unknown;
+  stakeholder_rates?: unknown;
+}
+
+function isPositiveInt(v: unknown): v is number {
+  return typeof v === "number" && Number.isInteger(v) && v > 0;
+}
+
+function validateBody(
+  body: PricingChartBody,
+  res: Response,
+): { loading_fee: number; unloading_fee: number; stakeholder_rates: StakeholderRateInput[] } | null {
+  if (!isPositiveInt(body.loading_fee)) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "loading_fee must be a positive integer (kobo)" });
+    return null;
+  }
+  if (!isPositiveInt(body.unloading_fee)) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "unloading_fee must be a positive integer (kobo)" });
+    return null;
+  }
+  if (!Array.isArray(body.stakeholder_rates)) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "stakeholder_rates must be an array" });
+    return null;
+  }
+  for (const r of body.stakeholder_rates as StakeholderRateInput[]) {
+    if (!r.stakeholder_id || typeof r.stakeholder_id !== "string") {
+      res.status(400).json({ error: "BAD_REQUEST", message: "Each rate must have a valid stakeholder_id" });
+      return null;
+    }
+    if (!isPositiveInt(r.amount)) {
+      res.status(400).json({ error: "BAD_REQUEST", message: `Rate for stakeholder ${r.stakeholder_id} must be a positive integer (kobo)` });
+      return null;
+    }
+  }
+  return {
+    loading_fee: body.loading_fee as number,
+    unloading_fee: body.unloading_fee as number,
+    stakeholder_rates: body.stakeholder_rates as StakeholderRateInput[],
+  };
+}
+
+export async function createPricingChart(req: Request, res: Response): Promise<void> {
+  const validated = validateBody(req.body as PricingChartBody, res);
+  if (!validated) return;
+
+  const { loading_fee, unloading_fee, stakeholder_rates } = validated;
+  const userId = (req as any).userId as string | undefined;
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const chartRes = await client.query<{
+      id: string; loading_fee: number; unloading_fee: number; is_active: boolean; created_at: string;
+    }>(
+      `INSERT INTO pricing_charts (loading_fee, unloading_fee, is_active, created_by)
+       VALUES ($1, $2, false, $3)
+       RETURNING id, loading_fee, unloading_fee, is_active, created_at`,
+      [loading_fee, unloading_fee, userId ?? null],
+    );
+    const chart = chartRes.rows[0]!;
+    const rates: { id: string; stakeholder_id: string; amount: number }[] = [];
+
+    for (const r of stakeholder_rates) {
+      const rateRes = await client.query<{ id: string; stakeholder_id: string; amount: number }>(
+        `INSERT INTO pricing_chart_stakeholder_rates (pricing_chart_id, stakeholder_id, amount)
+         VALUES ($1, $2, $3)
+         RETURNING id, stakeholder_id, amount`,
+        [chart.id, r.stakeholder_id, r.amount],
+      );
+      rates.push(rateRes.rows[0]!);
+    }
+
+    await client.query("COMMIT");
+    res.status(201).json({ data: { chart: { ...chart, stakeholder_rates: rates } } });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export async function updatePricingChart(req: Request, res: Response): Promise<void> {
+  const { id } = req.params;
+  const validated = validateBody(req.body as PricingChartBody, res);
+  if (!validated) return;
+
+  const { loading_fee, unloading_fee, stakeholder_rates } = validated;
+
+  const client = await pool.connect();
+  try {
+    const existingRes = await client.query<{ id: string; is_active: boolean }>(
+      `SELECT id, is_active FROM pricing_charts WHERE id = $1`,
+      [id],
+    );
+    if (existingRes.rows.length === 0) {
+      res.status(404).json({ error: "NOT_FOUND", message: "Pricing chart not found" });
+      return;
+    }
+    if (existingRes.rows[0]!.is_active) {
+      res.status(400).json({ error: "BAD_REQUEST", message: "Cannot update an active pricing chart" });
+      return;
+    }
+
+    await client.query("BEGIN");
+
+    const chartRes = await client.query<{
+      id: string; loading_fee: number; unloading_fee: number; is_active: boolean; created_at: string;
+    }>(
+      `UPDATE pricing_charts
+       SET loading_fee = $1, unloading_fee = $2, updated_at = NOW()
+       WHERE id = $3
+       RETURNING id, loading_fee, unloading_fee, is_active, created_at`,
+      [loading_fee, unloading_fee, id],
+    );
+
+    for (const r of stakeholder_rates) {
+      await client.query(
+        `INSERT INTO pricing_chart_stakeholder_rates (pricing_chart_id, stakeholder_id, amount)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (pricing_chart_id, stakeholder_id)
+         DO UPDATE SET amount = EXCLUDED.amount, updated_at = NOW()`,
+        [id, r.stakeholder_id, r.amount],
+      );
+    }
+
+    const ratesRes = await client.query<{ id: string; stakeholder_id: string; amount: number }>(
+      `SELECT id, stakeholder_id, amount FROM pricing_chart_stakeholder_rates WHERE pricing_chart_id = $1`,
+      [id],
+    );
+
+    await client.query("COMMIT");
+    res.json({ data: { chart: { ...chartRes.rows[0], stakeholder_rates: ratesRes.rows } } });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export async function getActivePricingChart(_req: Request, res: Response): Promise<void> {
+  const chartRes = await pool.query<{
+    id: string; loading_fee: number; unloading_fee: number; is_active: boolean; created_at: string;
+  }>(
+    `SELECT id, loading_fee, unloading_fee, is_active, created_at
+     FROM pricing_charts WHERE is_active = true LIMIT 1`,
+  );
+
+  if (chartRes.rows.length === 0) {
+    res.status(404).json({ error: "NOT_FOUND", message: "No active pricing chart" });
+    return;
+  }
+
+  const chart = chartRes.rows[0]!;
+
+  const ratesRes = await pool.query<{
+    id: string; stakeholder_id: string; amount: number; stakeholder_name: string;
+  }>(
+    `SELECT r.id, r.stakeholder_id, r.amount, s.name AS stakeholder_name
+     FROM pricing_chart_stakeholder_rates r
+     JOIN stakeholders s ON s.id = r.stakeholder_id
+     WHERE r.pricing_chart_id = $1`,
+    [chart.id],
+  );
+
+  res.json({ data: { chart: { ...chart, stakeholder_rates: ratesRes.rows } } });
+}
+
+export async function activatePricingChart(req: Request, res: Response): Promise<void> {
+  const { id } = req.params;
+
+  const client = await pool.connect();
+  try {
+    const existingRes = await client.query<{ id: string }>(
+      `SELECT id FROM pricing_charts WHERE id = $1`,
+      [id],
+    );
+    if (existingRes.rows.length === 0) {
+      res.status(404).json({ error: "NOT_FOUND", message: "Pricing chart not found" });
+      return;
+    }
+
+    await client.query("BEGIN");
+    await client.query(`UPDATE pricing_charts SET is_active = false, updated_at = NOW()`);
+    const chartRes = await client.query<{
+      id: string; loading_fee: number; unloading_fee: number; is_active: boolean; created_at: string;
+    }>(
+      `UPDATE pricing_charts SET is_active = true, updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, loading_fee, unloading_fee, is_active, created_at`,
+      [id],
+    );
+
+    const ratesRes = await client.query<{
+      id: string; stakeholder_id: string; amount: number; stakeholder_name: string;
+    }>(
+      `SELECT r.id, r.stakeholder_id, r.amount, s.name AS stakeholder_name
+       FROM pricing_chart_stakeholder_rates r
+       JOIN stakeholders s ON s.id = r.stakeholder_id
+       WHERE r.pricing_chart_id = $1`,
+      [id],
+    );
+
+    await client.query("COMMIT");
+    res.json({ data: { chart: { ...chartRes.rows[0], stakeholder_rates: ratesRes.rows } } });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}

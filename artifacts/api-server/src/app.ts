@@ -8,6 +8,7 @@ import lookupRouter       from "./routes/lookup.js";
 import usersRouter        from "./routes/users.js";
 import statesRouter       from "./routes/states.js";
 import stakeholdersRouter from "./routes/stakeholders.js";
+import pricingRouter      from "./routes/pricing.js";
 
 const app: Express = express();
 
@@ -27,5 +28,6 @@ app.use("/api/lookup",       lookupRouter);
 app.use("/api/users",        usersRouter);
 app.use("/api/states",       statesRouter);
 app.use("/api/stakeholders", stakeholdersRouter);
+app.use("/api/pricing",      pricingRouter);
 
 export default app;
