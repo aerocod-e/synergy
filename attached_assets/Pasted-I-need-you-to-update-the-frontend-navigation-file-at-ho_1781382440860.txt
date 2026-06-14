@@ -1,0 +1,32 @@
+I need you to update the frontend navigation file at /home/runner/workspace/artifacts/mobile/app/_layout.tsx. Do not touch any other files.
+Context: The app currently handles three roles in navigation: super_admin, admin, and driver. We are replacing these with four roles: super_admin, state_admin, trip_admin, and stakeholder. The driver navigation group must be removed entirely.
+Change 1 -- Remove the driver role and its route group
+Remove any navigation logic, Stack references, or route group mappings that reference the driver role or the /(driver) route group. The driver role no longer exists as a platform user.
+Change 2 -- Remove the admin role and its route group
+Remove any navigation logic, Stack references, or route group mappings that reference the admin role or the /(admin) route group. This role has been replaced by state_admin and trip_admin.
+Change 3 -- Add navigation shells for the four new roles
+Add the following role-to-route-group mappings, mirroring the same pattern used for super_admin:
+
+super_admin → /(superadmin) (already exists, keep as-is)
+state_admin → /(stateadmin)
+trip_admin → /(tripadmin)
+stakeholder → /(stakeholder)
+
+For state_admin, trip_admin, and stakeholder, create a minimal placeholder screen at the index route of each group. Each placeholder should just render a centered text label saying "State Admin Home", "Trip Admin Home", and "Stakeholder Home" respectively. We will replace these with real screens in Stage 2.
+Change 4 -- Create the placeholder screen files
+Create the following files with minimal placeholder content:
+
+/home/runner/workspace/artifacts/mobile/app/(stateadmin)/index.tsx
+/home/runner/workspace/artifacts/mobile/app/(tripadmin)/index.tsx
+/home/runner/workspace/artifacts/mobile/app/(stakeholder)/index.tsx
+
+Each file should be a simple React Native screen with a centered View and a Text component showing the role label. Import and use colors from constants/theme.ts if it exists, otherwise use the primary color #1a6ec8 directly.
+Once done, confirm:
+
+Every file created or modified
+That the driver and admin route groups and logic are fully removed from _layout.tsx
+That the app compiles with no TypeScript errors
+That no files outside _layout.tsx and the three new placeholder files were modified
+
+
+Paste the response back when done.
