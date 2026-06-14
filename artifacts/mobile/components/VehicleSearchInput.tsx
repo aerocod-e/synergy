@@ -101,7 +101,7 @@ export default function VehicleSearchInput({ value, onSelect, onRegisterNew, pla
             </TouchableOpacity>
           ))}
 
-          {query.trim().length > 0 && (
+          {results.length === 0 && query.trim().length > 0 && (
             <TouchableOpacity
               style={[styles.dropdownRow, styles.registerRow]}
               onPress={handleRegisterNew}

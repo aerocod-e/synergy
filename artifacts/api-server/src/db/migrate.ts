@@ -130,7 +130,8 @@ async function migrate(): Promise<void> {
         ADD COLUMN IF NOT EXISTS vehicle_id UUID REFERENCES vehicles(id)
     `);
 
-    // Backfill: insert one vehicle per distinct plate seen in trips, then link
+    // Backfill: insert one vehicle per distinct plate seen in ANY trip (including
+    // soft-deleted), then link ALL trips — so vehicle_id is never null.
     await client.query(`
       INSERT INTO vehicles (registration_number, created_by, is_active)
       SELECT DISTINCT ON (vehicle_number)
@@ -138,7 +139,6 @@ async function migrate(): Promise<void> {
         created_by,
         true
       FROM trips
-      WHERE deleted_at IS NULL
       ON CONFLICT (registration_number) DO NOTHING
     `);
 
@@ -150,7 +150,12 @@ async function migrate(): Promise<void> {
         AND  t.vehicle_id IS NULL
     `);
 
-    console.log('✓ Backfilled vehicle_id on trips');
+    // Enforce the constraint now that every row is covered.
+    await client.query(`
+      ALTER TABLE trips ALTER COLUMN vehicle_id SET NOT NULL
+    `);
+
+    console.log('✓ Backfilled vehicle_id on trips (all rows) and enforced NOT NULL');
 
     // trip_fees — amounts stored as INTEGER in kobo, never floats
     await client.query(`

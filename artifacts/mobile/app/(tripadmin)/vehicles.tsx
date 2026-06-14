@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,23 +37,27 @@ export default function TripAdminVehicles() {
     setModalVisible(true);
   }, []);
 
+  // On web the floating FAB is intercepted by the tab navigator container,
+  // so we surface the action via the header instead. On native the FAB renders normally.
   useEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <View style={styles.headerRight}>
-          <TouchableOpacity
-            onPress={openModal}
-            style={styles.headerBtn}
-            accessibilityLabel="Register vehicle"
-          >
-            <Ionicons name="add-circle-outline" size={26} color={theme.colors.primary} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleLogout} style={styles.headerBtn}>
-            <Ionicons name="log-out-outline" size={24} color={theme.colors.primary} />
-          </TouchableOpacity>
-        </View>
-      ),
-    });
+    if (Platform.OS === 'web') {
+      navigation.setOptions({
+        headerRight: () => (
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              onPress={openModal}
+              style={styles.headerBtn}
+              accessibilityLabel="Register vehicle"
+            >
+              <Ionicons name="add-circle-outline" size={26} color={theme.colors.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleLogout} style={styles.headerBtn}>
+              <Ionicons name="log-out-outline" size={24} color={theme.colors.primary} />
+            </TouchableOpacity>
+          </View>
+        ),
+      });
+    }
   }, [navigation, openModal, handleLogout]);
 
   const fetchVehicles = useCallback(async (isRefresh = false) => {
@@ -142,6 +147,18 @@ export default function TripAdminVehicles() {
           </View>
         }
       />
+
+      {/* FAB — native only; on web the header + button is used instead */}
+      {Platform.OS !== 'web' && (
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={openModal}
+          activeOpacity={0.85}
+          accessibilityLabel="Register vehicle"
+        >
+          <Ionicons name="add" size={28} color={theme.colors.white} />
+        </TouchableOpacity>
+      )}
 
       <Modal
         visible={modalVisible}
@@ -251,6 +268,18 @@ const styles = StyleSheet.create({
   emptySubtitle: {
     fontSize: 14,
     color: theme.colors.grey1,
+  },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 96,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: theme.colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...theme.shadows.strong,
   },
   headerRight: {
     flexDirection: 'row',

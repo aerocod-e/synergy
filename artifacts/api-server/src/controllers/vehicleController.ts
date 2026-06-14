@@ -110,9 +110,11 @@ export async function searchVehicles(req: Request, res: Response): Promise<void>
        WHERE  registration_number ILIKE $1
          AND  is_active = true
          AND  deleted_at IS NULL
-       ORDER  BY registration_number
+       ORDER  BY
+         CASE WHEN registration_number ILIKE $2 THEN 0 ELSE 1 END,
+         registration_number
        LIMIT  10`,
-      [`%${q}%`]
+      [`%${q}%`, `${q}%`]
     );
 
     res.json({
