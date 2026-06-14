@@ -1,0 +1,132 @@
+I need to build the vehicle management feature. This covers a database migration, backend CRUD and search, a reusable frontend search component, and a Trip Admin vehicles screen. Follow all steps in order.
+Step 1 -- Database migration
+Open artifacts/api-server/src/db/migrate.ts. Make the following changes:
+Add a vehicles table after the drivers table block:
+sqlCREATE TABLE IF NOT EXISTS vehicles (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  registration_number VARCHAR(50) NOT NULL UNIQUE,
+  created_by          UUID REFERENCES users(id),
+  is_active           BOOLEAN NOT NULL DEFAULT true,
+  deleted_at          TIMESTAMP WITH TIME ZONE,
+  created_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  updated_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+Then add a migration block that:
+
+Inserts one row into vehicles for each distinct vehicle_number currently in the trips table, using ON CONFLICT (registration_number) DO NOTHING to keep it idempotent
+Adds a vehicle_id UUID column to trips referencing vehicles(id) if it does not already exist
+Updates each trip's vehicle_id by matching trips.vehicle_number to vehicles.registration_number
+
+sql-- Migrate existing vehicle numbers into vehicles table
+INSERT INTO vehicles (registration_number)
+SELECT DISTINCT vehicle_number FROM trips WHERE vehicle_number IS NOT NULL
+ON CONFLICT (registration_number) DO NOTHING;
+
+-- Add vehicle_id FK column to trips
+ALTER TABLE trips ADD COLUMN IF NOT EXISTS vehicle_id UUID REFERENCES vehicles(id);
+
+-- Backfill vehicle_id on existing trips
+UPDATE trips t SET vehicle_id = v.id
+FROM vehicles v WHERE t.vehicle_number = v.registration_number;
+Update the success log from All 11 tables to All 12 tables. Run the migration:
+pnpm --filter @workspace/api-server run migrate
+Confirm the vehicles table exists and all existing trips have a vehicle_id populated.
+Step 2 -- Backend controller
+Create artifacts/api-server/src/controllers/vehicleController.ts with these functions:
+createVehicle -- POST handler. Accepts registration_number. Checks for an existing vehicle with the same registration number (including soft-deleted). If found active, returns 409. If found soft-deleted, reactivates it. Otherwise inserts a new row. Sets created_by to the calling user's id. Returns the created or reactivated vehicle.
+searchVehicles -- GET handler for /vehicles/search?q=. Accepts a query string q. Returns all vehicles where registration_number ILIKE '%q%' and deleted_at IS NULL, ordered by closest match first. Returns up to 10 results. Used by the trip creation search dropdown.
+listVehicles -- GET handler for /vehicles. Returns all active vehicles created by the calling Trip Admin (filter by created_by = req.user.id). Includes total trip count per vehicle by joining the trips table.
+deleteVehicle -- DELETE handler. Soft deletes a vehicle by setting deleted_at = NOW(). Returns 400 if the vehicle has any active trips (status created or in_transit).
+Step 3 -- Backend route
+Create artifacts/api-server/src/routes/vehicles.ts:
+GET    /vehicles           authenticateToken + requireRole("trip_admin") → listVehicles
+POST   /vehicles           authenticateToken + requireRole("trip_admin") → createVehicle
+GET    /vehicles/search    authenticateToken + requireRole("trip_admin") → searchVehicles
+DELETE /vehicles/:id       authenticateToken + requireRole("trip_admin") → deleteVehicle
+Register this router in artifacts/api-server/src/app.ts under the /api/vehicles prefix.
+Step 4 -- Update createTrip to use vehicle_id
+Open artifacts/api-server/src/controllers/tripController.ts. Update the createTrip function:
+
+Instead of accepting vehicleNumber as a free-text string, accept vehicleId (UUID)
+Look up the vehicle in the vehicles table by id to confirm it exists and is active
+Write vehicle_id to the trips table instead of vehicle_number
+Keep the duplicate active trip check but base it on vehicle_id instead of vehicle_number
+Keep vehicle_number column on the trips table for now -- do not remove it yet
+
+Step 5 -- Reusable VehicleSearchInput component
+Create artifacts/mobile/components/VehicleSearchInput.tsx. This component:
+
+Accepts props: value, onSelect(vehicle), onRegisterNew(registrationNumber)
+Renders a TextInput where the Trip Admin types a registration number
+After each keystroke (debounced 300ms) calls GET /api/vehicles/search?q= and shows results in a dropdown below the input
+Each result row shows the registration number and is tappable to select
+If no results are found, shows an "Register [typed value] as new vehicle" option at the bottom of the dropdown
+Tapping that option calls onRegisterNew with the typed registration number, which the parent form will use to create the vehicle inline
+Follows the existing design system: white background, primary color #1a6ec8, card-based dropdown
+
+Step 6 -- Trip Admin screens
+Replace the placeholder content in artifacts/mobile/app/(tripadmin)/index.tsx with a proper home screen that has two tabs: Trips (empty placeholder for now -- comes in Feature 4) and Vehicles.
+The Vehicles tab should:
+
+Fetch and display the Trip Admin's vehicles using GET /api/vehicles
+Show each vehicle as a card with its registration number and trip count
+Include a FAB to register a new vehicle, which opens a simple modal with a single registration number field
+On submit call POST /api/vehicles, refresh the list on success
+Show inline error if the registration number already exists
+Use the VehicleSearchInput component inside the modal so the Trip Admin can search first before registering
+
+Update artifacts/mobile/app/(tripadmin)/_layout.tsx to support the tab structure if needed.
+Add these API helpers to artifacts/mobile/services/api.ts:
+
+searchVehicles(q: string)
+createVehicle(body)
+listVehicles()
+deleteVehicle(id)
+
+Step 7 -- TypeScript check
+Run both:
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.
+
+PART 2 -- Testing
+After all steps are complete and TypeScript is clean, run the following tests without making any further changes.
+Backend Tests
+Test 1 -- vehicles table exists and trips are migrated:
+
+Query the database: confirm vehicles table exists, confirm all trips have a non-null vehicle_id, confirm vehicle count matches distinct vehicle numbers from the old trips data.
+Test 2 -- Trip Admin creates a vehicle:
+
+Login as test.lagos.tripadmin@synergy.com. POST /api/vehicles with registration_number: "LAG-001-XY". Expected: 201 with vehicle object.
+Test 3 -- Duplicate registration rejected:
+
+POST /api/vehicles again with registration_number: "LAG-001-XY". Expected: 409.
+Test 4 -- Vehicle search works:
+
+GET /api/vehicles/search?q=LAG. Expected: 200 with array containing the vehicle from Test 2.
+Test 5 -- Non Trip Admin cannot access vehicles:
+
+Login as superadmin@synergy.com. GET /api/vehicles. Expected: 403.
+Test 6 -- Cannot delete vehicle with active trip:
+
+If any existing vehicle has an active trip, attempt DELETE /api/vehicles/:id for that vehicle. Expected: 400.
+Test 7 -- List vehicles returns only calling Trip Admin's vehicles:
+
+Login as a different Trip Admin if one exists, call GET /api/vehicles. Confirm it does not return vehicles created by test.lagos.tripadmin@synergy.com.
+Frontend Tests
+Test 8 -- Trip Admin home screen loads:
+
+Login as test.lagos.tripadmin@synergy.com. Confirm the home screen no longer shows just "Trip Admin Home" placeholder text. Confirm Trips and Vehicles tabs are visible.
+Test 9 -- Vehicles tab loads:
+
+Tap the Vehicles tab. Confirm the vehicle list loads without error. Confirm any migrated vehicles appear.
+Test 10 -- Register new vehicle:
+
+Tap the FAB. Confirm a modal opens with a registration number search field. Type a new registration number. Confirm the "Register as new vehicle" option appears. Submit and confirm the new vehicle appears in the list.
+Test 11 -- VehicleSearchInput search works:
+
+Open the register vehicle modal. Type the first few characters of an existing vehicle registration number. Confirm the dropdown shows matching results.
+Test 12 -- Console is clean:
+
+Confirm no layout children warnings or navigation errors appear in the console during any of the above flows.
+Report every step result, every test with pass or fail, and the full error if anything fails. Report exact files created and modified.
