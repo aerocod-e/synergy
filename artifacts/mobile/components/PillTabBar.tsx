@@ -72,6 +72,7 @@ export default function PillTabBar(props: any) {
         >
           {pillWidth > 0 && (
             <Animated.View
+              pointerEvents="none"
               style={[
                 styles.slider,
                 {

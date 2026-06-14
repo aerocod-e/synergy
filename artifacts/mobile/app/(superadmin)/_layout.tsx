@@ -52,19 +52,6 @@ export default function SuperAdminLayout() {
         }}
       />
       <Tabs.Screen
-        name="create-trip"
-        options={{
-          title: 'Create Trip',
-          href: null,
-          headerRight: () => null,
-          headerLeft: () => (
-            <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 16 }}>
-              <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
-            </TouchableOpacity>
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="trip-detail"
         options={{
           title: 'Trip Detail',

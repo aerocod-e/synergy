@@ -1,0 +1,64 @@
+Three navigation bugs need to be fixed, followed by a full test. Follow the steps in order.
+Fix 1 -- Remove the dead create-trip route from Super Admin layout
+Open artifacts/mobile/app/(superadmin)/_layout.tsx. Find the Tabs.Screen declaration for create-trip and remove it entirely. The file create-trip.tsx no longer exists on disk so this declaration must be removed.
+Fix 2 -- Fix the PillTabBar slider pointer events
+Find the PillTabBar component file. Locate the Animated.View that renders the sliding pill/slider. Add pointerEvents="none" to it so it does not intercept touch events on the active tab.
+Fix 3 -- Add _layout.tsx files to the three new role groups
+Each of these folders currently has only an index.tsx with no _layout.tsx, which means Expo Router cannot recognise them as proper route groups:
+
+artifacts/mobile/app/(stateadmin)/
+artifacts/mobile/app/(tripadmin)/
+artifacts/mobile/app/(stakeholder)/
+
+Create a minimal _layout.tsx inside each folder. Each file should simply export a Stack with headerShown: false:
+tsximport { Stack } from 'expo-router';
+
+export default function Layout() {
+  return <Stack screenOptions={{ headerShown: false }} />;
+}
+Fix 4 -- TypeScript check
+Run both:
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors before proceeding to tests.
+
+PART 2 -- Testing
+After all fixes are applied and TypeScript is clean, run the following tests. Do not make any further changes.
+Test 1 -- Console warnings cleared
+Start the Expo app in development mode. Login as superadmin@synergy.com. Capture the full console output. Confirm that none of the following warnings appear:
+
+No route named "create-trip" exists
+No route named "(stateadmin)" exists
+No route named "(tripadmin)" exists
+No route named "(stakeholder)" exists
+
+Test 2 -- Super Admin tab navigation
+Navigate to each tab in the Super Admin tab bar and confirm each one loads without error:
+
+Trips tab → confirm trip list loads
+Config tab → confirm pricing management screen loads
+Users tab → confirm user list loads with correct role badges
+
+Test 3 -- Create User modal
+On the Users tab, tap the Create User button. Confirm:
+
+Modal opens with email, password, role picker, and entity dropdown
+Select State Admin and confirm states dropdown appears
+Select Stakeholder and confirm stakeholders dropdown appears
+Dismiss the modal without submitting
+
+Test 4 -- State Admin navigation
+Log out and log in as lagos.admin@synergy.com. Confirm:
+
+App lands on State Admin home screen
+No Super Admin tabs are visible
+No console warnings about layout children
+
+Test 5 -- Trip Admin navigation
+Log out and log in as the Trip Admin created during Feature 2 testing (test.tripadmin@synergy.com, password Test1234!). Confirm:
+
+App lands on Trip Admin home screen
+No Super Admin or State Admin tabs are visible
+No console warnings about layout children
+
+Report every fix with exact files changed, and every test with pass or fail and what was seen on screen. If any test fails, report the full error.
