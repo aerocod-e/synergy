@@ -54,6 +54,32 @@ const STAKEHOLDERS = [
 async function seed(): Promise<void> {
   const client = await pool.connect();
   try {
+    // ── Idempotent stale-role migration ───────────────────────────────────
+    // Fixes any existing rows that pre-date the 4-role schema.
+    // Safe to run on a fresh DB (UPDATE 0 rows) or a partially-migrated one.
+    await client.query(`
+      UPDATE users SET role = 'state_admin'
+      WHERE role = 'admin' AND entity_type = 'state'
+    `);
+    await client.query(`
+      UPDATE users SET role = 'stakeholder'
+      WHERE role = 'admin' AND entity_type = 'stakeholder'
+    `);
+    await client.query(`
+      UPDATE users
+      SET deleted_at = NOW(), is_active = false
+      WHERE role = 'driver' AND deleted_at IS NULL
+    `);
+    const staleCheck = await client.query<{ count: string }>(
+      `SELECT COUNT(*) AS count FROM users
+       WHERE role IN ('admin', 'driver') AND deleted_at IS NULL`,
+    );
+    const staleCount = parseInt(staleCheck.rows[0]?.count ?? '0', 10);
+    if (staleCount > 0) {
+      throw new Error(`Stale role migration incomplete: ${staleCount} rows still have legacy roles`);
+    }
+    console.log('✓ Stale role migration: 0 legacy-role rows remain');
+
     // ── States ────────────────────────────────────────────────────────────
     let statesUpserted = 0;
     const stateIdMap: Record<string, string> = {};
