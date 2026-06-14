@@ -1,0 +1,74 @@
+I need to build the user onboarding feature. Follow these steps in order.
+Step 1 -- Fix seed data mismatch
+The database currently has users with stale role values (admin, driver) that no longer exist in the system. Run the following SQL updates directly against the database:
+sql-- Update admin users: those linked to a state become state_admin
+UPDATE users SET role = 'state_admin' WHERE role = 'admin' AND entity_type = 'state';
+
+-- Update admin users: those linked to a stakeholder become stakeholder
+UPDATE users SET role = 'stakeholder' WHERE role = 'admin' AND entity_type = 'stakeholder';
+
+-- Remove driver users entirely (soft delete)
+UPDATE users SET deleted_at = NOW(), is_active = false WHERE role = 'driver';
+After running, confirm the updated user table with:
+sqlSELECT email, role, entity_type FROM users WHERE deleted_at IS NULL;
+Step 2 -- Backend: user creation controller
+Create artifacts/api-server/src/controllers/userController.ts or open it if it already exists. Add a createUser function with the following logic:
+
+Accepts: email, password, role, entity_type (optional), entity_id (optional)
+Validates that role is one of: super_admin, state_admin, trip_admin, stakeholder
+Enforces entity linking rules:
+
+state_admin requires entity_type: 'state' and a valid entity_id from the states table
+trip_admin requires entity_type: 'state' and a valid entity_id from the states table
+stakeholder requires entity_type: 'stakeholder' and a valid entity_id from the stakeholders table
+super_admin must have no entity fields
+
+
+Hashes the password with bcrypt before storing
+Inserts into the users table
+Returns the created user without the password hash
+
+Step 3 -- Backend: user creation route
+In artifacts/api-server/src/routes/users.ts, add:
+POST /users    authenticateToken + requireRole("super_admin", "state_admin") → createUser
+Add a caller role restriction inside the controller:
+
+If the caller is super_admin, they may create: state_admin, stakeholder
+If the caller is state_admin, they may only create: trip_admin linked to their own entity_id state
+
+Return 403 if the caller tries to create a role outside their permitted set.
+Step 4 -- Frontend: update users.tsx
+Update artifacts/mobile/app/(superadmin)/users.tsx to add a user creation flow:
+
+Add a FAB or a clearly visible Create User button in the top right, consistent with the design system (primary color #1a6ec8)
+Tapping it opens a modal or bottom sheet with a form containing:
+
+Email field
+Password field (masked)
+Role picker -- dropdown with options: State Admin, Stakeholder only (Super Admin cannot create Trip Admins from this screen)
+Conditional fields based on role:
+
+If State Admin selected: show a State dropdown fetched from GET /api/states
+If Stakeholder selected: show a Stakeholder dropdown fetched from GET /api/stakeholders
+
+
+
+
+On submit, call POST /api/users
+On success, close the modal and refresh the user list
+Show a clear error message if the API returns an error
+All form fields should follow the existing design system style
+
+Add a createUser API helper to artifacts/mobile/services/api.ts.
+Step 5 -- TypeScript check
+Run both:
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.
+Once done, confirm:
+
+The updated user table after the seed data fix
+Every new file created and every existing file modified
+Both TypeScript checks pass with zero errors
+That trips.ts, tripController.ts, pricing.ts, and pricingController.ts were not touched
+
