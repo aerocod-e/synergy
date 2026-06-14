@@ -120,7 +120,6 @@ async function seed(): Promise<void> {
 
     // ── Hash passwords ────────────────────────────────────────────────────
     const adminHash  = await bcrypt.hash('Admin@1234',  SALT_ROUNDS);
-    const driverHash = await bcrypt.hash('Driver@1234', SALT_ROUNDS);
 
     // ── Super admin ───────────────────────────────────────────────────────
     const superAdminRes = await client.query(
@@ -144,7 +143,7 @@ async function seed(): Promise<void> {
       if (!shId) continue;
       const res = await client.query(
         `INSERT INTO users (email, password_hash, role, entity_type, entity_id)
-         VALUES ($1, $2, 'admin', 'stakeholder', $3)
+         VALUES ($1, $2, 'stakeholder', 'stakeholder', $3)
          ON CONFLICT (email) DO NOTHING`,
         [sa.email, adminHash, shId],
       );
@@ -167,31 +166,13 @@ async function seed(): Promise<void> {
       if (!stateId) continue;
       const res = await client.query(
         `INSERT INTO users (email, password_hash, role, entity_type, entity_id)
-         VALUES ($1, $2, 'admin', 'state', $3)
+         VALUES ($1, $2, 'state_admin', 'state', $3)
          ON CONFLICT (email) DO NOTHING`,
         [sa.email, adminHash, stateId],
       );
       stateAdminsInserted += res.rowCount ?? 0;
     }
     console.log(`✓ State admins inserted: ${stateAdminsInserted}`);
-
-    // ── Drivers ───────────────────────────────────────────────────────────
-    const drivers = [
-      { email: 'driver1@synergy.com' },
-      { email: 'driver2@synergy.com' },
-    ];
-
-    let driversInserted = 0;
-    for (const d of drivers) {
-      const res = await client.query(
-        `INSERT INTO users (email, password_hash, role, entity_type, entity_id)
-         VALUES ($1, $2, 'driver', NULL, NULL)
-         ON CONFLICT (email) DO NOTHING`,
-        [d.email, driverHash],
-      );
-      driversInserted += res.rowCount ?? 0;
-    }
-    console.log(`✓ Drivers inserted: ${driversInserted}`);
 
     console.log('\n✅ Seed complete.');
   } finally {
