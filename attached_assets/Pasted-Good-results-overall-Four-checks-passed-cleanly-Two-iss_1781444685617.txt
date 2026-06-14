@@ -1,0 +1,23 @@
+Good results overall. Four checks passed cleanly. Two issues need fixing before we move to Stage 2 -- both are straightforward.
+Issue 1 -- drivers table not persisting via migrate.ts
+The table was created manually this time, but if the database resets, it will be gone again because the migration script never ran properly due to a TTY prompt blocking it. We need to fix this so the migration is reliable going forward.
+Issue 2 -- two dead driver references in tripController.ts
+These are broken logic that will silently fail in production. Line 93 validates a user has role = 'driver' when assigning a driver to a trip -- that will never match since no user has that role anymore. Line 720 checks if the caller has role = 'driver' to guard trip access -- drivers no longer have accounts so this guard is meaningless.
+Both need to be cleaned up now before Stage 2 builds on top of them. Paste this into the Replit Agent:
+
+Two cleanup items from the Stage 1 test report. Do not make any other changes.
+Fix 1 -- Ensure migration script runs reliably
+Open artifacts/api-server/src/db/migrate.ts. The drivers table CREATE TABLE block was added in a previous task but the migration was not actually running due to a TTY prompt from drizzle-kit. Confirm that the CREATE TABLE IF NOT EXISTS drivers block exists directly in the migration script as raw SQL (not via drizzle-kit push). If it does, run the migration script directly with:
+cd /home/runner/workspace && pnpm --filter @workspace/api-server run migrate
+Confirm the script runs to completion and prints ✅ All 9 tables created successfully. with no TTY prompts or interactive steps required.
+Fix 2 -- Remove dead driver role logic in tripController.ts
+Open artifacts/api-server/src/controllers/tripController.ts and make these two changes:
+Line 93 -- There is a SQL query that validates a user exists with role = 'driver'. This check is now invalid since drivers are no longer platform users. Remove or replace this validation. The correct approach going forward is to validate that the assigned driver_id exists in the drivers table rather than the users table. Replace the query so it checks:
+sqlSELECT id FROM drivers WHERE id = $1 AND is_active = true AND deleted_at IS NULL
+Line 720 -- There is an auth guard that checks if (role === "driver"). Since drivers no longer have platform accounts and cannot call any API endpoint, this guard will never be reached. Remove this entire conditional block.
+Once done, confirm:
+
+The migration script runs cleanly with no interactive prompts
+The exact changes made to tripController.ts with before and after context
+The backend TypeScript compiles with zero errors after the changes
+No other files were modified

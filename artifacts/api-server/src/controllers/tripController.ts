@@ -90,7 +90,7 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
     const [driverRes, loadingRes, unloadingRes, ...stakeholderResults] =
       await Promise.all([
         client.query<{ id: string }>(
-          `SELECT id FROM users WHERE id = $1 AND role = 'driver' AND is_active = true AND deleted_at IS NULL LIMIT 1`,
+          `SELECT id FROM drivers WHERE id = $1 AND is_active = true AND deleted_at IS NULL LIMIT 1`,
           [driverId]
         ),
         client.query<{ id: string }>(
@@ -716,11 +716,6 @@ export async function getTripById(req: Request, res: Response): Promise<void> {
     }
 
     const trip = rows[0]!;
-
-    if (role === "driver" && trip.driver_id !== userId) {
-      res.status(403).json({ error: "FORBIDDEN", message: "You are not assigned to this trip" });
-      return;
-    }
 
     const [feesRes, eventsRes] = await Promise.all([
       pool.query<{
