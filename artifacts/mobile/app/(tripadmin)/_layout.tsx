@@ -1,14 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Stack } from 'expo-router';
+import { Tabs } from 'expo-router';
 import { TouchableOpacity } from 'react-native';
 import { useLogout } from '@/hooks/useLogout';
 import { theme } from '@/constants/theme';
+import PillTabBar from '@/components/PillTabBar';
 
 export default function TripAdminLayout() {
   const { handleLogout } = useLogout();
 
   return (
-    <Stack
+    <Tabs
+      tabBar={(props) => <PillTabBar {...props} />}
       screenOptions={{
         headerTitle: 'Synergy Cargo Tax',
         headerRight: () => (
@@ -23,6 +25,15 @@ export default function TripAdminLayout() {
         headerTitleStyle: { ...theme.typography.headerTitle },
         headerShadowVisible: false,
       }}
-    />
+    >
+      <Tabs.Screen
+        name="index"
+        options={{ title: 'Trips', tabBarLabel: 'Trips' }}
+      />
+      <Tabs.Screen
+        name="vehicles"
+        options={{ title: 'Vehicles', tabBarLabel: 'Vehicles' }}
+      />
+    </Tabs>
   );
 }

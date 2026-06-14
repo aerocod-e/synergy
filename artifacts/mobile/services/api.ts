@@ -134,3 +134,16 @@ export const updatePricingChart = (id: string, body: unknown) =>
 
 export const activatePricingChart = (id: string) =>
   apiRequest(`/api/pricing/${id}/activate`, { method: 'POST' });
+
+// ── Vehicles (Trip Admin) ─────────────────────────────────────────────────────
+export const listVehicles = () =>
+  apiRequest('/api/vehicles');
+
+export const searchVehicles = (q: string) =>
+  apiRequest('/api/vehicles/search?' + new URLSearchParams({ q }).toString());
+
+export const createVehicle = (registrationNumber: string) =>
+  apiRequest('/api/vehicles', { method: 'POST', body: JSON.stringify({ registrationNumber }) });
+
+export const deleteVehicle = (id: string) =>
+  apiRequest(`/api/vehicles/${id}`, { method: 'DELETE' });

@@ -1,0 +1,306 @@
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  Modal,
+  TouchableOpacity,
+  ActivityIndicator,
+  RefreshControl,
+} from 'react-native';
+import { useFocusEffect, useNavigation } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { theme } from '@/constants/theme';
+import VehicleSearchInput, { type Vehicle } from '@/components/VehicleSearchInput';
+import { listVehicles, createVehicle } from '@/services/api';
+import { useLogout } from '@/hooks/useLogout';
+
+interface VehicleWithCount extends Vehicle {
+  tripCount: number;
+}
+
+export default function TripAdminVehicles() {
+  const [vehicles, setVehicles] = useState<VehicleWithCount[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [registerError, setRegisterError] = useState<string | null>(null);
+  const [registering, setRegistering] = useState(false);
+
+  const navigation = useNavigation();
+  const { handleLogout } = useLogout();
+
+  const openModal = useCallback(() => {
+    setRegisterError(null);
+    setModalVisible(true);
+  }, []);
+
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            onPress={openModal}
+            style={styles.headerBtn}
+            accessibilityLabel="Register vehicle"
+          >
+            <Ionicons name="add-circle-outline" size={26} color={theme.colors.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleLogout} style={styles.headerBtn}>
+            <Ionicons name="log-out-outline" size={24} color={theme.colors.primary} />
+          </TouchableOpacity>
+        </View>
+      ),
+    });
+  }, [navigation, openModal, handleLogout]);
+
+  const fetchVehicles = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+    try {
+      const data = await listVehicles();
+      setVehicles(data as VehicleWithCount[]);
+    } catch {
+      // silently keep existing list on error
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchVehicles();
+    }, [fetchVehicles])
+  );
+
+  const handleRegisterNew = async (registrationNumber: string) => {
+    if (!registrationNumber) return;
+    setRegisterError(null);
+    setRegistering(true);
+    try {
+      await createVehicle(registrationNumber);
+      setModalVisible(false);
+      fetchVehicles();
+    } catch (err: any) {
+      if (err?.error === 'CONFLICT') {
+        setRegisterError('A vehicle with this registration number already exists.');
+      } else {
+        setRegisterError(err?.message ?? 'Failed to register vehicle.');
+      }
+    } finally {
+      setRegistering(false);
+    }
+  };
+
+  const handleSelectExisting = (_vehicle: Vehicle) => {
+    setModalVisible(false);
+  };
+
+  const renderVehicle = ({ item }: { item: VehicleWithCount }) => (
+    <View style={styles.card}>
+      <View style={styles.cardLeft}>
+        <View style={styles.plateBadge}>
+          <Text style={styles.plateText}>{item.registrationNumber}</Text>
+        </View>
+        <Text style={styles.tripCount}>
+          {item.tripCount} {item.tripCount === 1 ? 'trip' : 'trips'}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={theme.colors.grey1} />
+    </View>
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <FlatList
+        data={vehicles}
+        keyExtractor={(v) => v.id}
+        renderItem={renderVehicle}
+        contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => fetchVehicles(true)}
+            tintColor={theme.colors.primary}
+          />
+        }
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <Ionicons name="car-outline" size={48} color={theme.colors.inactive} />
+            <Text style={styles.emptyTitle}>No vehicles yet</Text>
+            <Text style={styles.emptySubtitle}>Tap + to register your first vehicle</Text>
+          </View>
+        }
+      />
+
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Register Vehicle</Text>
+            <TouchableOpacity
+              onPress={() => setModalVisible(false)}
+              accessibilityLabel="Close modal"
+            >
+              <Ionicons name="close" size={24} color={theme.colors.grey2} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.modalBody}>
+            <Text style={styles.fieldLabel}>REGISTRATION NUMBER</Text>
+            <VehicleSearchInput
+              value=""
+              onSelect={handleSelectExisting}
+              onRegisterNew={handleRegisterNew}
+              placeholder="e.g. LAG-001-XY"
+            />
+
+            {registerError && (
+              <View style={styles.errorBox}>
+                <Ionicons name="alert-circle-outline" size={16} color={theme.colors.error} />
+                <Text style={styles.errorText}>{registerError}</Text>
+              </View>
+            )}
+
+            {registering && (
+              <ActivityIndicator
+                size="small"
+                color={theme.colors.primary}
+                style={{ marginTop: 16 }}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+  },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: theme.colors.background,
+  },
+  listContent: {
+    padding: 16,
+    paddingBottom: 120,
+  },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.white,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 10,
+    ...theme.shadows.card,
+  },
+  cardLeft: {
+    flex: 1,
+    gap: 6,
+  },
+  plateBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: theme.colors.blueMuted,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  plateText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: theme.colors.blueText,
+    letterSpacing: 1,
+  },
+  tripCount: {
+    fontSize: 13,
+    color: theme.colors.grey1,
+    fontWeight: '500',
+  },
+  empty: {
+    flex: 1,
+    alignItems: 'center',
+    paddingTop: 80,
+    gap: 8,
+  },
+  emptyTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: theme.colors.grey2,
+    marginTop: 8,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: theme.colors.grey1,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginRight: 8,
+  },
+  headerBtn: {
+    padding: 6,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 12,
+    backgroundColor: theme.colors.white,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.separator,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.colors.black,
+  },
+  modalBody: {
+    padding: 20,
+    gap: 8,
+  },
+  fieldLabel: {
+    ...theme.typography.sectionLabel,
+    marginBottom: 4,
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 12,
+  },
+  errorText: {
+    fontSize: 13,
+    color: theme.colors.error,
+    flex: 1,
+  },
+});

@@ -14,7 +14,7 @@ interface FeesInput {
 }
 
 interface CreateTripBody {
-  vehicleNumber?: unknown;
+  vehicleId?: unknown;
   driverId?: unknown;
   loadingStateId?: unknown;
   unloadingStateId?: unknown;
@@ -31,7 +31,7 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
   const body = req.body as CreateTripBody;
 
   // ── 1. Basic type/presence checks ──────────────────────────────────────────
-  const vehicleNumber = body.vehicleNumber;
+  const vehicleId = body.vehicleId;
   const driverId = body.driverId;
   const loadingStateId = body.loadingStateId;
   const unloadingStateId = body.unloadingStateId;
@@ -39,8 +39,8 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
   const destinationDescription = body.destinationDescription;
   const fees = body.fees as FeesInput | undefined;
 
-  if (!vehicleNumber || typeof vehicleNumber !== "string" || vehicleNumber.trim() === "") {
-    res.status(400).json({ error: "BAD_REQUEST", message: "vehicleNumber must not be empty" });
+  if (!vehicleId || typeof vehicleId !== "string" || vehicleId.trim() === "") {
+    res.status(400).json({ error: "BAD_REQUEST", message: "vehicleId is required" });
     return;
   }
   if (!driverId || typeof driverId !== "string") {
@@ -87,8 +87,12 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
   // ── 2. DB existence checks (run in parallel before opening transaction) ────
   const client = await pool.connect();
   try {
-    const [driverRes, loadingRes, unloadingRes, ...stakeholderResults] =
+    const [vehicleRes, driverRes, loadingRes, unloadingRes, ...stakeholderResults] =
       await Promise.all([
+        client.query<{ id: string; registration_number: string }>(
+          `SELECT id, registration_number FROM vehicles WHERE id = $1 AND is_active = true AND deleted_at IS NULL LIMIT 1`,
+          [vehicleId]
+        ),
         client.query<{ id: string }>(
           `SELECT id FROM drivers WHERE id = $1 AND is_active = true AND deleted_at IS NULL LIMIT 1`,
           [driverId]
@@ -108,6 +112,12 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
           )
         ),
       ]);
+
+    if (vehicleRes.rows.length === 0) {
+      res.status(400).json({ error: "BAD_REQUEST", message: "vehicleId does not reference an active vehicle" });
+      return;
+    }
+    const vehicle = vehicleRes.rows[0]!;
 
     if (driverRes.rows.length === 0) {
       res.status(400).json({ error: "BAD_REQUEST", message: "driverId does not reference an active driver user" });
@@ -131,11 +141,11 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
     // ── 3. Duplicate active vehicle check ──────────────────────────────────
     const dupRes = await client.query<{ id: string }>(
       `SELECT id FROM trips
-       WHERE vehicle_number = $1
+       WHERE vehicle_id = $1
          AND status IN ('created', 'in_transit')
          AND deleted_at IS NULL
        LIMIT 1`,
-      [vehicleNumber.trim()]
+      [vehicleId]
     );
     if (dupRes.rows.length > 0) {
       res.status(409).json({ error: "CONFLICT", message: "Vehicle already has an active trip" });
@@ -151,6 +161,7 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
     const { rows: [trip] } = await client.query<{
       id: string;
       vehicle_number: string;
+      vehicle_id: string;
       driver_id: string | null;
       loading_state_id: string;
       unloading_state_id: string;
@@ -162,12 +173,13 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
       updated_at: Date;
     }>(
       `INSERT INTO trips
-         (vehicle_number, driver_id, loading_state_id, unloading_state_id,
+         (vehicle_number, vehicle_id, driver_id, loading_state_id, unloading_state_id,
           origin_description, destination_description, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
       [
-        vehicleNumber.trim(),
+        vehicle.registration_number,
+        vehicleId,
         driverId,
         loadingStateId,
         unloadingStateId,
@@ -272,7 +284,8 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
         trip.id,
         createdById,
         JSON.stringify({
-          vehicleNumber: vehicleNumber.trim(),
+          vehicleNumber: vehicle.registration_number,
+          vehicleId,
           loadingStateId,
           unloadingStateId,
           totalFees,

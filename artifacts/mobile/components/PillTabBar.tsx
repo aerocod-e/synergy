@@ -11,6 +11,7 @@ const TAB_ICONS: Record<string, { active: IoniconsName; inactive: IoniconsName }
   config: { active: 'settings', inactive: 'settings-outline' },
   users: { active: 'people', inactive: 'people-outline' },
   ledger: { active: 'receipt', inactive: 'receipt-outline' },
+  vehicles: { active: 'car', inactive: 'car-outline' },
 };
 
 const PILL_PADDING = 6;
@@ -62,18 +63,17 @@ export default function PillTabBar(props: any) {
   const pillBottom = Math.max(insets.bottom, 8);
 
   return (
-    // Full-screen transparent overlay — pointerEvents="box-none" lets touches
-    // pass through the transparent area but still hit the pill bar itself.
-    <View style={StyleSheet.absoluteFillObject} pointerEvents="box-none">
-      <View style={[styles.wrapper, { bottom: pillBottom }]} pointerEvents="box-none">
-        <View
-          style={styles.pill}
-          onLayout={(e) => setPillWidth(e.nativeEvent.layout.width)}
-        >
+    // Bottom-anchored absolute container — only as tall as the pill itself,
+    // so it never sits over screen content above it.
+    <View style={[styles.wrapper, { bottom: pillBottom }]}>
+      <View
+        style={styles.pill}
+        onLayout={(e) => setPillWidth(e.nativeEvent.layout.width)}
+      >
           {pillWidth > 0 && (
             <Animated.View
-              pointerEvents="none"
               style={[
+                { pointerEvents: 'none' },
                 styles.slider,
                 {
                   width: slotWidth,
@@ -125,7 +125,6 @@ export default function PillTabBar(props: any) {
             );
           })}
         </View>
-      </View>
     </View>
   );
 }

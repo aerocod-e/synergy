@@ -91,6 +91,20 @@ async function migrate(): Promise<void> {
     `);
     console.log('✓ Table created: drivers');
 
+    // vehicles — master record keyed by registration number
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS vehicles (
+        id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        registration_number VARCHAR(50) NOT NULL UNIQUE,
+        created_by          UUID REFERENCES users(id),
+        is_active           BOOLEAN NOT NULL DEFAULT true,
+        deleted_at          TIMESTAMP WITH TIME ZONE,
+        created_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )
+    `);
+    console.log('✓ Table created: vehicles');
+
     // trips — references users and states; soft-delete via deleted_at
     await client.query(`
       CREATE TABLE IF NOT EXISTS trips (
@@ -109,6 +123,34 @@ async function migrate(): Promise<void> {
       )
     `);
     console.log('✓ Table created: trips');
+
+    // vehicles ← trips: add vehicle_id FK and backfill from vehicle_number
+    await client.query(`
+      ALTER TABLE trips
+        ADD COLUMN IF NOT EXISTS vehicle_id UUID REFERENCES vehicles(id)
+    `);
+
+    // Backfill: insert one vehicle per distinct plate seen in trips, then link
+    await client.query(`
+      INSERT INTO vehicles (registration_number, created_by, is_active)
+      SELECT DISTINCT ON (vehicle_number)
+        vehicle_number,
+        created_by,
+        true
+      FROM trips
+      WHERE deleted_at IS NULL
+      ON CONFLICT (registration_number) DO NOTHING
+    `);
+
+    await client.query(`
+      UPDATE trips t
+      SET    vehicle_id = v.id
+      FROM   vehicles v
+      WHERE  v.registration_number = t.vehicle_number
+        AND  t.vehicle_id IS NULL
+    `);
+
+    console.log('✓ Backfilled vehicle_id on trips');
 
     // trip_fees — amounts stored as INTEGER in kobo, never floats
     await client.query(`
@@ -170,7 +212,7 @@ async function migrate(): Promise<void> {
     `);
     console.log('✓ Table created: trip_events');
 
-    console.log('\n✅ All 11 tables created successfully.');
+    console.log('\n✅ All 12 tables created successfully.');
   } finally {
     client.release();
     await pool.end();
