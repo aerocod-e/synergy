@@ -1,0 +1,44 @@
+PART 2 -- Testing
+After all steps are complete and TypeScript is clean, run the following tests without making any further changes.
+Backend Tests
+Test 1 -- Trip Admin creates a driver:
+
+Login as test.lagos.tripadmin@synergy.com. POST /api/drivers with full_name: "Test Driver", license_number: "LIC-TEST-001", phone_number: "08012345678". Expected: 201.
+Test 2 -- Duplicate license number rejected:
+
+POST /api/drivers again with the same license_number. Expected: 409.
+Test 3 -- Driver search works:
+
+GET /api/drivers/search?q=Test. Expected: 200 with the driver from Test 1 in results.
+Test 4 -- Search by license number works:
+
+GET /api/drivers/search?q=LIC-TEST. Expected: 200 with the same driver.
+Test 5 -- Non Trip Admin cannot access drivers:
+
+Login as superadmin@synergy.com. GET /api/drivers/search?q=Test. Expected: 403.
+Test 6 -- Full trip creation end to end:
+
+Using the Trip Admin token, ensure an active pricing chart exists (create and activate one via Super Admin if none exists). Call POST /api/trips with a valid vehicleId (from Feature 3 testing), the driverId from Test 1, valid loading and unloading state ids, and fees matching the active pricing chart. Expected: 201 with the created trip. Confirm trip_fees rows were created and wallets were credited.
+Frontend Tests
+Test 7 -- Trips tab loads:
+
+Login as test.lagos.tripadmin@synergy.com. Tap the Trips tab. Confirm it no longer shows "Trips — coming soon" and instead shows a list (possibly empty) with a way to create a new trip.
+Test 8 -- Trip creation form loads pricing:
+
+Open the trip creation form. Confirm loading fee and unloading fee display correctly from the active pricing chart and are not editable. Confirm stakeholder rows appear with toggles and fixed amounts.
+Test 9 -- Vehicle and driver search work in the form:
+
+In the form, search for an existing vehicle registration number, confirm it can be selected. Search for an existing driver, confirm it can be selected.
+Test 10 -- Inline driver registration works:
+
+In the form, search for a driver name that does not exist. Confirm the "Register new driver" option appears, expands to a three-field form, and successfully registers and selects the new driver on submit.
+Test 11 -- Full form submission:
+
+Fill out the complete form with vehicle, driver, both states, and submit. Confirm the trip appears in the trips list afterward.
+Test 12 -- Form validation:
+
+Attempt to submit without selecting a vehicle. Confirm a clear validation error is shown and the form does not submit.
+Test 13 -- Console is clean:
+
+Confirm no layout warnings or navigation errors appear throughout all the above flows.
+Report every step result, every test with pass or fail, and full error details if anything fails. Report exact files created and modified.

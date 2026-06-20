@@ -1,0 +1,50 @@
+Paste this into the Replit Agent:
+
+I need to build Feature 4 -- Trip Admin trip creation. This includes a driver search and registration backend, a DriverSearchInput component, and the full trip creation form. Follow all steps in order.
+Step 1 -- Backend: driver controller
+Create artifacts/api-server/src/controllers/driverController.ts with two functions:
+createDriver -- POST handler. Accepts full_name, license_number, phone_number. Checks for an existing driver with the same license_number (including soft-deleted). If found active, returns 409. If found soft-deleted, reactivates it and updates the name/phone. Otherwise inserts a new row. Sets created_by to the calling user's id. Returns the created driver.
+searchDrivers -- GET handler for /drivers/search?q=. Accepts a query string q. Returns all drivers where full_name ILIKE '%q%' OR license_number ILIKE '%q%' OR phone_number ILIKE '%q%' and deleted_at IS NULL. Returns up to 10 results.
+Step 2 -- Backend: driver route
+Create artifacts/api-server/src/routes/drivers.ts:
+POST   /drivers           authenticateToken + requireRole("trip_admin") → createDriver
+GET    /drivers/search    authenticateToken + requireRole("trip_admin") → searchDrivers
+Register this router in artifacts/api-server/src/app.ts under the /api/drivers prefix.
+Step 3 -- Frontend: DriverSearchInput component
+Create artifacts/mobile/components/DriverSearchInput.tsx, mirroring the structure of VehicleSearchInput.tsx with these differences:
+
+Search is by name, license number, or phone number combined (single text input, debounced 300ms, calls GET /api/drivers/search?q=)
+Each result row shows the driver's full name with license number and phone as secondary text
+When no results are found, instead of a single "Register as new" row, show a "Register new driver" row that expands an inline mini-form with three fields: Full Name, License Number, Phone Number
+The inline form has its own Submit button that calls POST /api/drivers, and on success calls onSelect with the newly created driver and collapses the form
+Props: value, onSelect(driver), placeholder?
+Export a Driver interface: { id, fullName, licenseNumber, phoneNumber, createdBy, isActive, createdAt }
+Follow the same design system and styling patterns as VehicleSearchInput.tsx
+
+Add searchDrivers(q) and createDriver(body) helpers to artifacts/mobile/services/api.ts.
+Step 4 -- Frontend: trip creation form
+Replace the placeholder in artifacts/mobile/app/(tripadmin)/index.tsx Trips tab with a real screen:
+
+A FlatList or simple list showing trips created by this Trip Admin (fetch GET /api/trips, filtered server-side or client-side to the calling user's trips if not already scoped)
+A button or FAB (use header + button to avoid the known PillTabBar touch interception issue) that opens the trip creation form, either as a modal or a separate screen pushed onto the stack
+
+The trip creation form should:
+
+On mount, fetch GET /api/pricing/active and store the loading fee, unloading fee, and stakeholder rates
+Display loading fee and unloading fee as read-only fields (formatted in Naira via formatCurrency.ts) -- Trip Admin cannot edit these, they come from the active chart
+Display each stakeholder from the active chart's rates as a row with a toggle (enabled/disabled) and its fixed amount shown read-only next to it
+Include a VehicleSearchInput for vehicle selection
+Include the new DriverSearchInput for driver selection
+Include a loading state dropdown and unloading state dropdown (fetch from GET /api/states)
+Include optional origin description and destination description text fields
+On submit, construct the request body matching the exact shape createTrip expects: vehicleId, driverId, loadingStateId, unloadingStateId, originDescription, destinationDescription, fees: { loadingFee, unloadingFee, stakeholders: [{ stakeholderId, amount, enabled }] } -- using the values from the active pricing chart, not manual entry
+Show a clear validation error if vehicle, driver, loading state, or unloading state is not selected
+On success, close the form and refresh the trips list
+If no active pricing chart exists, show a message telling the Trip Admin to contact their administrator and disable the form submission
+
+Follow the existing design system throughout.
+Step 5 -- TypeScript check
+Run both:
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.
