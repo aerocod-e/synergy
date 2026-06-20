@@ -26,6 +26,6 @@ async function listStates(_req: Request, res: Response): Promise<void> {
   }
 }
 
-router.get("/", authenticateToken, requireRole("super_admin"), listStates);
+router.get("/", authenticateToken, requireRole("super_admin", "trip_admin"), listStates);
 
 export default router;

@@ -217,6 +217,12 @@ async function migrate(): Promise<void> {
     `);
     console.log('✓ Table created: trip_events');
 
+    // Drop FK trips.driver_id → users(id) so it can hold drivers.id UUIDs
+    await client.query(`
+      ALTER TABLE trips DROP CONSTRAINT IF EXISTS trips_driver_id_fkey
+    `);
+    console.log('✓ Dropped FK trips_driver_id_fkey (driver_id is now a free UUID)');
+
     console.log('\n✅ All 12 tables created successfully.');
   } finally {
     client.release();

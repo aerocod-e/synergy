@@ -10,6 +10,7 @@ import statesRouter       from "./routes/states.js";
 import stakeholdersRouter from "./routes/stakeholders.js";
 import pricingRouter      from "./routes/pricing.js";
 import vehiclesRouter     from "./routes/vehicles.js";
+import driversRouter     from "./routes/drivers.js";
 
 const app: Express = express();
 
@@ -31,5 +32,6 @@ app.use("/api/states",       statesRouter);
 app.use("/api/stakeholders", stakeholdersRouter);
 app.use("/api/pricing",      pricingRouter);
 app.use("/api/vehicles",     vehiclesRouter);
+app.use("/api/drivers",      driversRouter);
 
 export default app;

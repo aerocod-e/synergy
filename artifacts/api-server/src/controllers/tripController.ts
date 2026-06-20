@@ -560,11 +560,15 @@ export async function listTrips(req: Request, res: Response): Promise<void> {
 
   try {
     const isSuperAdmin = role === "super_admin";
+    const isTripAdmin  = role === "trip_admin";
     const params: unknown[] = [];
     let idx = 1;
     const conditions: string[] = [];
 
-    if (!isSuperAdmin) {
+    if (isTripAdmin) {
+      params.push(userId);
+      conditions.push(`t.created_by = $${idx++}`);
+    } else if (!isSuperAdmin) {
       params.push(userId);
       conditions.push(`t.driver_id = $${idx++}`);
     }

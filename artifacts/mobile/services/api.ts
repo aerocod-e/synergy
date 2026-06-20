@@ -147,3 +147,10 @@ export const createVehicle = (registrationNumber: string) =>
 
 export const deleteVehicle = (id: string) =>
   apiRequest(`/api/vehicles/${id}`, { method: 'DELETE' });
+
+// ── Drivers (Trip Admin) ──────────────────────────────────────────────────────
+export const searchDrivers = (q: string) =>
+  apiRequest('/api/drivers/search?' + new URLSearchParams({ q }).toString());
+
+export const createDriver = (body: { full_name: string; license_number: string; phone_number: string }) =>
+  apiRequest('/api/drivers', { method: 'POST', body: JSON.stringify(body) });
