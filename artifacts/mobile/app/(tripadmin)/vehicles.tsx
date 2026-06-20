@@ -25,6 +25,7 @@ export default function TripAdminVehicles() {
   const [vehicles, setVehicles] = useState<VehicleWithCount[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
@@ -66,8 +67,9 @@ export default function TripAdminVehicles() {
     try {
       const data = await listVehicles();
       setVehicles(data as VehicleWithCount[]);
+      setFetchError(null);
     } catch {
-      // silently keep existing list on error
+      setFetchError("Couldn't load your vehicles");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -121,6 +123,22 @@ export default function TripAdminVehicles() {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={theme.colors.primary} />
+      </View>
+    );
+  }
+
+  if (fetchError && vehicles.length === 0) {
+    return (
+      <View style={styles.center}>
+        <Ionicons name="cloud-offline-outline" size={48} color={theme.colors.inactive} />
+        <Text style={styles.fetchErrorTitle}>{fetchError}</Text>
+        <TouchableOpacity
+          style={styles.retryButton}
+          onPress={() => fetchVehicles()}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -268,6 +286,25 @@ const styles = StyleSheet.create({
   emptySubtitle: {
     fontSize: 14,
     color: theme.colors.grey1,
+  },
+  fetchErrorTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.grey2,
+    marginTop: 12,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  retryButton: {
+    paddingHorizontal: 28,
+    paddingVertical: 11,
+    borderRadius: 10,
+    backgroundColor: theme.colors.primary,
+  },
+  retryButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: theme.colors.white,
   },
   fab: {
     position: 'absolute',
