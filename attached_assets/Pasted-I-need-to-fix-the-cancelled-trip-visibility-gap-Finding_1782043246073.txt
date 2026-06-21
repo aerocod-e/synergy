@@ -1,0 +1,33 @@
+I need to fix the cancelled trip visibility gap (Finding G6) found in regression testing. Follow all steps in order. Do not use any browser/runTest tooling for this task -- verify everything via direct API calls and database queries only, to avoid risk of the browser session getting stuck again.
+Step 1 -- Backend: include cancelled trips in public search
+Open publicLookupController.ts. Find the line filtering trips by status (AND t.status IN ('created', 'in_transit', 'completed')). Add 'cancelled' to this list so cancelled trips are findable.
+Step 2 -- Backend: extend payment status to a third state
+Open paymentStatusService.ts. Currently getFeePaymentStatus returns 'paid' or 'pending'. Add a third possible status: 'reversed'. The logic should be:
+
+If the trip's status is 'cancelled': every fee on that trip returns 'reversed', regardless of whether a trip_fees row exists (since cancellation reverses all fees per the cancellation flow built in Feature 5)
+Otherwise: existing logic applies unchanged ('paid' if a fee row exists, 'pending' if not)
+
+Update the function signature to accept the trip's status as a parameter, since the status now needs to be known to determine this. Update all callers of this function (both lookupVehicle and searchTrips) to pass the trip's status in.
+Step 3 -- Backend: verify via API only
+Without using any browser tooling, call GET /api/lookup/trips/search?q= for a known cancelled trip (e.g. one from the earlier cancellation testing, such as SYN-2026-000014 which was cancelled in the previous regression pass). Confirm:
+
+The trip now appears in results (it did not before)
+Its status field shows cancelled
+Every entry in its paymentStatus object (loading, unloading, each stakeholder) shows 'reversed', not 'paid' or 'pending'
+
+Also re-confirm the existing GET /api/lookup/vehicle/:vehicleNumber endpoint's external contract is still unaffected by this change.
+Step 4 -- Frontend: display the reversed status
+Open (public)/lookup.tsx. Update the payment status badge rendering to handle three states instead of two:
+
+'paid' -- green badge, "Paid"
+'pending' -- amber badge, "Pending"
+'reversed' -- a third distinct color (e.g. gray or blue, your choice, but visually distinct from both green and amber) -- "Reversed"
+
+Also confirm the trip status badge on the result card itself clearly shows "Cancelled" for cancelled trips (this likely already exists from earlier work -- just confirm, don't rebuild it if it's already correct).
+Step 5 -- TypeScript check
+Run both:
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.
+
+Do not use any browser/runTest tooling anywhere in this task. Report every step with exact files changed, the API verification results from Step 3 with exact response bodies, and confirmation that both TypeScript checks pass

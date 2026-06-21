@@ -24,21 +24,29 @@
  */
 
 export interface FeePaymentStatus {
-  status: 'paid' | 'pending';
+  status: 'paid' | 'pending' | 'reversed';
   paidAt: string | null;
 }
 
 /**
  * Determines the payment status of a single trip fee.
  *
- * @param tripFee - The trip_fees row, or null if the fee was not recorded for this trip
+ * @param tripFee     - The trip_fees row, or null if the fee was not recorded for this trip
  * @param referenceDate - The trip creation date, used as a paidAt placeholder when paid
- * @returns { status: 'paid' | 'pending', paidAt: ISO string or null }
+ * @param tripStatus  - The parent trip's status. When 'cancelled', all fees return 'reversed'
+ *                      regardless of whether a fee row exists (cancellation reverses all ledger
+ *                      entries via the cancellation flow).
+ * @returns { status: 'paid' | 'pending' | 'reversed', paidAt: ISO string or null }
  */
 export function getFeePaymentStatus(
   tripFee: { id: string; cleared: boolean } | null,
   referenceDate?: Date,
+  tripStatus?: string,
 ): FeePaymentStatus {
+  if (tripStatus === 'cancelled') {
+    return { status: 'reversed', paidAt: null };
+  }
+
   if (!tripFee) {
     return { status: 'pending', paidAt: null };
   }

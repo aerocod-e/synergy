@@ -15,15 +15,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
 import { searchPublicTrips } from '@/services/api';
 
+type FeeStatus = 'paid' | 'pending' | 'reversed';
+
 interface StakeholderStatus {
   stakeholderId: string;
   stakeholderName: string;
-  status: 'paid' | 'pending';
+  status: FeeStatus;
 }
 
 interface TripPaymentStatus {
-  loading: 'paid' | 'pending';
-  unloading: 'paid' | 'pending';
+  loading: FeeStatus;
+  unloading: FeeStatus;
   stakeholders: StakeholderStatus[];
 }
 
@@ -55,7 +57,14 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled:  'Cancelled',
 };
 
-function PaymentBadge({ status }: { status: 'paid' | 'pending' }) {
+function PaymentBadge({ status }: { status: FeeStatus }) {
+  if (status === 'reversed') {
+    return (
+      <View style={[styles.payBadge, styles.payBadgeReversed]}>
+        <Text style={[styles.payBadgeText, styles.payBadgeTextReversed]}>Reversed</Text>
+      </View>
+    );
+  }
   const isPaid = status === 'paid';
   return (
     <View style={[styles.payBadge, isPaid ? styles.payBadgePaid : styles.payBadgePending]}>
@@ -445,6 +454,9 @@ const styles = StyleSheet.create({
   payBadgePending: {
     backgroundColor: '#fef3c7',
   },
+  payBadgeReversed: {
+    backgroundColor: '#f1f5f9',
+  },
   payBadgeText: {
     fontSize: 12,
     fontWeight: '600',
@@ -454,5 +466,8 @@ const styles = StyleSheet.create({
   },
   payBadgeTextPending: {
     color: '#d97706',
+  },
+  payBadgeTextReversed: {
+    color: '#64748b',
   },
 });

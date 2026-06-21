@@ -79,8 +79,8 @@ export async function lookupVehicle(req: Request, res: Response): Promise<void> 
           ? { id: trip.driver_id, email: trip.driver_email }
           : null,
         fees: {
-          loadingFeePaid:   getFeePaymentStatus(loadingFee,   trip.created_at).status === "paid",
-          unloadingFeePaid: getFeePaymentStatus(unloadingFee, trip.created_at).status === "paid",
+          loadingFeePaid:   getFeePaymentStatus(loadingFee,   trip.created_at, trip.status).status === "paid",
+          unloadingFeePaid: getFeePaymentStatus(unloadingFee, trip.created_at, trip.status).status === "paid",
         },
         createdAt: trip.created_at,
       },

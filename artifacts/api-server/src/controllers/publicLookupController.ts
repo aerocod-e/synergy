@@ -43,8 +43,8 @@ export async function searchTrips(req: Request, res: Response): Promise<void> {
        JOIN  states ls ON t.loading_state_id   = ls.id
        JOIN  states us ON t.unloading_state_id = us.id
        LEFT JOIN drivers dr ON dr.id = t.driver_id
-       WHERE t.deleted_at IS NULL
-         AND t.status IN ('created', 'in_transit', 'completed')
+       WHERE (t.deleted_at IS NULL OR t.status = 'cancelled')
+         AND t.status IN ('created', 'in_transit', 'completed', 'cancelled')
          AND (
                t.trip_code             ILIKE $1
            OR  t.vehicle_number        ILIKE $1
@@ -91,7 +91,7 @@ export async function searchTrips(req: Request, res: Response): Promise<void> {
         let stakeholderStatuses: Array<{
           stakeholderId:   string;
           stakeholderName: string;
-          status:          "paid" | "pending";
+          status:          "paid" | "pending" | "reversed";
         }> = [];
 
         if (stakeholderFees.length > 0) {
@@ -107,6 +107,7 @@ export async function searchTrips(req: Request, res: Response): Promise<void> {
             status: getFeePaymentStatus(
               { id: f.id, cleared: false },
               trip.created_at,
+              trip.status,
             ).status,
           }));
         }
@@ -123,8 +124,8 @@ export async function searchTrips(req: Request, res: Response): Promise<void> {
           destinationDescription:  trip.destination_description,
           createdAt:               trip.created_at,
           paymentStatus: {
-            loading:      getFeePaymentStatus(loadingFee   ? { id: loadingFee.id,   cleared: false } : null, trip.created_at).status,
-            unloading:    getFeePaymentStatus(unloadingFee ? { id: unloadingFee.id, cleared: false } : null, trip.created_at).status,
+            loading:      getFeePaymentStatus(loadingFee   ? { id: loadingFee.id,   cleared: false } : null, trip.created_at, trip.status).status,
+            unloading:    getFeePaymentStatus(unloadingFee ? { id: unloadingFee.id, cleared: false } : null, trip.created_at, trip.status).status,
             stakeholders: stakeholderStatuses,
           },
         };
