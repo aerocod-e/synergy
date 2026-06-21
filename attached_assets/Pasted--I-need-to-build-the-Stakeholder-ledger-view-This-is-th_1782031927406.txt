@@ -1,0 +1,35 @@
+
+I need to build the Stakeholder ledger view. This is the simplest feature so far -- mostly a role guard change plus a frontend build. Follow all steps in order.
+Step 1 -- Backend: extend role guard
+Open artifacts/api-server/src/routes/wallets.ts. Update the role guard on both:
+GET /wallets/my
+GET /wallets/my/ledger
+From requireRole("trip_admin") to requireRole("trip_admin", "stakeholder"). Remove the old // TODO: clarify if state_admin or trip_admin comments above each route now that this is resolved -- these endpoints are confirmed to belong to whichever role is making the request, scoped via their own JWT entityType/entityId, not a fixed role.
+Step 2 -- Backend: enrich the ledger join with route info
+Open artifacts/api-server/src/controllers/walletController.ts (or wherever getMyLedger lives). Add a join to states (twice, aliased) via trips.loading_state_id and trips.unloading_state_id to also return loadingStateName and unloadingStateName in each ledger entry response. Keep all existing fields (tripId, vehicleNumber, feeType, amount, amountNaira, entryType, cleared, clearedAt, createdAt) unchanged.
+Step 3 -- Frontend: API helpers
+Confirm services/api.ts has helpers for fetching the wallet and ledger (likely getMyWallet() and getMyLedger(filters) already exist from earlier wallet work -- if not, add them). They should call GET /api/wallets/my and GET /api/wallets/my/ledger respectively, supporting optional startDate, endDate, feeType query params on the ledger call.
+Step 4 -- Frontend: Stakeholder home screen
+Replace the placeholder content in artifacts/mobile/app/(stakeholder)/index.tsx with a real screen:
+
+On mount, fetch getMyWallet() and getMyLedger()
+At the top, show a card displaying the total collected balance in Naira (using formatCurrency.ts), styled consistently with the existing design system
+Below, show a list of ledger entries using a FlatList. Each row should display:
+
+Route: loading state name → unloading state name
+Vehicle number
+Amount (formatted in Naira, with a clear visual distinction between credit and reversal -- e.g. green for credit, red for reversal)
+Date (formatted, displayed in WAT per project convention)
+
+
+Include pull-to-refresh on the list
+Include a simple date range filter at the top (e.g. two date pickers or quick filter chips like "Last 7 days", "Last 30 days", "All time") that re-fetches the ledger with startDate/endDate params
+Show an empty state if there are no ledger entries ("No transactions yet")
+Show a clear error state with a Retry button if the fetch fails (consistent with the pattern already built on the Trip Admin Vehicles screen in Feature 3)
+This is a single screen with no tabs needed -- stakeholders are view-only
+
+Step 5 -- TypeScript check
+Run both:
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.
