@@ -55,6 +55,44 @@ export async function listUsers(_req: Request, res: Response): Promise<void> {
   }
 }
 
+export async function listTripAdmins(req: Request, res: Response): Promise<void> {
+  try {
+    const callerEntityId = req.user!.entityId;
+
+    const { rows } = await pool.query<{
+      id: string;
+      email: string;
+      is_active: boolean;
+      can_cancel_without_approval: boolean;
+      created_at: Date;
+    }>(
+      `SELECT id, email, is_active, can_cancel_without_approval, created_at
+       FROM users
+       WHERE role = 'trip_admin'
+         AND entity_id = $1
+         AND deleted_at IS NULL
+       ORDER BY created_at DESC`,
+      [callerEntityId],
+    );
+
+    res.json({
+      data: {
+        tripAdmins: rows.map((r) => ({
+          id: r.id,
+          email: r.email,
+          isActive: r.is_active,
+          canCancelWithoutApproval: r.can_cancel_without_approval,
+          createdAt: r.created_at,
+        })),
+      },
+      message: "Trip admins retrieved",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to retrieve trip admins" });
+  }
+}
+
 const VALID_ROLES = ["super_admin", "state_admin", "trip_admin", "stakeholder"] as const;
 type ValidRole = (typeof VALID_ROLES)[number];
 

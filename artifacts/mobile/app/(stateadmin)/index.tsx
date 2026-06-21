@@ -20,7 +20,6 @@ import {
   approveCancellationRequest,
   rejectCancellationRequest,
 } from '@/services/api';
-import { useLogout } from '@/hooks/useLogout';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -41,8 +40,6 @@ interface CancellationRequest {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function StateAdminHome() {
-  const { handleLogout } = useLogout();
-
   const [requests, setRequests] = useState<CancellationRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -229,12 +226,7 @@ export default function StateAdminHome() {
           />
         }
         ListHeaderComponent={
-          <View style={styles.listHeader}>
-            <Text style={styles.listHeaderTitle}>Cancellation Requests</Text>
-            <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
-              <Ionicons name="log-out-outline" size={22} color={theme.colors.primary} />
-            </TouchableOpacity>
-          </View>
+          <Text style={styles.listHeaderTitle}>Cancellation Requests</Text>
         }
         ListEmptyComponent={
           <View style={styles.empty}>
@@ -324,19 +316,11 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 40,
   },
-  listHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
   listHeaderTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: theme.colors.black,
-  },
-  logoutBtn: {
-    padding: 6,
+    marginBottom: 16,
   },
 
   // card

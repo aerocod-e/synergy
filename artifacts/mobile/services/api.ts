@@ -123,8 +123,10 @@ export const getAllWallets = () =>
 export const lookupVehicle = (vehicleNumber: string) =>
   apiRequest(`/api/lookup/vehicle/${encodeURIComponent(vehicleNumber)}`, {}, false);
 
-// ── Users (Super Admin) ──────────────────────────────────────────────────────
+// ── Users (Super Admin / State Admin) ────────────────────────────────────────
 export const getUsers = () => apiRequest('/api/users');
+
+export const listTripAdmins = () => apiRequest('/api/users/trip-admins');
 
 export const createUser = (body: unknown) =>
   apiRequest('/api/users', { method: 'POST', body: JSON.stringify(body) });

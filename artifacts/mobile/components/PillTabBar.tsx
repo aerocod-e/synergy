@@ -12,6 +12,7 @@ const TAB_ICONS: Record<string, { active: IoniconsName; inactive: IoniconsName }
   users: { active: 'people', inactive: 'people-outline' },
   ledger: { active: 'receipt', inactive: 'receipt-outline' },
   vehicles: { active: 'car', inactive: 'car-outline' },
+  'trip-admins': { active: 'person', inactive: 'person-outline' },
 };
 
 const PILL_PADDING = 6;
