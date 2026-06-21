@@ -1,0 +1,108 @@
+This is a full regression and discovery pass across the entire application -- both backend and frontend. The goal is to find every issue, gap, or broken flow across everything built so far. Do not fix anything you find. Only document it. We will triage and fix everything afterward in a separate pass.
+For all frontend testing: perform live App Testing in an actual browser session, navigating only by tapping real, visible UI elements (buttons, tabs, links, list items). Never navigate by directly typing or editing a URL to jump between in-app screens -- the only exception is the very first page load of the app itself. If you cannot find a tappable way to reach a screen, report that itself as a finding.
+Work through every section below in order. For each numbered test, report: what you did, what you expected, what actually happened, and PASS / FAIL / PARTIAL. If something fails, capture the exact error message, status code, or screen state.
+
+SECTION A -- Authentication and Core Session
+A1. Login with valid credentials for each of the four roles (super_admin, state_admin, trip_admin, stakeholder). Confirm correct landing screen for each.
+
+A2. Login with an invalid password. Confirm a clear error message, no crash.
+
+A3. Confirm JWT refresh works -- stay on an authenticated screen long enough to require a token refresh (or inspect the refresh logic) and confirm no forced logout occurs.
+
+A4. Logout from each role. Confirm it returns to the login screen and a subsequent back-navigation does not re-enter an authenticated screen.
+
+A5. Attempt to access a role-specific API endpoint with no token at all. Confirm 401.
+
+A6. Attempt to access another role's endpoint using a valid token for the wrong role (e.g. Trip Admin token calling a Super Admin-only endpoint). Confirm 403.
+SECTION B -- Super Admin Flows
+B1. Login as Super Admin. Confirm the three tabs (Trips, Config, Users) all load without error.
+
+B2. Trips tab: confirm the trip list displays and filter pills work.
+
+B3. Config tab (pricing chart): view the current active chart. Create a new chart with different rates. Activate it. Confirm the previously active chart is now inactive and the new one is active.
+
+B4. Users tab: view the user list, confirm role badges are correct for every user type present.
+
+B5. Create a new State Admin via the modal. Confirm it appears in the list immediately.
+
+B6. Create a new Stakeholder via the modal. Confirm it appears in the list immediately.
+
+B7. Attempt to create a Trip Admin from this screen (should not be possible -- confirm the role picker does not even offer this option).
+
+B8. Backend: confirm GET /api/users, GET /api/states, GET /api/stakeholders, GET /api/wallets/all all work correctly for Super Admin and return sensible data.
+SECTION C -- State Admin Flows
+C1. Login as a State Admin. Confirm the two tabs (Requests, Trip Admins) load.
+
+C2. Trip Admins tab: confirm only Trip Admins belonging to this State Admin's own state appear.
+
+C3. Toggle pre-approved cancellation rights on a Trip Admin. Confirm it persists after a refresh.
+
+C4. Create a new Trip Admin via the modal. Confirm it appears immediately and is correctly scoped to this State Admin's state.
+
+C5. Requests tab: if there are no pending cancellation requests, confirm the empty state displays correctly.
+
+C6. Backend: confirm a State Admin cannot list or modify Trip Admins belonging to a different state (re-verify cross-state isolation still holds after all the features built since Feature 6).
+SECTION D -- Trip Admin Flows (the most complex role)
+D1. Login as a Trip Admin. Confirm the two tabs (Trips, Vehicles) load.
+
+D2. Vehicles tab: confirm the vehicle list loads, shows correct trip counts.
+
+D3. Register a new vehicle via the search-and-register flow. Confirm it appears in the list.
+
+D4. Search for an existing vehicle by partial registration number. Confirm matching results appear in the dropdown.
+
+D5. Trips tab: confirm the trip list loads with correct status badges.
+
+D6. Create a full new trip: select an existing vehicle via search, register a brand new driver inline via the driver search component, select loading and unloading states, confirm pricing chart values are correctly pre-filled and read-only, toggle a stakeholder off, submit. Confirm the trip appears in the list with status created and a properly formatted trip_code.
+
+D7. Attempt to submit the trip creation form with a required field missing (e.g. no vehicle selected). Confirm a clear validation error and no submission occurs.
+
+D8. On the newly created trip, tap Request Cancellation. Enter a reason and submit. Confirm the trip status updates correctly based on whether this Trip Admin has pre-approved rights or not.
+
+D9. If this Trip Admin does NOT have pre-approved rights: confirm the trip now shows cancellation_pending and cannot be cancelled again or have its status changed further until a State Admin acts on it.
+
+D10. Backend: confirm a Trip Admin cannot see or act on vehicles, drivers, or trips created by a different Trip Admin (re-verify cross-admin isolation holds).
+
+D11. Backend: attempt to create a trip with a vehicleId that does not exist. Confirm a clear validation error, not a server crash.
+
+D12. Backend: attempt to create a trip reusing a vehicle that already has another active (created or in_transit) trip. Confirm the duplicate-active-trip guard still works correctly.
+SECTION E -- Cancellation Approval Flow (cross-role)
+E1. As the State Admin for the Trip Admin from Section D, login and check the Requests tab. Confirm the cancellation request from D8/D9 appears (if it was a request, not an instant cancellation).
+
+E2. Approve it. Confirm the trip status becomes cancelled, and confirm via direct database or wallet endpoint check that the wallet credits for that trip were correctly reversed.
+
+E3. Create another trip and cancellation request as Trip Admin. As State Admin, reject it with a reason. Confirm the trip status reverts correctly to what it was before the cancellation request (not stuck on cancellation_pending, not incorrectly marked cancelled).
+SECTION F -- Stakeholder Flows
+F1. Login as a Stakeholder. Confirm the single home screen loads with wallet balance and ledger list, not the old placeholder.
+
+F2. Confirm the wallet balance shown matches what was credited from trips created in earlier sections, accounting for any reversals from Section E.
+
+F3. Use the date range filter. Confirm the list updates correctly.
+
+F4. Pull to refresh. Confirm no crash and data reloads correctly.
+SECTION G -- Public Lookup Flow
+G1. From the login screen (not logged in), tap "Verify a trip payment". Confirm the screen loads with no auth prompt.
+
+G2. Search for the trip created in Section D using its trip_code. Confirm it appears with the correct payment status.
+
+G3. Search using the driver's name from that trip. Confirm the same trip appears.
+
+G4. Search using the vehicle registration number. Confirm the same trip appears.
+
+G5. Tap the result to expand payment status. Confirm Loading, Unloading, and stakeholder rows display with correct Paid/Pending badges.
+
+G6. Search for the cancelled trip from Section E. Confirm its status and payment information display sensibly even though it was cancelled (decide if this is handled gracefully or not, and report exactly what is shown).
+
+G7. Search for something with no matches. Confirm the "No results" state.
+SECTION H -- Cross-Cutting Data Integrity Checks
+H1. Query the database directly: confirm no trips exist with a null vehicle_id, null trip_code, or an invalid status value outside the five known values (created, in_transit, cancellation_pending, cancelled, completed).
+
+H2. Confirm no users rows exist with role outside the four valid values.
+
+H3. Confirm every wallet_ledger entry has a valid wallet_id, trip_id, and trip_fee_id reference (no orphaned rows).
+
+H4. Confirm wallets.total_collected for every wallet matches the sum of its wallet_ledger entries (credits minus reversals) -- flag any wallet where these do not reconcile.
+SECTION I -- Console and Stability
+I1. Throughout all of the above, note any console errors, warnings, or layout children warnings encountered, even if the corresponding feature still appeared to function. List them all, grouped by which section/screen triggered them.
+
+At the end, compile a single consolidated list of every FAIL and PARTIAL result across all sections, plus every console warning from Section I, formatted as a numbered backlog list ready for triage. Do not attempt to fix any of them.
