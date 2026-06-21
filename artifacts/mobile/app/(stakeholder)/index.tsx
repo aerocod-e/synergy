@@ -52,9 +52,13 @@ function formatWAT(dateStr: string): string {
 function getFilterParams(filter: FilterKey): Record<string, string> {
   if (filter === 'all') return {};
   const days = filter === '7d' ? 7 : 30;
+  const now = new Date();
   const past = new Date();
-  past.setDate(past.getDate() - days);
-  return { startDate: past.toISOString().split('T')[0]! };
+  past.setDate(now.getDate() - days);
+  return {
+    startDate: past.toISOString().split('T')[0]!,
+    endDate:   now.toISOString().split('T')[0]!,
+  };
 }
 
 export default function StakeholderHome() {
@@ -75,8 +79,8 @@ export default function StakeholderHome() {
         getMyWallet(),
         getMyLedger(Object.keys(params).length > 0 ? params : undefined),
       ]);
-      setWallet(walletRes.data?.wallet ?? null);
-      setEntries(ledgerRes.data?.entries ?? []);
+      setWallet(walletRes.wallet ?? null);
+      setEntries(ledgerRes.entries ?? []);
     } catch {
       setFetchError("Couldn't load your wallet");
     } finally {
