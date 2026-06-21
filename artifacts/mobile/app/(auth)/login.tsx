@@ -90,17 +90,10 @@ const DEMO_ACCOUNTS: DemoAccount[] = [
     badgeColor: '#0891B2',
   },
   {
-    label: 'Driver 1',
-    email: 'driver1@synergy.com',
-    password: 'Driver@1234',
-    badge: 'Driver',
-    badgeColor: '#059669',
-  },
-  {
-    label: 'Driver 2',
-    email: 'driver2@synergy.com',
-    password: 'Driver@1234',
-    badge: 'Driver',
+    label: 'Trip Admin — Lagos',
+    email: 'ta.alpha@synergy.com',
+    password: 'Admin@1234',
+    badge: 'Trip Admin',
     badgeColor: '#059669',
   },
 ];
