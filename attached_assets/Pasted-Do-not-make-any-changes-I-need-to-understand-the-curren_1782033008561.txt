@@ -1,0 +1,24 @@
+Do not make any changes. I need to understand the current state before building the public trip lookup feature. Answer the following:
+1 -- Current lookup.ts content
+Open artifacts/api-server/src/routes/lookup.ts in full. List every endpoint defined in it, its role guard (or confirm if any are public/no-auth), and exactly what each one does.
+2 -- Trip ID format
+From migrate.ts, confirm the trips.id column type. Is it a raw UUID, or is there a separate human-readable Trip ID field anywhere? The SOW requires a unique Trip ID assigned at creation that serves as the primary reference -- confirm whether this already exists or needs to be added.
+3 -- Searchable fields availability
+For each of these required search fields, confirm where the data currently lives and whether it is already queryable in a single query or would require multiple joins:
+
+Trip ID
+Driver Name (drivers table)
+License Number (drivers table)
+Phone Number (drivers table)
+Vehicle Number (vehicles table via trips.vehicle_id)
+Origin (trips.origin_description or loading_state)
+Destination (trips.destination_description or unloading_state)
+Date (trips.created_at or another date field)
+
+4 -- Payment status determination
+How would we determine "has loading been paid", "has unloading been paid", "has each stakeholder been paid" for a given trip? Is there a cleared boolean on wallet_ledger we could use (mentioned in earlier findings), or does payment status need to be derived some other way? Confirm exactly what marks an entry as paid/settled versus pending.
+5 -- Existing public/no-auth routes
+Confirm whether any route in the entire backend currently has no authenticateToken middleware at all (genuinely public). If none exist yet, this will be the first one -- confirm there isn't an existing pattern to follow, or if there is.
+6 -- Frontend public route group
+Check artifacts/mobile/app/ for any (public) route group or equivalent that does not require login. Confirm whether one already exists or needs to be created, and how the root _layout.tsx currently handles unauthenticated navigation.
+Report findings only. No changes.
