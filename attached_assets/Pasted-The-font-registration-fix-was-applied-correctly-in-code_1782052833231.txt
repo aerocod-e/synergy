@@ -1,0 +1,21 @@
+The font registration fix was applied correctly in code, but icons are still broken on the Android emulator after testing. Do not make any changes yet -- investigate the following first.
+1 -- Confirm the testing environment
+Is this project running via Expo Go on the emulator, or via a custom development build / prebuilt native Android app (i.e. does an android/ folder exist in this project from a previous expo prebuild)? This matters a lot -- if it's a custom/prebuilt build, the native Android project may have its own baked-in copy of the old font that a JS-only fix cannot touch.
+2 -- Search for any other copies of the font files
+Search the entire repository for any other location containing Ionicons.ttf, Feather.ttf, or references to them, beyond what was already found and fixed in app/_layout.tsx and app.json. Specifically check:
+
+android/app/src/main/assets/fonts/ (if an android/ folder exists)
+android/app/src/main/res/font/
+Any android/app/build.gradle font-related configuration
+Any other config file referencing font assets (e.g. metro.config.js, react-native.config.js)
+
+3 -- Confirm whether a cache clear or full rebuild happened
+Font registration changes, especially on Android, often require more than a hot reload to take effect -- sometimes a Metro bundler cache clear, sometimes a full native rebuild if using a custom dev client. Report:
+
+Whether the Android emulator test was done by simply reloading the existing running app, or by fully restarting Metro and reopening the app
+If this is Expo Go: confirm whether clearing the Expo Go app's cache/data on the emulator, or fully restarting Metro with a cache-clear flag, was attempted
+If this is a custom dev client / prebuilt app: confirm whether the native Android app was rebuilt after the font change, since a JS-only change would not update anything already baked into a previously built APK
+
+4 -- Check the icon component's expected font family name
+Read how @expo/vector-icons' Ionicons and Feather components internally reference their font family name. Confirm this matches exactly what is now being registered via useFonts (case-sensitive). A mismatch here (even something subtle like a casing difference) would explain icons still failing even with the font technically "loaded."
+Report findings only. No changes yet.
