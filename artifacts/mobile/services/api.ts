@@ -172,6 +172,9 @@ export const deleteVehicle = (id: string) =>
   apiRequest(`/api/vehicles/${id}`, { method: 'DELETE' });
 
 // ── Drivers (Trip Admin) ──────────────────────────────────────────────────────
+export const listDrivers = () =>
+  apiRequest('/api/drivers');
+
 export const searchDrivers = (q: string) =>
   apiRequest('/api/drivers/search?' + new URLSearchParams({ q }).toString());
 

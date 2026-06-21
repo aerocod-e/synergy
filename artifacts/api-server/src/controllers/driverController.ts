@@ -106,6 +106,51 @@ export async function createDriver(req: Request, res: Response): Promise<void> {
   }
 }
 
+export async function listDrivers(req: Request, res: Response): Promise<void> {
+  const createdBy = req.user!.userId;
+
+  try {
+    const { rows } = await pool.query<{
+      id: string;
+      full_name: string;
+      license_number: string;
+      phone_number: string;
+      created_by: string;
+      is_active: boolean;
+      created_at: Date;
+      trip_count: string;
+    }>(
+      `SELECT d.id, d.full_name, d.license_number, d.phone_number,
+              d.created_by, d.is_active, d.created_at,
+              COUNT(t.id) AS trip_count
+       FROM   drivers d
+       LEFT   JOIN trips t ON t.driver_id = d.id
+       WHERE  d.created_by = $1
+         AND  d.is_active = true
+         AND  d.deleted_at IS NULL
+       GROUP  BY d.id
+       ORDER  BY d.full_name`,
+      [createdBy]
+    );
+
+    res.json({
+      data: rows.map((d) => ({
+        id:            d.id,
+        fullName:      d.full_name,
+        licenseNumber: d.license_number,
+        phoneNumber:   d.phone_number,
+        createdBy:     d.created_by,
+        isActive:      d.is_active,
+        createdAt:     d.created_at,
+        tripCount:     Number(d.trip_count),
+      })),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to list drivers" });
+  }
+}
+
 export async function searchDrivers(req: Request, res: Response): Promise<void> {
   const q = typeof req.query["q"] === "string" ? req.query["q"].trim() : "";
 

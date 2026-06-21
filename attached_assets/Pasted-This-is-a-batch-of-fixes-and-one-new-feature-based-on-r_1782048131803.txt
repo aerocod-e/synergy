@@ -1,0 +1,39 @@
+This is a batch of fixes and one new feature, based on real device testing feedback from an iPhone via Expo Go. Follow all steps in order.
+Step 1 -- Fix stakeholder default state
+In the Trip Admin trip creation form, when populating the stakeholder list from the active pricing chart, each stakeholder should default to enabled: false (currently defaults to true). The Trip Admin must explicitly toggle ON each stakeholder that applies to a given trip, rather than turning off ones that don't.
+Step 2 -- Investigate and fix vehicle inline registration not working
+On a physical device (and likely web too, this needs checking), tapping the "Register '[X]' as new vehicle" row inside VehicleSearchInput's dropdown (when used within the trip creation form specifically) does nothing -- no vehicle gets created, no error shown.
+Investigate:
+
+Read the exact onRegisterNew handler wired up in the trip creation form ((tripadmin)/index.tsx) where VehicleSearchInput is used
+Confirm whether the handler actually calls createVehicle and whether any error from that call is silently swallowed (e.g. an empty catch block)
+Compare this against the working version inside the standalone Vehicles tab's registration modal -- if that one works correctly but this one doesn't, identify the exact difference between the two implementations
+Check whether this is a platform-specific issue (e.g. something that only fails on native, not web)
+
+Fix the root cause once identified. Ensure any future failure here surfaces a visible error to the user rather than failing silently.
+Step 3 -- Investigate and fix the loading/unloading state dropdown timing bug
+On a physical device, tapping the loading or unloading state dropdown inside the trip creation form does nothing on first attempt. Closing the modal, switching to the Vehicles tab, then switching back to the Trips tab and reopening the form causes the dropdown to work correctly.
+This strongly resembles the same class of bug found in Stage 2.5 (a useEffect that should be a useFocusEffect, or some state/ref not properly initialized until the screen regains focus). Investigate:
+
+Read the exact implementation of the state dropdown component used in the trip creation form
+Check whether its open/close state, options list, or any ref it depends on is initialized via a useEffect that only runs once on mount rather than on every focus
+Check whether this dropdown is a Modal-based component and whether there's a mounting order issue with the parent trip creation modal
+
+Fix the root cause once identified.
+Step 4 -- Move the FAB further up
+The trip creation FAB on the Trip Admin Trips tab (native only, since web uses the header button) is still too close to the PillTabBar and appears to be visually obstructed by it. Increase its bottom offset further (currently 96) until it sits clearly above the tab bar with comfortable spacing on a real device. Apply the same adjustment to the Vehicles tab FAB if it has the same positioning value.
+Step 5 -- Build a new Drivers tab for Trip Admin
+This mirrors the existing Vehicles tab pattern closely.
+Backend: Add a listDrivers function to driverController.ts. GET handler for /drivers. Trip Admin only. Returns all active drivers where created_by = req.user.id, including a trip count per driver via a join with trips. Add the route GET /drivers to routes/drivers.ts, registered before any /:id param routes if applicable.
+Frontend:
+
+Update (tripadmin)/_layout.tsx to add a third tab: Drivers, alongside Trips and Vehicles
+Create (tripadmin)/drivers.tsx, mirroring vehicles.tsx closely: fetches the driver list on load/focus, displays each driver as a card (full name, license number, phone number, trip count), header + button (web) / FAB (native, positioned consistently with Step 4's fix) opening a registration modal with the three driver fields, error and empty states matching the existing pattern
+Important: use useFocusEffect (not useEffect) for the header-right button setup on this new screen from the start, to avoid reintroducing the bug fixed in Stage 2.5
+Add a listDrivers() helper to services/api.ts
+
+Step 6 -- TypeScript check
+Run both:
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.

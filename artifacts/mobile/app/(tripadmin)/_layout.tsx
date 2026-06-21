@@ -34,6 +34,10 @@ export default function TripAdminLayout() {
         name="vehicles"
         options={{ title: 'Vehicles', tabBarLabel: 'Vehicles' }}
       />
+      <Tabs.Screen
+        name="drivers"
+        options={{ title: 'Drivers', tabBarLabel: 'Drivers' }}
+      />
     </Tabs>
   );
 }

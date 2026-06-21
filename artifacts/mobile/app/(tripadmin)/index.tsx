@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
 import VehicleSearchInput, { type Vehicle } from '@/components/VehicleSearchInput';
 import DriverSearchInput, { type Driver } from '@/components/DriverSearchInput';
-import { getTrips, createTrip, getActivePricingChart, getStates, requestCancellation } from '@/services/api';
+import { getTrips, createTrip, getActivePricingChart, getStates, requestCancellation, createVehicle } from '@/services/api';
 import { formatNaira } from '@/utils/formatCurrency';
 import { useLogout } from '@/hooks/useLogout';
 
@@ -106,9 +106,12 @@ export default function TripAdminTrips() {
   const [destinationDescription, setDestinationDescription] = useState('');
   const [toggles, setToggles] = useState<Record<string, boolean>>({});
 
-  // state picker sub-modal
-  const [statePickerVisible, setStatePickerVisible] = useState(false);
-  const [statePickerFor, setStatePickerFor] = useState<'loading' | 'unloading'>('loading');
+  // inline state picker
+  const [activeStatePicker, setActiveStatePicker] = useState<'loading' | 'unloading' | null>(null);
+
+  // vehicle inline registration
+  const [vehicleRegistering, setVehicleRegistering] = useState(false);
+  const [vehicleRegisterError, setVehicleRegisterError] = useState<string | null>(null);
 
   // submission
   const [submitting, setSubmitting] = useState(false);
@@ -168,7 +171,7 @@ export default function TripAdminTrips() {
         setPricing(pd);
         const initialToggles: Record<string, boolean> = {};
         for (const r of pd.stakeholderRates) {
-          initialToggles[r.stakeholder_id] = true;
+          initialToggles[r.stakeholder_id] = false;
         }
         setToggles(initialToggles);
       }
@@ -191,6 +194,9 @@ export default function TripAdminTrips() {
     setDestinationDescription('');
     setToggles({});
     setSubmitError(null);
+    setActiveStatePicker(null);
+    setVehicleRegisterError(null);
+    setVehicleRegistering(false);
     setModalVisible(true);
     loadFormData();
   }, [loadFormData]);
@@ -221,14 +227,13 @@ export default function TripAdminTrips() {
   // ── state picker ────────────────────────────────────────────────────────────
 
   const openStatePicker = (which: 'loading' | 'unloading') => {
-    setStatePickerFor(which);
-    setStatePickerVisible(true);
+    setActiveStatePicker((prev) => (prev === which ? null : which));
   };
 
-  const handleStateSelect = (state: StateItem) => {
-    if (statePickerFor === 'loading') setLoadingStateId(state.id);
+  const handleStateSelect = (state: StateItem, which: 'loading' | 'unloading') => {
+    if (which === 'loading') setLoadingStateId(state.id);
     else setUnloadingStateId(state.id);
-    setStatePickerVisible(false);
+    setActiveStatePicker(null);
   };
 
   const loadingStateName  = states.find((s) => s.id === loadingStateId)?.name  ?? '';
@@ -506,12 +511,44 @@ export default function TripAdminTrips() {
                 onSelect={(v) => {
                   setSelectedVehicle(v);
                   setVehicleInputValue(v.registrationNumber);
+                  setVehicleRegisterError(null);
                 }}
-                onRegisterNew={(regNum) => {
-                  setVehicleInputValue(regNum);
+                onRegisterNew={async (regNum) => {
+                  if (!regNum) return;
+                  setVehicleRegisterError(null);
+                  setVehicleRegistering(true);
+                  try {
+                    const created = await createVehicle(regNum);
+                    const v = created as any;
+                    setSelectedVehicle({
+                      id: v.id,
+                      registrationNumber: v.registrationNumber,
+                      createdBy: v.createdBy,
+                      isActive: v.isActive,
+                      createdAt: v.createdAt,
+                    });
+                    setVehicleInputValue(v.registrationNumber);
+                  } catch (err: any) {
+                    if (err?.error === 'CONFLICT') {
+                      setVehicleRegisterError('Already registered — search for it above.');
+                    } else {
+                      setVehicleRegisterError(err?.message ?? 'Failed to register vehicle.');
+                    }
+                  } finally {
+                    setVehicleRegistering(false);
+                  }
                 }}
                 placeholder="Search registration number…"
               />
+              {vehicleRegistering && (
+                <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginTop: 8 }} />
+              )}
+              {vehicleRegisterError && (
+                <View style={styles.errorBox}>
+                  <Ionicons name="alert-circle-outline" size={16} color={theme.colors.error} />
+                  <Text style={styles.errorText}>{vehicleRegisterError}</Text>
+                </View>
+              )}
 
               {/* DRIVER */}
               <Text style={[styles.sectionLabel, { marginTop: 20 }]}>DRIVER</Text>
@@ -540,8 +577,30 @@ export default function TripAdminTrips() {
                 >
                   {loadingStateName || 'Select loading state…'}
                 </Text>
-                <Ionicons name="chevron-down" size={18} color={theme.colors.grey1} />
+                <Ionicons
+                  name={activeStatePicker === 'loading' ? 'chevron-up' : 'chevron-down'}
+                  size={18}
+                  color={theme.colors.grey1}
+                />
               </TouchableOpacity>
+              {activeStatePicker === 'loading' && (
+                <View style={styles.inlinePickerList}>
+                  {states.map((s) => (
+                    <TouchableOpacity
+                      key={s.id}
+                      style={styles.inlinePickerRow}
+                      onPress={() => handleStateSelect(s, 'loading')}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.stateRowText}>{s.name}</Text>
+                      <Text style={styles.stateRowCode}>{s.code}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  {states.length === 0 && (
+                    <Text style={styles.inlinePickerEmpty}>No states available</Text>
+                  )}
+                </View>
+              )}
 
               <TouchableOpacity
                 style={[styles.pickerField, { marginTop: 10 }]}
@@ -556,8 +615,30 @@ export default function TripAdminTrips() {
                 >
                   {unloadingStateName || 'Select unloading state…'}
                 </Text>
-                <Ionicons name="chevron-down" size={18} color={theme.colors.grey1} />
+                <Ionicons
+                  name={activeStatePicker === 'unloading' ? 'chevron-up' : 'chevron-down'}
+                  size={18}
+                  color={theme.colors.grey1}
+                />
               </TouchableOpacity>
+              {activeStatePicker === 'unloading' && (
+                <View style={styles.inlinePickerList}>
+                  {states.map((s) => (
+                    <TouchableOpacity
+                      key={s.id}
+                      style={styles.inlinePickerRow}
+                      onPress={() => handleStateSelect(s, 'unloading')}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.stateRowText}>{s.name}</Text>
+                      <Text style={styles.stateRowCode}>{s.code}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  {states.length === 0 && (
+                    <Text style={styles.inlinePickerEmpty}>No states available</Text>
+                  )}
+                </View>
+              )}
 
               {/* DESCRIPTION (optional) */}
               <Text style={[styles.sectionLabel, { marginTop: 20 }]}>DESCRIPTION (OPTIONAL)</Text>
@@ -664,43 +745,6 @@ export default function TripAdminTrips() {
         </View>
       </Modal>
 
-      {/* ── State picker sub-modal ── */}
-      <Modal
-        visible={statePickerVisible}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setStatePickerVisible(false)}
-      >
-        <View style={styles.statePickerModal}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>
-              {statePickerFor === 'loading' ? 'Loading State' : 'Unloading State'}
-            </Text>
-            <TouchableOpacity onPress={() => setStatePickerVisible(false)}>
-              <Ionicons name="close" size={24} color={theme.colors.grey2} />
-            </TouchableOpacity>
-          </View>
-          <FlatList
-            data={states}
-            keyExtractor={(s) => s.id}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.stateRow}
-                onPress={() => handleStateSelect(item)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.stateRowText}>{item.name}</Text>
-                <Text style={styles.stateRowCode}>{item.code}</Text>
-              </TouchableOpacity>
-            )}
-            ListEmptyComponent={
-              <View style={styles.center}>
-                <Text style={styles.emptySubtitle}>No states available</Text>
-              </View>
-            }
-          />
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -831,7 +875,7 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: 20,
-    bottom: 96,
+    bottom: 140,
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -1018,23 +1062,32 @@ const styles = StyleSheet.create({
     color: theme.colors.white,
   },
 
-  // state picker sub-modal
-  statePickerModal: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
+  // inline state picker
+  inlinePickerList: {
+    marginTop: 4,
+    borderRadius: 12,
+    backgroundColor: theme.colors.white,
+    overflow: 'hidden',
+    maxHeight: 240,
+    ...theme.shadows.card,
   },
-  stateRow: {
+  inlinePickerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.colors.separator,
-    backgroundColor: theme.colors.white,
+  },
+  inlinePickerEmpty: {
+    fontSize: 14,
+    color: theme.colors.grey1,
+    padding: 16,
+    textAlign: 'center',
   },
   stateRowText: {
-    fontSize: 16,
+    fontSize: 15,
     color: theme.colors.black,
     fontWeight: '500',
   },
