@@ -1,0 +1,22 @@
+I need to fix the Android broken-icon issue identified in the investigation. Two distinct problems need fixing in app/_layout.tsx. Follow these steps in order.
+Step 1 -- Remove the stale Ionicons override
+In the useFonts call, remove this line entirely:
+Ionicons: require("../assets/fonts/Ionicons.ttf"),
+Keep only ...Ionicons.font (the spread from the canonical @expo/vector-icons package). This ensures the font version always matches whatever version of @expo/vector-icons is actually installed, eliminating any possibility of a glyph code mismatch.
+Step 2 -- Register the Feather font
+Add ...Feather.font to the same useFonts call, alongside the existing ...Ionicons.font. Make sure Feather is properly imported from @expo/vector-icons at the top of the file if it isn't already.
+Step 3 -- Clean up the now-unused local font file and config
+Check if assets/fonts/Ionicons.ttf is referenced anywhere else in the codebase besides the line removed in Step 1. If it is not referenced anywhere else, delete the file and remove the "fonts": ["./assets/fonts/Ionicons.ttf"] entry from app.json (or app.config.js), since it's no longer needed once we rely on the canonical package font.
+Step 4 -- TypeScript check
+Run:
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Must return zero errors.
+Step 5 -- Verification
+Since this is an Android-specific rendering issue, web-based App Testing cannot fully confirm the fix (the original investigation confirmed iOS and web were never affected). Do the following instead:
+
+Confirm via code inspection that both Ionicons.font and Feather.font are now correctly spread into useFonts with no overrides
+Run the app in web mode and confirm it still loads correctly and no icons are broken there either (regression check, not the actual fix verification)
+Confirm the app still builds/bundles successfully for Android if there's any way to verify this in the current environment (e.g. expo prebuild dry run or equivalent), without needing an actual Android device
+
+
+Report every change made, confirm the TypeScript check passes, and clearly state that final confirmation of the actual fix requires testing on a real Android device or emulator, since that is the only way to verify Android-specific font rendering.

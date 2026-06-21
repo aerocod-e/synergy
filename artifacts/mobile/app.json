@@ -21,7 +21,6 @@
       "favicon": "./assets/images/icon.png",
       "baseUrl": "/mobile/"
     },
-    "fonts": ["./assets/fonts/Ionicons.ttf"],
     "plugins": [
       [
         "expo-router",

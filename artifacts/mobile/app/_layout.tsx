@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, Feather } from "@expo/vector-icons";
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -109,7 +109,7 @@ export default function RootLayout() {
 
   const [fontsLoaded, fontError] = useFonts({
     ...Ionicons.font,
-    Ionicons: require("../assets/fonts/Ionicons.ttf"),
+    ...Feather.font,
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
