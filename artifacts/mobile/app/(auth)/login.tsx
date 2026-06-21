@@ -96,6 +96,13 @@ const DEMO_ACCOUNTS: DemoAccount[] = [
     badge: 'Trip Admin',
     badgeColor: '#059669',
   },
+  {
+    label: 'Trip Admin — Lagos (Test)',
+    email: 'test.lagos.tripadmin@synergy.com',
+    password: 'Test@1234',
+    badge: 'Trip Admin',
+    badgeColor: '#059669',
+  },
 ];
 
 export default function LoginScreen() {
