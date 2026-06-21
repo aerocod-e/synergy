@@ -1,0 +1,37 @@
+This is a follow-up to the regression report. Do not fix any application code. This pass has two goals: (1) investigate and resolve the test session issue so the remaining sections can actually be tested live, and (2) investigate three ambiguous findings to confirm whether they are real bugs before we treat them as such.
+Part 1 -- Fix the test session routing issue
+Sessions kept landing on /__mockup (Component Preview Server) after the first test, preventing Sections D, E, and F from being properly tested. Investigate why this is happening in your test tooling/session setup -- this is a testing infrastructure issue, not necessarily an app bug. Once resolved, re-run the following as live App Testing, navigating only by tapping real UI elements:
+
+D4 -- Search for an existing vehicle by partial registration number on the Vehicles tab
+D6 -- Full trip creation: vehicle search/select, inline driver registration, state selection, pricing chart pre-fill, stakeholder toggle, submit
+D7 -- Submit trip creation form with a required field missing, confirm validation error
+D8 -- Request cancellation on a trip with a reason
+D9 -- Confirm trip status reflects cancellation_pending or cancelled correctly depending on pre-approved rights
+E1 -- State Admin sees the pending cancellation request from D8/D9 on their Requests tab
+E2 -- Approve it, confirm trip becomes cancelled and wallet entries reverse
+E3 -- Create another trip/cancellation request, reject it, confirm the trip status reverts correctly
+F3 -- Stakeholder date range filter updates the ledger list
+F4 -- Stakeholder pull-to-refresh works without crash
+G6 -- Search the public lookup for the cancelled trip from E2 or E3, report exactly how a cancelled trip's payment status displays
+
+Part 2 -- Investigate the Vehicles "+" button issue
+This button was specifically built in Feature 3 to avoid the FAB pointer-events interception bug. Now it appears to have the same class of issue. Investigate:
+
+Read the current implementation of the Vehicles tab header button
+Compare it against the PillTabBar slider fix applied in Stage 1 (the pointerEvents="none" fix on the Animated.View slider)
+Determine the exact root cause of why this specific button is being intercepted -- is it the same root cause recurring, a regression from a later change, or something new entirely
+Report the exact cause in detail. Do not fix it yet.
+
+Part 3 -- Investigate the wallet reconciliation discrepancy
+Before treating this as a confirmed bug, verify the check itself first:
+
+Report the exact SQL query used to compute computed_sum_of_ledger in the original H4 test. Confirm whether it involves any JOIN that could cause row fan-out/duplication (which would inflate the computed sum artificially without it being a real bug)
+If the query itself is sound, pick exactly one affected wallet (recommend the smallest discrepancy: Stakeholder Gamma, -₦100,000) and manually trace every single wallet_ledger row tied to it alongside every trip and trip_fee it relates to. Reconstruct by hand what total_collected should be step by step, and identify the exact point where it diverges from the ledger.
+Report your full findings, including whether this is a real application bug, and if so, the precise mechanism causing it (e.g. a specific code path that updates the ledger but not the wallet total, or vice versa)
+
+Part 4 -- Investigate the driver role finding
+Re-run the H2 check, this time explicitly checking: do driver1@synergy.com and driver2@synergy.com have deleted_at IS NOT NULL and is_active = false? Confirm this matches the intentional soft-delete performed in Feature 2. If so, report this as confirmed expected behavior, not a bug. If either record is somehow still active, report that as a real finding.
+Part 5 -- Investigate the /__mockup logout finding
+Determine whether /__mockup is a real route that exists anywhere in this application's routing configuration, or whether it is an artifact of the Expo web development/preview environment (e.g. a dev-only debug route that would not exist in the Expo Go app or a production build). Report which it is, with evidence.
+
+Report every part in full detail. Do not fix anything -- this is still a discovery and investigation pass only.
