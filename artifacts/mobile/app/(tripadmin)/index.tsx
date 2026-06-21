@@ -12,6 +12,8 @@ import {
   TextInput,
   Switch,
   KeyboardAvoidingView,
+  Keyboard,
+  Pressable,
   Platform,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from 'expo-router';
@@ -701,56 +703,64 @@ export default function TripAdminTrips() {
       {/* ── Cancellation request modal ── */}
       <Modal
         visible={cancelModalTripId !== null}
-        animationType="fade"
+        animationType="slide"
         transparent
-        onRequestClose={() => setCancelModalTripId(null)}
+        onRequestClose={() => { Keyboard.dismiss(); setCancelModalTripId(null); }}
       >
-        <View style={styles.cancelOverlay}>
-          <View style={styles.cancelSheet}>
-            <Text style={styles.cancelSheetTitle}>Request Cancellation</Text>
-            <Text style={styles.cancelSheetSubtitle}>
-              Your State Admin will review this request. Please explain why this trip needs to be cancelled.
-            </Text>
-            <TextInput
-              style={[styles.textField, styles.cancelReasonInput]}
-              value={cancelReason}
-              onChangeText={setCancelReason}
-              placeholder="Enter reason…"
-              placeholderTextColor={theme.colors.grey1}
-              multiline
-              numberOfLines={3}
-              autoCorrect={false}
-            />
-            {cancelError && (
-              <View style={[styles.errorBox, { marginTop: 8 }]}>
-                <Ionicons name="alert-circle-outline" size={16} color={theme.colors.error} />
-                <Text style={styles.errorText}>{cancelError}</Text>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <Pressable style={styles.cancelOverlay} onPress={Keyboard.dismiss}>
+            <Pressable style={styles.cancelSheet}>
+              <Text style={styles.cancelSheetTitle}>Request Cancellation</Text>
+              <Text style={styles.cancelSheetSubtitle}>
+                Your State Admin will review this request. Please explain why this trip needs to be cancelled.
+              </Text>
+              <TextInput
+                style={[styles.textField, styles.cancelReasonInput]}
+                value={cancelReason}
+                onChangeText={setCancelReason}
+                placeholder="Enter reason…"
+                placeholderTextColor={theme.colors.grey1}
+                multiline
+                numberOfLines={3}
+                autoCorrect={false}
+                blurOnSubmit
+                returnKeyType="done"
+                onSubmitEditing={Keyboard.dismiss}
+              />
+              {cancelError && (
+                <View style={[styles.errorBox, { marginTop: 8 }]}>
+                  <Ionicons name="alert-circle-outline" size={16} color={theme.colors.error} />
+                  <Text style={styles.errorText}>{cancelError}</Text>
+                </View>
+              )}
+              <View style={styles.cancelSheetActions}>
+                <TouchableOpacity
+                  style={styles.cancelSheetDismiss}
+                  onPress={() => { Keyboard.dismiss(); setCancelModalTripId(null); }}
+                  activeOpacity={0.7}
+                  disabled={cancelSubmitting}
+                >
+                  <Text style={styles.cancelSheetDismissText}>Keep Trip</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.cancelSheetSubmit, cancelSubmitting && styles.submitButtonDisabled]}
+                  onPress={handleCancelRequest}
+                  activeOpacity={0.85}
+                  disabled={cancelSubmitting}
+                >
+                  {cancelSubmitting ? (
+                    <ActivityIndicator size="small" color={theme.colors.white} />
+                  ) : (
+                    <Text style={styles.cancelSheetSubmitText}>Submit</Text>
+                  )}
+                </TouchableOpacity>
               </View>
-            )}
-            <View style={styles.cancelSheetActions}>
-              <TouchableOpacity
-                style={styles.cancelSheetDismiss}
-                onPress={() => setCancelModalTripId(null)}
-                activeOpacity={0.7}
-                disabled={cancelSubmitting}
-              >
-                <Text style={styles.cancelSheetDismissText}>Keep Trip</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.cancelSheetSubmit, cancelSubmitting && styles.submitButtonDisabled]}
-                onPress={handleCancelRequest}
-                activeOpacity={0.85}
-                disabled={cancelSubmitting}
-              >
-                {cancelSubmitting ? (
-                  <ActivityIndicator size="small" color={theme.colors.white} />
-                ) : (
-                  <Text style={styles.cancelSheetSubmitText}>Submit</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
     </View>
