@@ -104,8 +104,10 @@ export async function getMyLedger(req: Request, res: Response): Promise<void> {
 
     const baseQuery = `
       FROM wallet_ledger wl
-      JOIN trip_fees tf ON wl.trip_fee_id = tf.id
-      JOIN trips t      ON wl.trip_id     = t.id
+      JOIN trip_fees tf ON wl.trip_fee_id    = tf.id
+      JOIN trips t      ON wl.trip_id        = t.id
+      JOIN states sl    ON sl.id             = t.loading_state_id
+      JOIN states su    ON su.id             = t.unloading_state_id
       WHERE wl.wallet_id = $1 ${whereClause}`;
 
     const [summaryRes, countRes] = await Promise.all([
@@ -126,15 +128,17 @@ export async function getMyLedger(req: Request, res: Response): Promise<void> {
     const totalPages = Math.ceil(total / limit);
 
     const entriesRes = await pool.query<{
-      ledger_id:      string;
-      trip_id:        string;
-      vehicle_number: string;
-      fee_type:       string;
-      amount:         number;
-      entry_type:     string;
-      cleared:        boolean;
-      cleared_at:     Date | null;
-      created_at:     Date;
+      ledger_id:            string;
+      trip_id:              string;
+      vehicle_number:       string;
+      fee_type:             string;
+      amount:               number;
+      entry_type:           string;
+      cleared:              boolean;
+      cleared_at:           Date | null;
+      created_at:           Date;
+      loading_state_name:   string;
+      unloading_state_name: string;
     }>(
       `SELECT
          wl.id          AS ledger_id,
@@ -145,7 +149,9 @@ export async function getMyLedger(req: Request, res: Response): Promise<void> {
          wl.entry_type,
          wl.cleared,
          wl.cleared_at,
-         wl.created_at
+         wl.created_at,
+         sl.name        AS loading_state_name,
+         su.name        AS unloading_state_name
        ${baseQuery}
        ORDER BY wl.created_at DESC
        LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
@@ -158,16 +164,18 @@ export async function getMyLedger(req: Request, res: Response): Promise<void> {
     res.json({
       data: {
         entries: entriesRes.rows.map((r) => ({
-          ledgerId:     r.ledger_id,
-          tripId:       r.trip_id,
-          vehicleNumber: r.vehicle_number,
-          feeType:      r.fee_type,
-          amount:       r.amount,
-          amountNaira:  toNaira(r.amount),
-          entryType:    r.entry_type,
-          cleared:      r.cleared,
-          clearedAt:    r.cleared_at,
-          createdAt:    r.created_at,
+          ledgerId:            r.ledger_id,
+          tripId:              r.trip_id,
+          vehicleNumber:       r.vehicle_number,
+          feeType:             r.fee_type,
+          amount:              r.amount,
+          amountNaira:         toNaira(r.amount),
+          entryType:           r.entry_type,
+          cleared:             r.cleared,
+          clearedAt:           r.cleared_at,
+          createdAt:           r.created_at,
+          loadingStateName:    r.loading_state_name,
+          unloadingStateName:  r.unloading_state_name,
         })),
         pagination: {
           page,
