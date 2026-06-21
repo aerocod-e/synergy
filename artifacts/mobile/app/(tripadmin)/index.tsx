@@ -584,7 +584,11 @@ export default function TripAdminTrips() {
                 />
               </TouchableOpacity>
               {activeStatePicker === 'loading' && (
-                <View style={styles.inlinePickerList}>
+                <ScrollView
+                  style={styles.inlinePickerList}
+                  nestedScrollEnabled
+                  keyboardShouldPersistTaps="handled"
+                >
                   {states.map((s) => (
                     <TouchableOpacity
                       key={s.id}
@@ -599,7 +603,7 @@ export default function TripAdminTrips() {
                   {states.length === 0 && (
                     <Text style={styles.inlinePickerEmpty}>No states available</Text>
                   )}
-                </View>
+                </ScrollView>
               )}
 
               <TouchableOpacity
@@ -622,7 +626,11 @@ export default function TripAdminTrips() {
                 />
               </TouchableOpacity>
               {activeStatePicker === 'unloading' && (
-                <View style={styles.inlinePickerList}>
+                <ScrollView
+                  style={styles.inlinePickerList}
+                  nestedScrollEnabled
+                  keyboardShouldPersistTaps="handled"
+                >
                   {states.map((s) => (
                     <TouchableOpacity
                       key={s.id}
@@ -637,7 +645,7 @@ export default function TripAdminTrips() {
                   {states.length === 0 && (
                     <Text style={styles.inlinePickerEmpty}>No states available</Text>
                   )}
-                </View>
+                </ScrollView>
               )}
 
               {/* DESCRIPTION (optional) */}
