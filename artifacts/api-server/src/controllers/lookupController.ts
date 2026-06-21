@@ -1,6 +1,12 @@
 import { type Request, type Response } from "express";
 import pool from "../db/connection.js";
+import { getFeePaymentStatus } from "../services/paymentStatusService.js";
 
+// NOTE: GET /lookup/vehicle/:vehicleNumber is the original vehicle lookup endpoint.
+// Its external contract (URL, request params, response shape, HTTP status codes)
+// is frozen for backward compatibility. The internal payment status check has been
+// refactored to use paymentStatusService — callers see no difference in output.
+// For richer search, use GET /lookup/trips/search?q= instead.
 export async function lookupVehicle(req: Request, res: Response): Promise<void> {
   const { vehicleNumber } = req.params as { vehicleNumber: string };
 
@@ -47,13 +53,15 @@ export async function lookupVehicle(req: Request, res: Response): Promise<void> 
 
     const trip = rows[0]!;
 
-    const { rows: feeRows } = await pool.query<{ fee_type: string }>(
-      `SELECT DISTINCT fee_type
+    const { rows: feeRows } = await pool.query<{ id: string; fee_type: string; cleared: boolean }>(
+      `SELECT id, fee_type, false AS cleared
        FROM trip_fees
        WHERE trip_id = $1 AND fee_type IN ('loading', 'unloading')`,
       [trip.id]
     );
-    const feeTypes = new Set(feeRows.map((r) => r.fee_type));
+
+    const loadingFee  = feeRows.find((r) => r.fee_type === "loading")  ?? null;
+    const unloadingFee = feeRows.find((r) => r.fee_type === "unloading") ?? null;
 
     res.json({
       data: {
@@ -71,8 +79,8 @@ export async function lookupVehicle(req: Request, res: Response): Promise<void> 
           ? { id: trip.driver_id, email: trip.driver_email }
           : null,
         fees: {
-          loadingFeePaid:   feeTypes.has("loading"),
-          unloadingFeePaid: feeTypes.has("unloading"),
+          loadingFeePaid:   getFeePaymentStatus(loadingFee,   trip.created_at).status === "paid",
+          unloadingFeePaid: getFeePaymentStatus(unloadingFee, trip.created_at).status === "paid",
         },
         createdAt: trip.created_at,
       },

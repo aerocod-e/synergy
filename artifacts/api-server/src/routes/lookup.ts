@@ -3,12 +3,20 @@ import { publicLookupLimiter } from "../middleware/rateLimiter.js";
 import { authenticateToken } from "../middleware/auth.js";
 import { requireRole } from "../middleware/roleGuard.js";
 import { lookupVehicle } from "../controllers/lookupController.js";
+import { searchTrips } from "../controllers/publicLookupController.js";
 import { listUsers } from "../controllers/userController.js";
 import pool from "../db/connection.js";
 
 const router = Router();
 
-// Public lookup
+// Public trip search — GET /lookup/trips/search?q=
+// Searches across trip code, driver, vehicle, states, origin/destination, date.
+// No auth required. Rate-limited via publicLookupLimiter.
+router.get("/trips/search", publicLookupLimiter, searchTrips);
+
+// Public vehicle lookup — GET /lookup/vehicle/:vehicleNumber
+// NOTE: Superseded by /trips/search for richer queries; kept for backward compatibility.
+// External contract (URL, response shape) is frozen.
 router.get("/vehicle/:vehicleNumber", publicLookupLimiter, lookupVehicle);
 
 // Super-admin lookups

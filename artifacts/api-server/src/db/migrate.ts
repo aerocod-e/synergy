@@ -246,7 +246,44 @@ async function migrate(): Promise<void> {
     `);
     console.log('✓ Column added: users.can_cancel_without_approval');
 
-    console.log('\n✅ All 13 tables created successfully.');
+    // trip_code — human-readable trip identifier (SYN-YYYY-000001)
+    await client.query(`
+      CREATE SEQUENCE IF NOT EXISTS trip_code_seq START 1
+    `);
+    console.log('✓ Sequence created: trip_code_seq');
+
+    await client.query(`
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS trip_code VARCHAR(30) UNIQUE
+    `);
+    console.log('✓ Column added: trips.trip_code');
+
+    // Backfill trip_code for all existing trips (ordered by created_at ASC so older
+    // trips get lower sequence numbers — gaps are acceptable if the migration reruns)
+    await client.query(`
+      DO $$
+      DECLARE
+        rec      RECORD;
+        seq_val  BIGINT;
+        yr       INT;
+      BEGIN
+        FOR rec IN
+          SELECT id, created_at
+          FROM   trips
+          WHERE  trip_code IS NULL
+          ORDER  BY created_at ASC
+        LOOP
+          seq_val := nextval('trip_code_seq');
+          yr      := EXTRACT(YEAR FROM rec.created_at)::INT;
+          UPDATE trips
+          SET    trip_code = 'SYN-' || yr || '-' || LPAD(seq_val::TEXT, 6, '0')
+          WHERE  id = rec.id;
+        END LOOP;
+      END;
+      $$
+    `);
+    console.log('✓ Backfilled trips.trip_code for all existing trips');
+
+    console.log('\n✅ Migration complete: 13 tables, trip_code column + sequence.');
   } finally {
     client.release();
     await pool.end();

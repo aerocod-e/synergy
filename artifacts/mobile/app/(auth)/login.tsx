@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
@@ -106,6 +107,7 @@ const DEMO_ACCOUNTS: DemoAccount[] = [
 
 export default function LoginScreen() {
   const { login, isLoading } = useAuthContext();
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -208,6 +210,15 @@ export default function LoginScreen() {
               <Text style={styles.demoTriggerText}>Use a demo account</Text>
             </TouchableOpacity>
           </View>
+
+          <TouchableOpacity
+            style={styles.publicLookupLink}
+            onPress={() => router.push('/(public)/lookup')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="search-outline" size={14} color={theme.colors.primary} />
+            <Text style={styles.publicLookupText}>Verify a trip payment</Text>
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
 
@@ -394,5 +405,18 @@ const styles = StyleSheet.create({
   demoBadgeText: {
     fontSize: 11,
     fontWeight: '600',
+  },
+  publicLookupLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 16,
+    paddingVertical: 8,
+  },
+  publicLookupText: {
+    fontSize: 14,
+    color: theme.colors.primary,
+    fontWeight: '500',
   },
 });

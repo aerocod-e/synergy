@@ -1,0 +1,45 @@
+After all steps are complete and TypeScript is clean, run the following tests. For frontend tests, perform live App Testing -- open an actual browser session and navigate by tapping real UI elements only. Do not navigate via direct URL entry to jump between in-app screens under any circumstances; if a screen cannot be reached by tapping a visible element, report that as a failure. The one exception is the very first page load of the app itself, which naturally starts from a URL.
+Backend Tests
+Test 1 -- Trip codes backfilled correctly:
+
+Query the database. Confirm every trip has a non-null, unique trip_code in the format SYN-YYYY-NNNNNN.
+Test 2 -- New trip creation generates a trip code:
+
+Login as test.lagos.tripadmin@synergy.com, create a new trip. Confirm the response includes a properly formatted tripCode.
+Test 3 -- Public search works with no auth:
+
+Without any auth token, call GET /api/lookup/trips/search?q=SYN-2026 (or a real trip code prefix). Expected: 200 with matching results, no 401/403.
+Test 4 -- Search by driver name:
+
+Call the same endpoint with a known driver's name as q. Expected: matching trip(s) returned.
+Test 5 -- Search by vehicle number:
+
+Call with a known vehicle registration number as q. Expected: matching trip(s) returned.
+Test 6 -- Payment status structure present:
+
+Confirm each result in the response includes a paymentStatus object with loading, unloading, and a stakeholders array, each with a status of paid or pending.
+Test 7 -- Old vehicle lookup endpoint still works:
+
+Call GET /api/lookup/vehicle/:vehicleNumber with a known vehicle number. Confirm it still returns 200 with the same response shape as before -- unaffected by this feature.
+Test 8 -- Rate limiting still applies:
+
+Confirm the new search endpoint is using the same publicLookupLimiter as the existing public endpoint.
+Frontend App Tests (live browser navigation, tapping UI only)
+Test 9 -- Public lookup accessible without login:
+
+Open the app fresh (not logged in). From the login screen, tap the "Verify a trip payment" link. Confirm the search screen loads without requiring credentials.
+Test 10 -- Search returns results:
+
+Type a known trip code, driver name, or vehicle number into the search bar. Confirm results appear as cards.
+Test 11 -- Payment status detail view:
+
+Tap a result card. Confirm it expands or navigates to show Loading, Unloading, and stakeholder payment status badges, color-coded correctly.
+Test 12 -- No results state:
+
+Search for something that does not exist (e.g. a random string). Confirm a clear "No results found" message appears.
+Test 13 -- Accessible while logged in too:
+
+Login as any role (e.g. test.lagos.tripadmin@synergy.com). Confirm the public lookup screen can still be reached and works the same way for an authenticated user.
+Test 14 -- Console is clean throughout.
+
+Report every step with exact files created/modified, and every test with pass or fail. For frontend tests, describe exactly what was seen on screen, and explicitly confirm navigation was done via tapping UI elements only.

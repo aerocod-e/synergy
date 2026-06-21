@@ -123,6 +123,14 @@ export const getAllWallets = () =>
 export const lookupVehicle = (vehicleNumber: string) =>
   apiRequest(`/api/lookup/vehicle/${encodeURIComponent(vehicleNumber)}`, {}, false);
 
+// Public trip search — no auth token attached
+export const searchPublicTrips = (q: string) =>
+  apiRequest(
+    `/api/lookup/trips/search?${new URLSearchParams({ q }).toString()}`,
+    {},
+    false,
+  );
+
 // ── Users (Super Admin / State Admin) ────────────────────────────────────────
 export const getUsers = () => apiRequest('/api/users');
 

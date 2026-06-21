@@ -155,11 +155,19 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
     // ── 4–7. Transaction: insert trip, fees, wallets, event ───────────────
     await client.query("BEGIN");
 
+    // Generate a human-readable trip code atomically using the sequence
+    const { rows: [seqRow] } = await client.query<{ nextval: string }>(
+      `SELECT nextval('trip_code_seq') AS nextval`
+    );
+    const tripCodeYear = new Date().getFullYear();
+    const tripCode = `SYN-${tripCodeYear}-${String(seqRow.nextval).padStart(6, "0")}`;
+
     const createdById = req.user!.userId;
 
     // STEP A: Insert trip
     const { rows: [trip] } = await client.query<{
       id: string;
+      trip_code: string;
       vehicle_number: string;
       vehicle_id: string;
       driver_id: string | null;
@@ -174,8 +182,8 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
     }>(
       `INSERT INTO trips
          (vehicle_number, vehicle_id, driver_id, loading_state_id, unloading_state_id,
-          origin_description, destination_description, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          origin_description, destination_description, created_by, trip_code)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
       [
         vehicle.registration_number,
@@ -186,6 +194,7 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
         typeof originDescription === "string" ? originDescription : null,
         typeof destinationDescription === "string" ? destinationDescription : null,
         createdById,
+        tripCode,
       ]
     );
 
@@ -299,6 +308,7 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
       data: {
         trip: {
           id: trip.id,
+          tripCode: trip.trip_code,
           vehicleNumber: trip.vehicle_number,
           status: trip.status,
           loadingStateId: trip.loading_state_id,
