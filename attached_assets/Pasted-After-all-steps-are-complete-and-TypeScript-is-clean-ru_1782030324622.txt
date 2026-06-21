@@ -1,0 +1,33 @@
+After all steps are complete and TypeScript is clean, run the following tests. For the frontend tests, perform live App Testing -- open an actual browser session and navigate through the app screen by screen as a real user would, taking note of what actually renders at each step, rather than just reading the source code.
+Backend Tests
+Test 1 -- State Admin lists their own Trip Admins:
+
+Login as lagos.admin@synergy.com. Call GET /api/users/trip-admins. Confirm it returns only Trip Admins with entity_id matching Lagos, including test.lagos.tripadmin@synergy.com and test.tripadmin2@synergy.com if both are linked to Lagos. Confirm can_cancel_without_approval is included in the response for each.
+Test 2 -- Cross-state isolation:
+
+Login as a State Admin from a different state. Call GET /api/users/trip-admins. Confirm Lagos Trip Admins do not appear.
+Test 3 -- Super Admin cannot access this endpoint:
+
+Login as superadmin@synergy.com. Call GET /api/users/trip-admins. Expected: 403.
+Test 4 -- Trip Admin creation via this screen's flow:
+
+Using the Lagos State Admin token, call POST /api/users with role: "trip_admin", entity_type: "state", entity_id set to Lagos's state id, a new email. Expected: 201.
+Frontend App Tests (live browser navigation required)
+Test 5 -- State Admin tab bar loads correctly:
+
+Login as lagos.admin@synergy.com in the browser. Confirm two tabs appear: Requests and Trip Admins. Navigate between them and confirm both load without error.
+Test 6 -- Trip Admins list displays correctly:
+
+Tap the Trip Admins tab. Confirm the list shows Trip Admins for Lagos with their pre-approval toggle switches in the correct current state.
+Test 7 -- Toggle pre-approved cancellation rights:
+
+Tap the toggle switch on a Trip Admin's card. Confirm it visually updates immediately. Refresh the screen or re-fetch and confirm the change persisted (call the backend directly to verify if needed).
+Test 8 -- Create Trip Admin via the modal:
+
+Tap the header + button. Confirm the modal opens with email and password fields. Submit a new Trip Admin. Confirm the modal closes and the new Trip Admin appears in the list.
+Test 9 -- Requests tab still works after the layout change:
+
+Navigate to the Requests tab. Confirm the existing cancellation request approval flow from Feature 5 still works correctly and was not broken by the Stack-to-Tabs conversion.
+Test 10 -- Console is clean throughout all flows.
+
+Report every step with exact files created/modified, and every test with pass or fail. For frontend tests, describe exactly what was seen on screen at each step.

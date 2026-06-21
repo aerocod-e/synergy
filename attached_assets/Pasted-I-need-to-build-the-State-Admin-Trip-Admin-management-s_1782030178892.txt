@@ -1,0 +1,31 @@
+I need to build the State Admin Trip Admin management screen. Follow all steps in order.
+Step 1 -- Backend: list Trip Admins endpoint
+Add a listTripAdmins function to userController.ts. GET handler for /users/trip-admins. State Admin only. Returns all users where role = 'trip_admin' and entity_id = caller.entityId, including the can_cancel_without_approval column and is_active status. Order by created_at descending.
+Add the route to users.ts:
+GET /trip-admins   authenticateToken + requireRole("state_admin") → listTripAdmins
+Step 2 -- Convert State Admin layout to tabs
+Update artifacts/mobile/app/(stateadmin)/_layout.tsx to use <Tabs tabBar={(props) => <PillTabBar {...props} />}> mirroring the exact pattern in (tripadmin)/_layout.tsx. Two tabs:
+
+index -- title "Requests" (the existing cancellation requests screen)
+trip-admins -- title "Trip Admins" (new screen)
+
+Move the logout button into the shared screenOptions.headerRight, same pattern as Trip Admin. Remove any inline logout button currently inside index.tsx if one exists there directly rather than in the layout.
+Step 3 -- New Trip Admins management screen
+Create artifacts/mobile/app/(stateadmin)/trip-admins.tsx:
+
+On mount, fetch the Trip Admin list via a new listTripAdmins() helper added to services/api.ts (calls GET /api/users/trip-admins)
+Display each Trip Admin as a card showing: email, active status, and a toggle switch labeled "Pre-approved cancellation rights"
+Toggling the switch calls the existing updateCancellationRights(userId, bool) helper (already exists in services/api.ts from Feature 5) and updates the card optimistically, reverting on error
+Include a header + button (consistent with the known PillTabBar FAB touch-interception issue) that opens a Create Trip Admin modal
+The modal form has: email, password (masked) -- on submit, call the existing createUser helper with role: "trip_admin" and entity_type: "state", entity_id set automatically to the calling State Admin's own entityId (read this from the auth context, do not ask the user to select a state since they can only create within their own state)
+On successful creation, close the modal and refresh the list
+Show inline error if the API returns an error (e.g. duplicate email)
+Follow the existing design system throughout, consistent with the Vehicles and Users screens
+
+Step 4 -- Clean up index.tsx if needed
+If (stateadmin)/index.tsx currently has its own header configuration or logout button that conflicts with the new shared layout header, clean it up so there is no duplication.
+Step 5 -- TypeScript check
+Run both:
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.
