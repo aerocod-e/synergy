@@ -1,0 +1,38 @@
+PART 2 -- Testing
+After all steps are complete and TypeScript is clean, run the following tests.
+Backend Tests
+Test 1 -- Old cancel endpoint fully removed:
+
+Confirm PATCH /api/trips/:tripId/cancel no longer exists (should return 404, not 403).
+Test 2 -- Trip Admin without pre-approved rights requests cancellation:
+
+Login as test.lagos.tripadmin@synergy.com (confirm this account has can_cancel_without_approval = false by default). Create a fresh trip if needed. Call PATCH /trips/:tripId/request-cancellation with a reason. Expected: 200, trip status becomes cancellation_pending, a cancellation_requests row is created with status pending.
+Test 3 -- Trip Admin cannot request cancellation on another admin's trip:
+
+Using test.tripadmin2@synergy.com token, attempt to request cancellation on a trip created by test.lagos.tripadmin@synergy.com. Expected: 403 or 404.
+Test 4 -- State Admin sees pending request:
+
+Login as lagos.admin@synergy.com. Call GET /api/cancellation-requests. Confirm the request from Test 2 appears.
+Test 5 -- State Admin from a different state cannot see it:
+
+Login as a State Admin from a different state (e.g. Kano). Call GET /api/cancellation-requests. Confirm the Lagos request does NOT appear.
+Test 6 -- State Admin approves cancellation:
+
+Using the Lagos State Admin token, call PATCH /cancellation-requests/:id/approve. Expected: 200. Confirm the trip status is now cancelled, wallet entries were reversed (check wallet_ledger for a reversal entry), and cancellation_requests.status is approved.
+Test 7 -- State Admin rejects cancellation:
+
+Create another fresh trip and cancellation request. Approve a different one and reject this one with a reason. Confirm the trip status reverts to its previous_trip_status (not cancelled), and cancellation_requests.status is rejected.
+Test 8 -- Pre-approved cancellation works instantly:
+
+Using the Lagos State Admin token, call PATCH /users/:tripAdminId/cancellation-rights with can_cancel_without_approval: true for test.lagos.tripadmin@synergy.com. Then login as that Trip Admin, create a fresh trip, and call request-cancellation. Expected: trip status immediately becomes cancelled with no cancellation_requests row created, and wallet entries are reversed immediately.
+Test 9 -- State Admin cannot modify cancellation rights for another state's Trip Admin:
+
+Using the Lagos State Admin token, attempt to update cancellation rights for a Trip Admin belonging to a different state. Expected: 403.
+Frontend Tests
+Test 10 -- Trip Admin can request cancellation from the trips list:
+
+Login as a Trip Admin, find an active trip, tap Request Cancellation, enter a reason, submit. Confirm the trip badge updates to reflect cancellation_pending or cancelled depending on pre-approved rights.
+Test 11 -- State Admin approval screen loads and functions:
+
+Login as lagos.admin@synergy.com. Confirm the State Admin home screen now shows pending cancellation requests instead of the placeholder. Approve one request, confirm it disappears from the pending list. Reject another with a reason, confirm it also disappears.
+Test 12 -- Console is clean throughout all flows.
