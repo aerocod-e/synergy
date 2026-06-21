@@ -1,0 +1,49 @@
+I need to build the public trip lookup feature, including a new human-readable Trip ID, a payment status abstraction layer designed for future extensibility, and the full search experience. Follow all steps in order.
+Step 1 -- Database migration: Trip ID
+Open artifacts/api-server/src/db/migrate.ts. Add a trip_code column to the trips table:
+sqlALTER TABLE trips ADD COLUMN IF NOT EXISTS trip_code VARCHAR(30) UNIQUE;
+Add a sequence to generate the numeric portion atomically:
+sqlCREATE SEQUENCE IF NOT EXISTS trip_code_seq START 1;
+Add a migration block that backfills trip_code for all existing trips that do not have one, ordered by created_at ascending, using the format SYN-{year_of_created_at}-{6-digit zero-padded sequence}. Use nextval('trip_code_seq') for each row to assign the number atomically.
+Update the success log appropriately. Run the migration and confirm every existing trip now has a unique trip_code.
+Step 2 -- Update createTrip to generate trip_code
+In tripController.ts, update createTrip so that every new trip generates its trip_code at insert time using the same format: fetch nextval('trip_code_seq'), get the current year, format as SYN-{year}-{padded(seq, 6)}. Include tripCode in the response of the created trip.
+Step 3 -- Backend: payment status abstraction
+Create a new file artifacts/api-server/src/services/paymentStatusService.ts. This file should export a single function, something like:
+tsexport function getFeePaymentStatus(tripFee: { id: string; cleared: boolean }): { status: 'paid' | 'pending'; paidAt: string | null }
+For now, the implementation should treat a fee as 'paid' simply because a trip_fees row exists for it (matching current behavior), with paidAt set to the trip's created_at as a placeholder. Add a clear comment block at the top of this file explaining: this is currently a placeholder that treats "fee recorded" as "fee paid" because no real payment processor is connected yet; this is the single integration point where real payment/clearing status (e.g. from wallet_ledger.cleared, or a future external payment processor webhook) should be wired in later, so that no other file needs to change when that happens.
+Use this function in all payment status lookups going forward instead of inline existence checks.
+Step 4 -- Backend: public trip search endpoint
+Create artifacts/api-server/src/controllers/publicLookupController.ts (or add to the existing lookup controller) with a searchTrips function. GET handler for /lookup/trips/search?q=. No auth required, but apply the existing publicLookupLimiter rate limiting middleware.
+Logic:
+
+Accept a single query parameter q
+Search across: trip_code (exact or prefix match), drivers.full_name, drivers.license_number, drivers.phone_number, trips.vehicle_number, trips.origin_description, trips.destination_description, loading and unloading state names, and trips.created_at (if q parses as a valid date, match trips created on that date)
+Use a single query with LEFT JOIN drivers, LEFT JOIN states (twice, aliased for loading/unloading), matching any field with ILIKE '%q%' combined with OR
+Return up to 20 results, most recent first
+For each result, also fetch its trip_fees rows and apply getFeePaymentStatus from Step 3 to each one, returning a paymentStatus object: { loading: 'paid'|'pending', unloading: 'paid'|'pending', stakeholders: [{ stakeholderId, stakeholderName, status }] }
+Each result should include: tripCode, status (trip status), vehicleNumber, driverName (or null), loadingStateName, unloadingStateName, originDescription, destinationDescription, createdAt, paymentStatus
+
+Register this route in artifacts/api-server/src/routes/lookup.ts as GET /trips/search, no authenticateToken, with publicLookupLimiter applied. Do not remove or modify the existing GET /lookup/vehicle/:vehicleNumber endpoint -- leave it exactly as-is for backward compatibility, but note in a comment that it is now superseded by the new search endpoint.
+Step 5 -- Frontend: public lookup screen
+Create artifacts/mobile/app/(public)/lookup.tsx. This is the first real screen in the (public) group.
+
+A search bar at the top with placeholder text like "Search by Trip ID, driver, vehicle, license, phone, or location"
+Debounced search (400ms) calling GET /api/lookup/trips/search?q=
+Results displayed as cards, each showing: Trip ID, vehicle number, driver name, route (loading state → unloading state), trip status badge, and date
+Tapping a result card expands it (or navigates to a detail view) showing the full payment verification breakdown: Loading Fee -- Paid/Pending badge, Unloading Fee -- Paid/Pending badge, and one row per stakeholder with their name and Paid/Pending badge
+Use green for "Paid" and amber/orange for "Pending" badges, consistent with existing badge color patterns in the app
+Show an empty state when no search has been entered yet ("Search for a trip to verify payment status")
+Show a "No results found" state when a search returns nothing
+Show a loading indicator while searching
+This screen requires no login -- confirm it renders correctly for both authenticated and unauthenticated users, consistent with how (public) already works
+Follow the existing design system throughout
+
+Add a searchPublicTrips(q) helper to artifacts/mobile/services/api.ts -- note this one does not need an auth token attached.
+Step 6 -- Link to the public lookup from the login screen
+Check the login screen at artifacts/mobile/app/(auth)/login.tsx. Add a simple link or button -- something like "Verify a trip payment" or "Public trip lookup" -- that navigates to /(public)/lookup without requiring login. This is the natural entry point for someone who is not a platform user.
+Step 7 -- TypeScript check
+Run both:
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.
