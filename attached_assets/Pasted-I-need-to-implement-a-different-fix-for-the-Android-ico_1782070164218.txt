@@ -1,0 +1,30 @@
+I need to implement a different fix for the Android icon issue, based on a known community workaround. The root cause is suspected to be Metro's asset resolution failing for font files reached through this project's pnpm-symlinked node_modules, specifically on Android. Follow these steps exactly.
+Step 1 -- Copy the canonical font files into the project's own assets folder
+Copy these two files from their canonical location inside @expo/vector-icons into artifacts/mobile/assets/fonts/:
+
+node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf
+node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Feather.ttf
+
+Confirm both files exist and are non-empty after copying.
+Step 2 -- Update useFonts with explicit local requires and correct lowercase keys
+In app/_layout.tsx, replace the current ...Ionicons.font and ...Feather.font spreads with explicit local requires, using the exact lowercase font family keys that @expo/vector-icons uses internally (ionicons and feather -- confirmed lowercase in our earlier investigation of createIconSet.js):
+jsconst [fontsLoaded, fontError] = useFonts({
+  ionicons: require("../assets/fonts/Ionicons.ttf"),
+  feather: require("../assets/fonts/Feather.ttf"),
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+});
+Remove the ...Ionicons.font and ...Feather.font spreads entirely -- we are bypassing the automatic node_modules path resolution since that is the suspected point of failure in this pnpm monorepo setup.
+Step 3 -- Update app.json
+Add both font files back to the fonts array:
+json"fonts": ["./assets/fonts/Ionicons.ttf", "./assets/fonts/Feather.ttf"]
+Step 4 -- Restart with a full cache clear
+Restart the Expo dev server with npx expo start --clear. Confirm it starts with no errors.
+Step 5 -- TypeScript check
+Run:
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Must return zero errors.
+
+Report every file changed, confirm both TTF files copied correctly, confirm the exact final useFonts call, and confirm the dev server restarted cleanly.

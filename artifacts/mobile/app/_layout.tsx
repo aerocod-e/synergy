@@ -108,8 +108,8 @@ export default function RootLayout() {
   const auth = useAuth();
 
   const [fontsLoaded, fontError] = useFonts({
-    ...Ionicons.font,
-    ...Feather.font,
+    ionicons: require("../assets/fonts/Ionicons.ttf"),
+    feather: require("../assets/fonts/Feather.ttf"),
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
