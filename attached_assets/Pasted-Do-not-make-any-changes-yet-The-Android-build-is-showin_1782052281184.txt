@@ -1,0 +1,17 @@
+Do not make any changes yet. The Android build is showing every icon as a broken "missing glyph" box (a rectangle with an X through it) instead of the actual icon graphic. iOS and web have not shown this issue in any testing so far. I need to understand the root cause before fixing it.
+1 -- Icon library confirmation
+Search the codebase for every import of an icon library (e.g. @expo/vector-icons, Ionicons, react-native-vector-icons). Confirm exactly which library and which specific icon set (Ionicons, MaterialIcons, etc.) is used throughout the app.
+2 -- Font loading setup
+Check whether the app loads icon fonts explicitly before rendering, using something like expo-font's useFonts hook or Font.loadAsync, gated behind a loading screen. Check the root _layout.tsx and App.tsx (or equivalent entry point) for any such font-loading logic. Report exactly what exists, or confirm if nothing does.
+3 -- app.json / app.config configuration
+Check app.json or app.config.js for:
+
+Any expo-font plugin configuration
+Any custom fonts array under assetBundlePatterns or similar
+The Expo SDK version being used (relevant since font-loading requirements have changed across SDK versions)
+
+4 -- Scope of the issue
+Based on the code, confirm whether ALL icons in the app come from the same single import source (suggesting a single global font-loading fix would resolve everything), or whether multiple different icon sets are used in different places (which would mean the issue might need to be fixed in multiple places, or might only affect some icons rather than all of them).
+5 -- Known Expo/Android pattern check
+This is a well-known category of issue in Expo apps where vector icon fonts fail to register on Android specifically when not explicitly preloaded via useFonts, while iOS and web often work without it due to differences in how each platform handles font fallback. Confirm whether this matches what you find in this codebase, or whether there's evidence of a different cause (e.g. a missing font file in the build, a Metro bundler asset resolution issue, or something else entirely).
+Report findings only. No changes.
