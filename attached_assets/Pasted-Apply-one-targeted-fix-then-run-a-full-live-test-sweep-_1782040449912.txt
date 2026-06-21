@@ -1,0 +1,55 @@
+Apply one targeted fix, then run a full live test sweep of everything that couldn't be tested in the previous regression pass.
+Step 1 -- Fix the PillTabBar wrapper
+In PillTabBar.tsx, add pointerEvents: 'box-none' to the wrapper style. This allows the wrapper container to pass pointer events through to elements behind it (like header buttons) while still letting the pill and its tab buttons receive taps normally. Do not change anything else in this file.
+Step 2 -- Verify the fix does not break existing tab navigation
+Confirm tab switching still works correctly on at least one screen using PillTabBar (e.g. Trip Admin's Trips/Vehicles tabs) after this change, before moving on.
+Step 3 -- Check for the same issue elsewhere
+Search the codebase for any other header button that sits on a screen using PillTabBar, particularly the trip creation "+" button on the Trip Admin Trips tab (Feature 4). Confirm whether it was also silently affected by this same root cause. Report what you find.
+Step 4 -- TypeScript check
+Run both:
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.
+
+PART 2 -- Full live test sweep of previously blocked sections
+Run this as a single continuous session in one fresh browser context. Navigate only by tapping real, visible UI elements -- never via direct URL entry. To avoid the browser context getting stuck (as happened in the previous pass), run every test below in order and do not test browser Back-button behavior (A4) at any point during this sweep -- that will be tested separately afterward in its own isolated session if needed at all.
+Vehicles "+" button (re-test):
+
+V1 -- Login as a Trip Admin. Tap the Vehicles tab. Tap the "+" button. Confirm the registration modal now opens correctly.
+
+V2 -- Register a new vehicle through it. Confirm it appears in the list.
+D4 -- Vehicle search:
+
+Search for an existing vehicle by partial registration number in the Vehicles tab search. Confirm matching results appear.
+D6 -- Full trip creation:
+
+Tap the trip creation "+" button (confirm it now opens correctly given Step 3's findings). Select an existing vehicle via search. Register a brand new driver inline via the driver search component (full name, license number, phone number). Select loading and unloading states. Confirm pricing chart values are correctly pre-filled and read-only. Toggle a stakeholder off. Submit. Confirm the trip appears in the list with status created and a properly formatted trip_code.
+D7 -- Validation:
+
+Attempt to submit the trip creation form with no vehicle selected. Confirm a clear validation error and no submission occurs.
+D8 -- Request cancellation:
+
+On the trip created in D6, tap Request Cancellation. Enter a reason and submit.
+D9 -- Cancellation status:
+
+Confirm the trip status updates correctly based on whether this Trip Admin has pre-approved cancellation rights or not (check via the State Admin Trip Admins screen if unsure which state this applies to).
+E1 -- State Admin sees the request:
+
+Login as the State Admin for this Trip Admin's state. Check the Requests tab. Confirm the cancellation request from D8 appears (only if D9 resulted in a pending request, not an instant cancellation).
+E2 -- Approve:
+
+Approve it. Confirm the trip status becomes cancelled and wallet entries reverse correctly (check via direct wallet/ledger query).
+E3 -- Reject:
+
+Create another trip and cancellation request as Trip Admin (repeat a minimal version of D6 and D8). As State Admin, reject this one with a reason. Confirm the trip status reverts correctly to what it was before the cancellation request.
+F3 -- Stakeholder date filter:
+
+Login as a Stakeholder. Use the date range filter (e.g. "Last 7 days"). Confirm the ledger list updates correctly.
+F4 -- Pull to refresh:
+
+Trigger pull-to-refresh on the stakeholder ledger list. Confirm no crash and data reloads correctly.
+G6 -- Cancelled trip in public lookup:
+
+From the login screen, tap "Verify a trip payment". Search for the trip cancelled in E2 or E3 using its trip_code. Report exactly how its status and payment information display -- is it clearly marked as cancelled, are the badges still showing as if active, or something else.
+
+Report Part 1 in full (exact files changed, verification results, what was found in Step 3). Report every test in Part 2 with pass/fail and exactly what was seen on screen at each step. If anything in this sweep fails, report it in full detail -- but do not fix anything beyond the one targeted fix in Step 1.

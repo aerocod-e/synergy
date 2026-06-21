@@ -135,6 +135,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 20,
     right: 20,
+    pointerEvents: 'box-none',
   },
   pill: {
     flexDirection: 'row',
