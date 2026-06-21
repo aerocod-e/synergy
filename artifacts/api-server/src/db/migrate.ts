@@ -223,7 +223,30 @@ async function migrate(): Promise<void> {
     `);
     console.log('✓ Dropped FK trips_driver_id_fkey (driver_id is now a free UUID)');
 
-    console.log('\n✅ All 12 tables created successfully.');
+    // cancellation_requests — two-path cancellation flow
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS cancellation_requests (
+        id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        trip_id               UUID NOT NULL REFERENCES trips(id),
+        requested_by          UUID NOT NULL REFERENCES users(id),
+        reason                TEXT NOT NULL,
+        status                VARCHAR(20) NOT NULL DEFAULT 'pending',
+        previous_trip_status  VARCHAR(50) NOT NULL,
+        reviewed_by           UUID REFERENCES users(id),
+        rejection_reason      TEXT,
+        created_at            TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at            TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )
+    `);
+    console.log('✓ Table created: cancellation_requests');
+
+    // can_cancel_without_approval — Trip Admin pre-approval flag
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS can_cancel_without_approval BOOLEAN NOT NULL DEFAULT false
+    `);
+    console.log('✓ Column added: users.can_cancel_without_approval');
+
+    console.log('\n✅ All 13 tables created successfully.');
   } finally {
     client.release();
     await pool.end();

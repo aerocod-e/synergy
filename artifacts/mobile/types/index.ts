@@ -15,7 +15,7 @@ export interface AuthTokens {
   refreshToken: string;
 }
 
-export type TripStatus = 'created' | 'in_transit' | 'completed' | 'cancelled';
+export type TripStatus = 'created' | 'in_transit' | 'completed' | 'cancelled' | 'cancellation_pending';
 
 export type FeeType = 'loading' | 'unloading' | 'stakeholder_fee';
 

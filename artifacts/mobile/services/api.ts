@@ -93,8 +93,21 @@ export const startTrip = (tripId: string) =>
 export const completeTrip = (tripId: string) =>
   apiRequest(`/api/trips/${tripId}/complete`, { method: 'PATCH' });
 
-export const cancelTrip = (tripId: string) =>
-  apiRequest(`/api/trips/${tripId}/cancel`, { method: 'PATCH' });
+export const requestCancellation = (tripId: string, reason: string) =>
+  apiRequest(`/api/trips/${tripId}/request-cancellation`, { method: 'PATCH', body: JSON.stringify({ reason }) });
+
+// ── Cancellation Requests (State Admin) ──────────────────────────────────────
+export const listCancellationRequests = () =>
+  apiRequest('/api/cancellation-requests');
+
+export const approveCancellationRequest = (id: string) =>
+  apiRequest(`/api/cancellation-requests/${id}/approve`, { method: 'PATCH' });
+
+export const rejectCancellationRequest = (id: string, rejectionReason: string) =>
+  apiRequest(`/api/cancellation-requests/${id}/reject`, { method: 'PATCH', body: JSON.stringify({ rejectionReason }) });
+
+export const updateCancellationRights = (userId: string, canCancelWithoutApproval: boolean) =>
+  apiRequest(`/api/users/${userId}/cancellation-rights`, { method: 'PATCH', body: JSON.stringify({ canCancelWithoutApproval }) });
 
 // ── Wallets ─────────────────────────────────────────────────────────────────
 export const getMyWallet = () =>

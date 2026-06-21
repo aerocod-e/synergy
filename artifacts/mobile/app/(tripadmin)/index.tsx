@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
 import VehicleSearchInput, { type Vehicle } from '@/components/VehicleSearchInput';
 import DriverSearchInput, { type Driver } from '@/components/DriverSearchInput';
-import { getTrips, createTrip, getActivePricingChart, getStates } from '@/services/api';
+import { getTrips, createTrip, getActivePricingChart, getStates, requestCancellation } from '@/services/api';
 import { formatNaira } from '@/utils/formatCurrency';
 import { useLogout } from '@/hooks/useLogout';
 
@@ -28,7 +28,7 @@ import { useLogout } from '@/hooks/useLogout';
 interface TripItem {
   id: string;
   vehicleNumber: string;
-  status: 'created' | 'in_transit' | 'completed' | 'cancelled' | string;
+  status: 'created' | 'in_transit' | 'completed' | 'cancelled' | 'cancellation_pending' | string;
   loadingState: { id: string; name: string; code: string };
   unloadingState: { id: string; name: string; code: string };
   driver: { id: string; email: string } | null;
@@ -59,17 +59,19 @@ interface StateItem {
 // ── Status badge helpers ───────────────────────────────────────────────────────
 
 const STATUS_LABELS: Record<string, string> = {
-  created:    'Created',
-  in_transit: 'In Transit',
-  completed:  'Completed',
-  cancelled:  'Cancelled',
+  created:               'Created',
+  in_transit:            'In Transit',
+  completed:             'Completed',
+  cancelled:             'Cancelled',
+  cancellation_pending:  'Pending Cancel',
 };
 
 const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
-  created:    { bg: theme.colors.blueMuted,  text: theme.colors.blueText },
-  in_transit: { bg: '#fef3c7',               text: '#d97706' },
-  completed:  { bg: theme.colors.greenMuted, text: theme.colors.greenText },
-  cancelled:  { bg: theme.colors.grey3,      text: theme.colors.grey1 },
+  created:               { bg: theme.colors.blueMuted,  text: theme.colors.blueText },
+  in_transit:            { bg: '#fef3c7',               text: '#d97706' },
+  completed:             { bg: theme.colors.greenMuted, text: theme.colors.greenText },
+  cancelled:             { bg: theme.colors.grey3,      text: theme.colors.grey1 },
+  cancellation_pending:  { bg: '#fff4ed',               text: '#ea580c' },
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -111,6 +113,12 @@ export default function TripAdminTrips() {
   // submission
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // cancellation request modal
+  const [cancelModalTripId, setCancelModalTripId] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   // ── trips fetch ─────────────────────────────────────────────────────────────
 
@@ -284,6 +292,27 @@ export default function TripAdminTrips() {
     }
   };
 
+  // ── cancel request ──────────────────────────────────────────────────────────
+
+  const handleCancelRequest = useCallback(async () => {
+    if (!cancelReason.trim()) {
+      setCancelError('Please provide a reason.');
+      return;
+    }
+    setCancelSubmitting(true);
+    setCancelError(null);
+    try {
+      await requestCancellation(cancelModalTripId!, cancelReason.trim());
+      setCancelModalTripId(null);
+      setCancelReason('');
+      fetchTrips(true);
+    } catch (err: any) {
+      setCancelError(err?.message ?? 'Failed to submit cancellation request.');
+    } finally {
+      setCancelSubmitting(false);
+    }
+  }, [cancelModalTripId, cancelReason, fetchTrips]);
+
   // ── renders ─────────────────────────────────────────────────────────────────
 
   const renderTrip = ({ item }: { item: TripItem }) => {
@@ -311,6 +340,19 @@ export default function TripAdminTrips() {
             <Ionicons name="person-outline" size={14} color={theme.colors.grey1} />
             <Text style={styles.driverEmail} numberOfLines={1}>{item.driver.email}</Text>
           </View>
+        )}
+        {(item.status === 'created' || item.status === 'in_transit') && (
+          <TouchableOpacity
+            style={styles.cancelRequestBtn}
+            onPress={() => {
+              setCancelModalTripId(item.id);
+              setCancelReason('');
+              setCancelError(null);
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.cancelRequestBtnText}>Request Cancellation</Text>
+          </TouchableOpacity>
         )}
       </View>
     );
@@ -565,6 +607,61 @@ export default function TripAdminTrips() {
             </ScrollView>
           )}
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ── Cancellation request modal ── */}
+      <Modal
+        visible={cancelModalTripId !== null}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setCancelModalTripId(null)}
+      >
+        <View style={styles.cancelOverlay}>
+          <View style={styles.cancelSheet}>
+            <Text style={styles.cancelSheetTitle}>Request Cancellation</Text>
+            <Text style={styles.cancelSheetSubtitle}>
+              Your State Admin will review this request. Please explain why this trip needs to be cancelled.
+            </Text>
+            <TextInput
+              style={[styles.textField, styles.cancelReasonInput]}
+              value={cancelReason}
+              onChangeText={setCancelReason}
+              placeholder="Enter reason…"
+              placeholderTextColor={theme.colors.grey1}
+              multiline
+              numberOfLines={3}
+              autoCorrect={false}
+            />
+            {cancelError && (
+              <View style={[styles.errorBox, { marginTop: 8 }]}>
+                <Ionicons name="alert-circle-outline" size={16} color={theme.colors.error} />
+                <Text style={styles.errorText}>{cancelError}</Text>
+              </View>
+            )}
+            <View style={styles.cancelSheetActions}>
+              <TouchableOpacity
+                style={styles.cancelSheetDismiss}
+                onPress={() => setCancelModalTripId(null)}
+                activeOpacity={0.7}
+                disabled={cancelSubmitting}
+              >
+                <Text style={styles.cancelSheetDismissText}>Keep Trip</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.cancelSheetSubmit, cancelSubmitting && styles.submitButtonDisabled]}
+                onPress={handleCancelRequest}
+                activeOpacity={0.85}
+                disabled={cancelSubmitting}
+              >
+                {cancelSubmitting ? (
+                  <ActivityIndicator size="small" color={theme.colors.white} />
+                ) : (
+                  <Text style={styles.cancelSheetSubmitText}>Submit</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
 
       {/* ── State picker sub-modal ── */}
@@ -945,5 +1042,84 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.colors.grey1,
     fontWeight: '600',
+  },
+
+  // cancel request button (on trip card)
+  cancelRequestBtn: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#fff4ed',
+    borderWidth: 1,
+    borderColor: '#ea580c',
+  },
+  cancelRequestBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#ea580c',
+  },
+
+  // cancellation modal overlay
+  cancelOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  cancelSheet: {
+    backgroundColor: theme.colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    gap: 12,
+  },
+  cancelSheetTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.colors.black,
+  },
+  cancelSheetSubtitle: {
+    fontSize: 14,
+    color: theme.colors.grey1,
+    lineHeight: 20,
+  },
+  cancelReasonInput: {
+    height: 88,
+    textAlignVertical: 'top',
+    paddingTop: 12,
+  },
+  cancelSheetActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 4,
+  },
+  cancelSheetDismiss: {
+    flex: 1,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: theme.colors.grey3,
+  },
+  cancelSheetDismissText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.colors.grey2,
+  },
+  cancelSheetSubmit: {
+    flex: 1,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+    backgroundColor: '#ea580c',
+  },
+  cancelSheetSubmitText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: theme.colors.white,
   },
 });
