@@ -1,3 +1,4 @@
 - [Playwright session freeze](playwright-session-freeze.md) — runTest browser gets stuck on an early snapshot; localStorage/reload/logout instructions have no effect.
 - [Driver screen refresh pattern](driver-screen-refresh.md) — use fetchTrips(true) after startTrip/completeTrip for inline RefreshControl update; fetchTrips() (no arg) shows skeleton and blocks observation.
 - [Expo web FAB pattern](expo-web-fab-pattern.md) — floating FABs fail on Expo web; use navigation.setOptions headerRight instead for primary action buttons in Tab screens.
+- [Expo web add-button reliability](expo-web-add-button.md) — useFocusEffect/setOptions header button may not fire in time for Playwright; add a Platform.OS==='web' absolute-positioned button in screen body as fallback.

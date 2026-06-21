@@ -208,6 +208,18 @@ export default function TripAdminDrivers() {
         </TouchableOpacity>
       )}
 
+      {Platform.OS === 'web' && (
+        <TouchableOpacity
+          style={styles.webAddBtn}
+          onPress={openModal}
+          activeOpacity={0.85}
+          accessibilityLabel="Register new driver"
+        >
+          <Ionicons name="add-circle-outline" size={20} color={theme.colors.white} />
+          <Text style={styles.webAddBtnText}>Register New Driver</Text>
+        </TouchableOpacity>
+      )}
+
       <Modal
         visible={modalVisible}
         animationType="slide"
@@ -381,6 +393,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     ...theme.shadows.strong,
+  },
+  webAddBtn: {
+    position: 'absolute',
+    right: 20,
+    bottom: 80,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: theme.colors.primary,
+    borderRadius: 28,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    ...theme.shadows.strong,
+  },
+  webAddBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: theme.colors.white,
   },
   headerRight: {
     flexDirection: 'row',
