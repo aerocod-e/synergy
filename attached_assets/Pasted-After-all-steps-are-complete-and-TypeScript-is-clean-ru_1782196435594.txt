@@ -1,0 +1,14 @@
+After all steps are complete and TypeScript is clean, run the following tests. Perform live App Testing in a browser session, navigating only by tapping real UI elements. No URL navigation between in-app screens. Do not test browser Back navigation in this session.
+Backend Tests
+Test 1 -- GET /api/users/trip-admins now returns tripCount per Trip Admin. Confirm the field is present and reflects the correct count for at least one Trip Admin with known trips.
+Test 2 -- State Admin can deactivate a Trip Admin: PATCH /api/users/:id/active with { isActive: false } as Lagos State Admin on a Lagos Trip Admin. Expected: 200, isActive: false.
+Test 3 -- State Admin cannot deactivate a Trip Admin from another state. Expected: 403.
+Test 4 -- State Admin can reactivate: PATCH /api/users/:id/active with { isActive: true } on the same account. Expected: 200, isActive: true.
+Frontend App Tests (live browser, tapping only)
+Test 5 -- Login as Super Admin. Navigate to the Config tab. Confirm a "Verify Trip Payment" link or button is visible. Tap it. Confirm it navigates to the public lookup screen.
+Test 6 -- Login as Trip Admin. Open a trip detail screen. Confirm a "Verify this trip's payment status" link is visible at the bottom. Tap it. Confirm it navigates to the public lookup screen with the trip code pre-filled in the search bar and results visible.
+Test 7 -- Login as State Admin. Confirm a public lookup entry point is accessible from the navigation. Tap it and confirm it reaches the lookup screen.
+Test 8 -- Login as Stakeholder. Confirm the "Verify a payment publicly" link is visible at the bottom of the home screen. Tap it and confirm it navigates to the public lookup.
+Test 9 -- Login as State Admin. Go to the Trip Admins tab. Confirm each card now shows a trip count. Confirm the Deactivate button is visible on active accounts.
+Test 10 -- Tap Deactivate on a Trip Admin card. Confirm the card updates visually (opacity/badge). Tap Reactivate. Confirm it reverts.
+Test 11 -- Console is clean throughout.
