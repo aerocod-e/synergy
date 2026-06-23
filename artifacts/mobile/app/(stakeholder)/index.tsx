@@ -262,7 +262,7 @@ export default function StakeholderHome() {
           <View style={styles.summarySeparator} />
           <View style={styles.summaryItem}>
             <Text style={styles.summaryLabel}>REVERSALS</Text>
-            <Text style={[styles.summaryAmount, styles.summaryReversal]}>−{formatNaira(totalReversals)}</Text>
+            <Text style={[styles.summaryAmount, styles.summaryReversal]}>−{formatNaira(Math.abs(totalReversals))}</Text>
           </View>
           <View style={styles.summarySeparator} />
           <View style={styles.summaryItem}>
