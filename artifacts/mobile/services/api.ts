@@ -109,6 +109,9 @@ export const rejectCancellationRequest = (id: string, rejectionReason: string) =
 export const updateCancellationRights = (userId: string, canCancelWithoutApproval: boolean) =>
   apiRequest(`/api/users/${userId}/cancellation-rights`, { method: 'PATCH', body: JSON.stringify({ canCancelWithoutApproval }) });
 
+export const toggleUserActive = (userId: string, isActive: boolean) =>
+  apiRequest(`/api/users/${userId}/active`, { method: 'PATCH', body: JSON.stringify({ isActive }) });
+
 // ── Wallets ─────────────────────────────────────────────────────────────────
 export const getMyWallet = () =>
   apiRequest('/api/wallets/my');

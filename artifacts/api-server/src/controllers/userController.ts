@@ -93,6 +93,80 @@ export async function listTripAdmins(req: Request, res: Response): Promise<void>
   }
 }
 
+export async function toggleUserActive(req: Request, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const caller = req.user!;
+    const { isActive } = req.body as { isActive?: unknown };
+
+    if (typeof isActive !== "boolean") {
+      res.status(400).json({ error: "BAD_REQUEST", message: "isActive must be a boolean" });
+      return;
+    }
+
+    const { rows } = await pool.query<{
+      id: string;
+      email: string;
+      role: string;
+      entity_id: string | null;
+      is_active: boolean;
+      can_cancel_without_approval: boolean;
+      created_at: Date;
+    }>(
+      `SELECT id, email, role, entity_id, is_active, can_cancel_without_approval, created_at
+       FROM users WHERE id = $1 AND deleted_at IS NULL`,
+      [id],
+    );
+
+    if (rows.length === 0) {
+      res.status(404).json({ error: "NOT_FOUND", message: "User not found" });
+      return;
+    }
+
+    const target = rows[0]!;
+
+    if (target.role !== "trip_admin") {
+      res.status(403).json({ error: "FORBIDDEN", message: "Can only toggle active status for trip_admin accounts" });
+      return;
+    }
+
+    if (target.entity_id !== caller.entityId) {
+      res.status(403).json({ error: "FORBIDDEN", message: "Cannot modify a trip admin from a different state" });
+      return;
+    }
+
+    const { rows: updated } = await pool.query<{
+      id: string;
+      email: string;
+      is_active: boolean;
+      can_cancel_without_approval: boolean;
+      created_at: Date;
+    }>(
+      `UPDATE users SET is_active = $1, updated_at = NOW()
+       WHERE id = $2
+       RETURNING id, email, is_active, can_cancel_without_approval, created_at`,
+      [isActive, id],
+    );
+
+    const u = updated[0]!;
+    res.json({
+      data: {
+        user: {
+          id: u.id,
+          email: u.email,
+          isActive: u.is_active,
+          canCancelWithoutApproval: u.can_cancel_without_approval,
+          createdAt: u.created_at,
+        },
+      },
+      message: isActive ? "Trip admin reactivated" : "Trip admin deactivated",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to update user status" });
+  }
+}
+
 const VALID_ROLES = ["super_admin", "state_admin", "trip_admin", "stakeholder"] as const;
 type ValidRole = (typeof VALID_ROLES)[number];
 

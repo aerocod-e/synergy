@@ -17,7 +17,7 @@ import {
 import { useFocusEffect, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
-import { listTripAdmins, createUser, updateCancellationRights } from '@/services/api';
+import { listTripAdmins, createUser, updateCancellationRights, toggleUserActive } from '@/services/api';
 import { useAuthContext } from '@/app/_layout';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -41,8 +41,12 @@ export default function StateAdminTripAdmins() {
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // toggle error per-card
+  // toggle error per-card (cancellation rights)
   const [toggleError, setToggleError] = useState<string | null>(null);
+
+  // per-card active toggle state
+  const [activeToggling, setActiveToggling] = useState<Record<string, boolean>>({});
+  const [activeToggleError, setActiveToggleError] = useState<Record<string, string>>({});
 
   // create modal
   const [modalVisible, setModalVisible] = useState(false);
@@ -101,6 +105,31 @@ export default function StateAdminTripAdmins() {
     }
   }, [navigation, openModal]);
 
+  // ── toggle active status ──────────────────────────────────────────────────────
+
+  const handleToggleActive = useCallback(async (admin: TripAdmin, isActive: boolean) => {
+    setActiveToggling((prev) => ({ ...prev, [admin.id]: true }));
+    setActiveToggleError((prev) => { const n = { ...prev }; delete n[admin.id]; return n; });
+    // optimistic update
+    setAdmins((prev) =>
+      prev.map((a) => (a.id === admin.id ? { ...a, isActive } : a))
+    );
+    try {
+      await toggleUserActive(admin.id, isActive);
+    } catch (err: any) {
+      // revert
+      setAdmins((prev) =>
+        prev.map((a) => (a.id === admin.id ? { ...a, isActive: admin.isActive } : a))
+      );
+      setActiveToggleError((prev) => ({
+        ...prev,
+        [admin.id]: err?.message ?? (isActive ? 'Failed to reactivate' : 'Failed to deactivate'),
+      }));
+    } finally {
+      setActiveToggling((prev) => { const n = { ...prev }; delete n[admin.id]; return n; });
+    }
+  }, []);
+
   // ── toggle pre-approval ──────────────────────────────────────────────────────
 
   const handleToggle = useCallback(async (admin: TripAdmin, value: boolean) => {
@@ -153,7 +182,7 @@ export default function StateAdminTripAdmins() {
   // ── render item ───────────────────────────────────────────────────────────
 
   const renderAdmin = ({ item }: { item: TripAdmin }) => (
-    <View style={styles.card}>
+    <View style={[styles.card, !item.isActive && styles.cardInactive]}>
       <View style={styles.cardTop}>
         <View style={styles.emailRow}>
           <Ionicons name="person-circle-outline" size={20} color={theme.colors.grey1} />
@@ -178,6 +207,41 @@ export default function StateAdminTripAdmins() {
           thumbColor={theme.colors.white}
         />
       </View>
+
+      <View style={styles.activeToggleRow}>
+        <TouchableOpacity
+          style={[
+            styles.activeToggleBtn,
+            item.isActive ? styles.deactivateBtn : styles.reactivateBtn,
+            activeToggling[item.id] && styles.activeToggleBtnDisabled,
+          ]}
+          onPress={() => handleToggleActive(item, !item.isActive)}
+          disabled={!!activeToggling[item.id]}
+          activeOpacity={0.8}
+        >
+          {activeToggling[item.id] ? (
+            <ActivityIndicator size="small" color={theme.colors.white} />
+          ) : (
+            <>
+              <Ionicons
+                name={item.isActive ? 'ban-outline' : 'checkmark-circle-outline'}
+                size={15}
+                color={theme.colors.white}
+              />
+              <Text style={styles.activeToggleBtnText}>
+                {item.isActive ? 'Deactivate' : 'Reactivate'}
+              </Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {activeToggleError[item.id] && (
+        <View style={styles.cardError}>
+          <Ionicons name="alert-circle-outline" size={13} color={theme.colors.error} />
+          <Text style={styles.cardErrorText}>{activeToggleError[item.id]}</Text>
+        </View>
+      )}
     </View>
   );
 
@@ -430,6 +494,9 @@ const styles = StyleSheet.create({
   statusTextInactive: {
     color: theme.colors.grey1,
   },
+  cardInactive: {
+    opacity: 0.6,
+  },
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -449,6 +516,46 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: theme.colors.grey1,
     lineHeight: 16,
+  },
+
+  // active toggle button
+  activeToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 4,
+  },
+  activeToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  activeToggleBtnDisabled: {
+    opacity: 0.5,
+  },
+  deactivateBtn: {
+    backgroundColor: theme.colors.error,
+  },
+  reactivateBtn: {
+    backgroundColor: theme.colors.greenText,
+  },
+  activeToggleBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.colors.white,
+  },
+  cardError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingTop: 2,
+  },
+  cardErrorText: {
+    fontSize: 12,
+    color: theme.colors.error,
+    flex: 1,
   },
 
   // empty / error
