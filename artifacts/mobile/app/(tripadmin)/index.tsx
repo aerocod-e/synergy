@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
-  Alert,
   View,
   Text,
   StyleSheet,
@@ -123,6 +122,7 @@ export default function TripAdminTrips() {
 
   // cancellation request modal
   const [cancelModalTripId, setCancelModalTripId] = useState<string | null>(null);
+  const [cancelModalTripStatus, setCancelModalTripStatus] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
@@ -358,28 +358,10 @@ export default function TripAdminTrips() {
           <TouchableOpacity
             style={styles.cancelRequestBtn}
             onPress={() => {
-              if (item.status === 'in_transit') {
-                Alert.alert(
-                  'Trip Is In Transit',
-                  'This trip has already started. Requesting cancellation for an in-transit trip will require State Admin approval and may take longer to process.\n\nDo you want to continue?',
-                  [
-                    { text: 'Go Back', style: 'cancel' },
-                    {
-                      text: 'Continue',
-                      style: 'destructive',
-                      onPress: () => {
-                        setCancelModalTripId(item.id);
-                        setCancelReason('');
-                        setCancelError(null);
-                      },
-                    },
-                  ],
-                );
-              } else {
-                setCancelModalTripId(item.id);
-                setCancelReason('');
-                setCancelError(null);
-              }
+              setCancelModalTripId(item.id);
+              setCancelModalTripStatus(item.status);
+              setCancelReason('');
+              setCancelError(null);
             }}
             activeOpacity={0.7}
           >
@@ -730,7 +712,7 @@ export default function TripAdminTrips() {
         visible={cancelModalTripId !== null}
         animationType="slide"
         transparent
-        onRequestClose={() => { Keyboard.dismiss(); setCancelModalTripId(null); }}
+        onRequestClose={() => { Keyboard.dismiss(); setCancelModalTripId(null); setCancelModalTripStatus(null); }}
       >
         <KeyboardAvoidingView
           style={{ flex: 1 }}
@@ -739,6 +721,14 @@ export default function TripAdminTrips() {
           <Pressable style={styles.cancelOverlay} onPress={Keyboard.dismiss}>
             <Pressable style={styles.cancelSheet}>
               <Text style={styles.cancelSheetTitle}>Request Cancellation</Text>
+              {cancelModalTripStatus === 'in_transit' && (
+                <View style={styles.inTransitWarningBanner}>
+                  <Ionicons name="warning-outline" size={18} color="#d97706" />
+                  <Text style={styles.inTransitWarningText}>
+                    This trip is currently in transit. Cancellation requests for in-transit trips require State Admin approval and may take longer to process.
+                  </Text>
+                </View>
+              )}
               <Text style={styles.cancelSheetSubtitle}>
                 Your State Admin will review this request. Please explain why this trip needs to be cancelled.
               </Text>
@@ -764,7 +754,7 @@ export default function TripAdminTrips() {
               <View style={styles.cancelSheetActions}>
                 <TouchableOpacity
                   style={styles.cancelSheetDismiss}
-                  onPress={() => { Keyboard.dismiss(); setCancelModalTripId(null); }}
+                  onPress={() => { Keyboard.dismiss(); setCancelModalTripId(null); setCancelModalTripStatus(null); }}
                   activeOpacity={0.7}
                   disabled={cancelSubmitting}
                 >
@@ -1175,6 +1165,20 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: theme.colors.black,
+  },
+  inTransitWarningBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#fef3c7',
+    borderRadius: 10,
+    padding: 12,
+    gap: 8,
+  },
+  inTransitWarningText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#92400e',
+    lineHeight: 18,
   },
   cancelSheetSubtitle: {
     fontSize: 14,
