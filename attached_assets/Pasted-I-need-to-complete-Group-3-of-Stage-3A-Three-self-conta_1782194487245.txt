@@ -1,0 +1,28 @@
+I need to complete Group 3 of Stage 3A. Three self-contained frontend tasks. Follow all steps in order.
+Step 1 -- Add in-app navigation path to the public lookup for authenticated users
+Currently the public trip lookup screen (/(public)/lookup) is only reachable from the login screen via a "Verify a trip payment" link. Once a user is logged in, there is no way to reach it from within the app.
+Add a "Verify Payment" or "Public Lookup" entry point to each authenticated role's screen in a sensible location:
+
+Super Admin: Add it as a tappable row or button in the Config tab ((superadmin)/config.tsx), below the pricing chart section. Label it "Verify Trip Payment" with a search icon.
+Trip Admin: Add it as a tappable row at the bottom of the trip detail screen ((tripadmin)/trip-detail.tsx). Label it "Verify this trip's payment status" and pre-fill the search with the trip's tripCode when navigating to /(public)/lookup?q=<tripCode>.
+State Admin: Add it as a tappable row in the cancellation requests screen ((stateadmin)/index.tsx), accessible as a header button or footer link. Label it "Public Lookup".
+Stakeholder: Add it as a small link at the bottom of their home screen ((stakeholder)/index.tsx). Label it "Verify a payment publicly".
+
+For all cases, navigation should use router.push('/(public)/lookup') or router.push('/(public)/lookup?q=<tripCode>') as appropriate. The public lookup screen already reads the q param on mount if present.
+Check whether /(public)/lookup currently reads the q query param on mount and pre-fills the search bar. If it does not already do this, add that behavior to artifacts/mobile/app/(public)/lookup.tsx.
+Step 2 -- Disable/reactivate Trip Admin accounts from State Admin screen
+In (stateadmin)/trip-admins.tsx, each Trip Admin card currently shows email, active status badge, and a pre-approved cancellation toggle. Add a disable/reactivate action to each card.
+Backend first: Add a toggleUserActive function to userController.ts. PATCH handler for /users/:id/active. State Admin only. Validates the target user has role = 'trip_admin' and entity_id matching the caller's entity_id. Accepts { isActive: boolean } in the body. Updates users.is_active. Returns the updated user. Register the route in users.ts:
+PATCH /users/:id/active   authenticateToken + requireRole("state_admin") → toggleUserActive
+Frontend: On each Trip Admin card in trip-admins.tsx, add a Deactivate / Reactivate button (or a toggle) below the pre-approved cancellation toggle. Show "Deactivate" in red for active accounts, "Reactivate" in green for inactive ones. On tap, call the new endpoint and update the card optimistically (reverting on error). A deactivated Trip Admin should have a visually distinct card (e.g. reduced opacity or a grey "Inactive" badge). Add a toggleUserActive(userId, isActive) helper to services/api.ts.
+Step 3 -- Trip activity count on Trip Admin cards
+In (stateadmin)/trip-admins.tsx, each Trip Admin card should show how many trips they have created. The GET /api/users/trip-admins endpoint currently returns Trip Admins without a trip count. Update the backend to include it.
+Add a join in listTripAdmins in userController.ts:
+sqlLEFT JOIN trips t ON t.created_by = u.id AND t.deleted_at IS NULL
+And a COUNT(t.id) AS trip_count in the SELECT, with a GROUP BY on all other selected columns. Return it as tripCount in the response.
+On the frontend card in trip-admins.tsx, add a small trip count indicator (e.g. "12 trips" in a subtle gray label below the email).
+Step 4 -- TypeScript check
+Run both:
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.
