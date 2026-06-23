@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  FlatList,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -8,380 +7,323 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
-import { getTrips } from '@/services/api';
+import { formatNaira } from '@/utils/formatCurrency';
+import { getUsers, getStates, getStakeholders, getActivePricingChart, getAllWallets } from '@/services/api';
 
-type TripStatus = 'created' | 'in_transit' | 'completed' | 'cancelled';
-
-interface StateRef {
-  id: string;
-  name: string;
-  code: string;
+interface DashboardData {
+  stateAdmins: number;
+  tripAdmins: number;
+  stakeholderUsers: number;
+  statesCount: number;
+  stakeholdersCount: number;
+  grandTotal: number;
+  pricing: {
+    loadingFee: number;
+    unloadingFee: number;
+    rateCount: number;
+  } | null;
 }
 
-interface Trip {
-  id: string;
-  vehicleNumber: string;
-  status: TripStatus;
-  loadingState: StateRef;
-  unloadingState: StateRef;
-  driver: { id: string; email: string } | null;
-  unstartedFlag: boolean | null;
-  createdAt: string;
-}
-
-type FilterOption = 'All' | 'Created' | 'In Transit' | 'Completed' | 'Cancelled';
-
-const FILTER_OPTIONS: FilterOption[] = ['All', 'Created', 'In Transit', 'Completed', 'Cancelled'];
-
-const STATUS_FILTER_MAP: Record<FilterOption, TripStatus | null> = {
-  All: null,
-  Created: 'created',
-  'In Transit': 'in_transit',
-  Completed: 'completed',
-  Cancelled: 'cancelled',
-};
-
-const STATUS_BADGE: Record<TripStatus, { bg: string; text: string; label: string }> = {
-  created:    { bg: '#e8f0fb', text: '#1a6ec8', label: 'Created' },
-  in_transit: { bg: '#fff8e1', text: '#f59e0b', label: 'In Transit' },
-  completed:  { bg: '#e8f5ec', text: '#2a8a4a', label: 'Completed' },
-  cancelled:  { bg: '#fdf0ed', text: '#c8401a', label: 'Cancelled' },
-};
-
-function formatDate(dateStr: string): string {
-  try {
-    return new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
-  } catch {
-    return '';
-  }
-}
-
-function SkeletonCard() {
+function SkeletonCard({ wide = false }: { wide?: boolean }) {
   return (
-    <View style={styles.card}>
-      <View style={styles.cardRow}>
-        <View style={[styles.skeletonBlock, { width: 120, height: 17 }]} />
-        <View style={[styles.skeletonBlock, { width: 72, height: 22, borderRadius: 8 }]} />
-      </View>
-      <View style={[styles.skeletonBlock, { width: '70%', height: 14, marginTop: 8 }]} />
-      <View style={[styles.skeletonBlock, { width: '50%', height: 13, marginTop: 6 }]} />
+    <View style={[styles.card, wide && styles.cardWide]}>
+      <View style={[styles.skeletonBlock, { width: 36, height: 36, borderRadius: 18, marginBottom: 10 }]} />
+      <View style={[styles.skeletonBlock, { width: 60, height: 26, marginBottom: 6 }]} />
+      <View style={[styles.skeletonBlock, { width: '70%', height: 13 }]} />
     </View>
   );
 }
 
-function TripCard({ trip, onPress }: { trip: Trip; onPress: () => void }) {
-  const badge = STATUS_BADGE[trip.status] ?? STATUS_BADGE.created;
+interface SummaryCardProps {
+  icon: string;
+  iconColor?: string;
+  value: string;
+  label: string;
+  wide?: boolean;
+  valueColor?: string;
+}
+
+function SummaryCard({ icon, iconColor, value, label, wide = false, valueColor }: SummaryCardProps) {
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}>
-      <View style={styles.cardRow}>
-        <Text style={styles.vehicleNumber}>{trip.vehicleNumber}</Text>
-        <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
-          <Text style={[styles.statusBadgeText, { color: badge.text }]}>{badge.label}</Text>
-        </View>
-      </View>
-      <Text style={styles.route} numberOfLines={1}>
-        {trip.loadingState.name} → {trip.unloadingState.name}
-      </Text>
-      <View style={styles.cardRow}>
-        <Text style={styles.driverEmail} numberOfLines={1}>
-          {trip.driver?.email ?? '—'}
-        </Text>
-        <Text style={styles.dateText}>{formatDate(trip.createdAt)}</Text>
-      </View>
-      {trip.unstartedFlag === true && (
-        <>
-          <View style={styles.separator} />
-          <Text style={styles.unstartedWarning}>⚠ Not started yet</Text>
-        </>
-      )}
-    </TouchableOpacity>
+    <View style={[styles.card, wide && styles.cardWide]}>
+      <Ionicons name={icon as any} size={26} color={iconColor ?? theme.colors.primary} style={styles.cardIcon} />
+      <Text style={[styles.cardValue, valueColor ? { color: valueColor } : {}]}>{value}</Text>
+      <Text style={styles.cardLabel}>{label}</Text>
+    </View>
   );
 }
 
-export default function SuperAdminTrips() {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const [trips, setTrips] = useState<Trip[]>([]);
+export default function SuperAdminDashboard() {
+  const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<FilterOption>('All');
+  const [hasError, setHasError] = useState(false);
 
-  const fetchTrips = useCallback(async (isRefresh = false) => {
+  const fetchDashboard = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
-    else { setLoading(true); }
-    setError(false);
-    try {
-      const data = await getTrips();
-      const list: Trip[] = Array.isArray(data?.trips) ? data.trips : [];
-      setTrips(list);
-    } catch {
-      setError(true);
-    } finally {
+    else setLoading(true);
+    setHasError(false);
+
+    const [usersRes, statesRes, stakeholdersRes, pricingRes, walletsRes] = await Promise.allSettled([
+      getUsers(),
+      getStates(),
+      getStakeholders(),
+      getActivePricingChart(),
+      getAllWallets(),
+    ]);
+
+    const anySucceeded = [usersRes, statesRes, stakeholdersRes, pricingRes, walletsRes].some(
+      (r) => r.status === 'fulfilled',
+    );
+    if (!anySucceeded) {
+      setHasError(true);
       setLoading(false);
       setRefreshing(false);
+      return;
     }
+
+    const users: any[] = usersRes.status === 'fulfilled'
+      ? (usersRes.value?.users ?? [])
+      : [];
+
+    const states: any[] = statesRes.status === 'fulfilled'
+      ? (statesRes.value?.states ?? (Array.isArray(statesRes.value) ? statesRes.value : []))
+      : [];
+
+    const stakeholders: any[] = stakeholdersRes.status === 'fulfilled'
+      ? (stakeholdersRes.value?.stakeholders ?? (Array.isArray(stakeholdersRes.value) ? stakeholdersRes.value : []))
+      : [];
+
+    const chart = pricingRes.status === 'fulfilled' ? pricingRes.value?.chart : null;
+
+    const walletSummary = walletsRes.status === 'fulfilled' ? walletsRes.value?.summary : null;
+
+    setData({
+      stateAdmins:       users.filter((u) => u.role === 'state_admin').length,
+      tripAdmins:        users.filter((u) => u.role === 'trip_admin').length,
+      stakeholderUsers:  users.filter((u) => u.role === 'stakeholder').length,
+      statesCount:       states.length,
+      stakeholdersCount: stakeholders.length,
+      grandTotal:        walletSummary?.grandTotal ?? 0,
+      pricing: chart
+        ? {
+            loadingFee:  chart.loading_fee as number,
+            unloadingFee: chart.unloading_fee as number,
+            rateCount:   (chart.stakeholder_rates as any[])?.length ?? 0,
+          }
+        : null,
+    });
+
+    setLoading(false);
+    setRefreshing(false);
   }, []);
 
   useEffect(() => {
-    fetchTrips();
-  }, [fetchTrips]);
+    fetchDashboard();
+  }, [fetchDashboard]);
 
-  const activeCount = trips.filter(
-    (t) => t.status === 'created' || t.status === 'in_transit',
-  ).length;
-  const unstartedCount = trips.filter((t) => t.unstartedFlag === true).length;
+  if (loading && !refreshing) {
+    return (
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+        <Text style={styles.sectionLabel}>USERS</Text>
+        <View style={styles.grid}>
+          <SkeletonCard />
+          <SkeletonCard />
+        </View>
+        <View style={styles.grid}>
+          <SkeletonCard />
+        </View>
+        <Text style={styles.sectionLabel}>PLATFORM</Text>
+        <View style={styles.grid}>
+          <SkeletonCard />
+          <SkeletonCard />
+        </View>
+        <SkeletonCard wide />
+        <Text style={styles.sectionLabel}>ACTIVE PRICING CHART</Text>
+        <View style={styles.grid}>
+          <SkeletonCard />
+          <SkeletonCard />
+        </View>
+        <SkeletonCard wide />
+      </ScrollView>
+    );
+  }
 
-  const statusFilter = STATUS_FILTER_MAP[activeFilter];
-  const filteredTrips = statusFilter
-    ? trips.filter((t) => t.status === statusFilter)
-    : trips;
+  if (hasError) {
+    return (
+      <View style={styles.centered}>
+        <Ionicons name="cloud-offline-outline" size={48} color={theme.colors.inactive} />
+        <Text style={styles.errorText}>Failed to load dashboard</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={() => fetchDashboard()}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
-    <View style={styles.container}>
-      {/* Summary card */}
-      <View style={styles.summaryCard}>
-        <View style={styles.summaryHalf}>
-          <Text style={styles.summaryValue}>{activeCount}</Text>
-          <Text style={styles.summaryLabel}>Active Trips</Text>
-        </View>
-        <View style={styles.summaryDivider} />
-        <View style={styles.summaryHalf}>
-          <Text style={[styles.summaryValue, unstartedCount > 0 && styles.summaryValueAlert]}>
-            {unstartedCount}
-          </Text>
-          <Text style={styles.summaryLabel}>Not Started</Text>
-        </View>
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={styles.scrollContent}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => fetchDashboard(true)}
+          tintColor={theme.colors.primary}
+        />
+      }
+    >
+      <Text style={styles.sectionLabel}>USERS</Text>
+      <View style={styles.grid}>
+        <SummaryCard
+          icon="shield-checkmark-outline"
+          value={String(data?.stateAdmins ?? '—')}
+          label="State Admins"
+        />
+        <SummaryCard
+          icon="person-outline"
+          value={String(data?.tripAdmins ?? '—')}
+          label="Trip Admins"
+        />
+      </View>
+      <View style={styles.grid}>
+        <SummaryCard
+          icon="briefcase-outline"
+          iconColor="#15803d"
+          value={String(data?.stakeholderUsers ?? '—')}
+          label="Stakeholder Users"
+        />
       </View>
 
-      {/* Pills + content share the remaining space so nothing pushes them around */}
-      <View style={styles.contentArea}>
-        {/* Filter pills */}
-        <View style={styles.pillsWrapper}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.pillsContainer}
-          >
-            {FILTER_OPTIONS.map((f) => {
-              const active = activeFilter === f;
-              return (
-                <TouchableOpacity
-                  key={f}
-                  onPress={() => setActiveFilter(f)}
-                  activeOpacity={0.75}
-                  style={[styles.pill, active ? styles.pillActive : styles.pillInactive]}
-                >
-                  <Text style={[styles.pillText, active ? styles.pillTextActive : styles.pillTextInactive]}>
-                    {f}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
+      <Text style={[styles.sectionLabel, styles.sectionLabelSpaced]}>PLATFORM</Text>
+      <View style={styles.grid}>
+        <SummaryCard
+          icon="map-outline"
+          value={String(data?.statesCount ?? '—')}
+          label="States"
+        />
+        <SummaryCard
+          icon="business-outline"
+          iconColor="#d97706"
+          value={String(data?.stakeholdersCount ?? '—')}
+          label="Stakeholders"
+        />
+      </View>
+      <SummaryCard
+        icon="wallet-outline"
+        iconColor="#15803d"
+        value={data != null ? formatNaira(data.grandTotal) : '—'}
+        label="Platform Grand Total Collected"
+        wide
+        valueColor="#15803d"
+      />
 
-        {/* List content */}
-        {loading && !refreshing ? (
-          <View style={styles.skeletonArea}>
-            <SkeletonCard />
-            <SkeletonCard />
-            <SkeletonCard />
+      <Text style={[styles.sectionLabel, styles.sectionLabelSpaced]}>ACTIVE PRICING CHART</Text>
+      {data?.pricing == null ? (
+        <View style={[styles.card, styles.cardWide, styles.noPricingCard]}>
+          <Ionicons name="warning-outline" size={22} color="#d97706" />
+          <Text style={styles.noPricingText}>No active pricing chart configured</Text>
+        </View>
+      ) : (
+        <>
+          <View style={styles.grid}>
+            <SummaryCard
+              icon="arrow-up-circle-outline"
+              value={formatNaira(data.pricing.loadingFee)}
+              label="Loading Fee"
+            />
+            <SummaryCard
+              icon="arrow-down-circle-outline"
+              iconColor="#2a8a4a"
+              value={formatNaira(data.pricing.unloadingFee)}
+              label="Unloading Fee"
+            />
           </View>
-        ) : error ? (
-          <View style={styles.centeredState}>
-            <Text style={styles.errorText}>Failed to load trips</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={() => fetchTrips()}>
-              <Text style={styles.retryButtonText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <FlatList
-            style={styles.list}
-            data={filteredTrips}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={filteredTrips.length === 0 ? styles.emptyList : styles.listContent}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={() => fetchTrips(true)} />
-            }
-            renderItem={({ item }) => (
-              <TripCard
-                trip={item}
-                onPress={() => router.push(`/(superadmin)/trip-detail?id=${item.id}`)}
-              />
-            )}
-            ListEmptyComponent={
-              <View style={styles.centeredState}>
-                <Text style={styles.emptyIcon}>○</Text>
-                <Text style={styles.emptyText}>No trips found</Text>
-                {activeFilter !== 'All' && (
-                  <Text style={styles.emptySubText}>Try selecting a different filter</Text>
-                )}
-              </View>
-            }
+          <SummaryCard
+            icon="people-outline"
+            iconColor="#d97706"
+            value={String(data.pricing.rateCount)}
+            label="Stakeholder Rates Configured"
+            wide
           />
-        )}
-      </View>
-
-    </View>
+        </>
+      )}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  scroll: {
     flex: 1,
     backgroundColor: theme.colors.background,
   },
-  summaryCard: {
-    flexDirection: 'row',
-    backgroundColor: theme.colors.white,
-    borderRadius: 16,
-    margin: 16,
-    marginBottom: 8,
-    marginHorizontal: 20,
+  scrollContent: {
     padding: 16,
-    ...theme.shadows.card,
+    paddingBottom: 40,
   },
-  summaryHalf: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  summaryDivider: {
-    width: 1,
-    backgroundColor: theme.colors.separator,
-    marginVertical: 4,
-  },
-  summaryValue: {
-    fontSize: 28,
+  sectionLabel: {
+    fontSize: 11,
     fontWeight: '700',
-    color: theme.colors.black,
-  },
-  summaryValueAlert: {
-    color: '#c8401a',
-  },
-  summaryLabel: {
-    fontSize: 12,
+    letterSpacing: 1,
     color: theme.colors.grey1,
-    marginTop: 2,
+    marginBottom: 10,
+    textTransform: 'uppercase',
   },
-  contentArea: {
-    flex: 1,
+  sectionLabelSpaced: {
+    marginTop: 20,
   },
-  pillsWrapper: {
-    height: 50,
-    justifyContent: 'center',
-  },
-  pillsContainer: {
-    paddingHorizontal: 20,
-    alignItems: 'center',
-  },
-  skeletonArea: {
-    flex: 1,
-    paddingTop: 8,
-  },
-  pill: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginRight: 8,
-  },
-  pillActive: {
-    backgroundColor: theme.colors.primary,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  pillInactive: {
-    backgroundColor: theme.colors.white,
-    borderWidth: 1,
-    borderColor: '#e4e8ef',
-  },
-  pillText: {
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  pillTextActive: {
-    color: theme.colors.white,
-    fontWeight: '600',
-  },
-  pillTextInactive: {
-    color: theme.colors.grey1,
-  },
-  listContent: {
-    paddingBottom: 140,
+  grid: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
   },
   card: {
+    flex: 1,
     backgroundColor: theme.colors.white,
     borderRadius: 16,
-    marginHorizontal: 20,
-    marginVertical: 6,
     padding: 16,
+    alignItems: 'flex-start',
     ...theme.shadows.card,
   },
-  cardRow: {
+  cardWide: {
+    flex: 0,
+    width: '100%',
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 14,
+    paddingVertical: 18,
+    marginBottom: 12,
   },
-  vehicleNumber: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: theme.colors.black,
-  },
-  statusBadge: {
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  statusBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  route: {
-    fontSize: 14,
-    color: theme.colors.grey2,
-    marginTop: 6,
-    marginBottom: 6,
-  },
-  driverEmail: {
-    fontSize: 13,
-    color: theme.colors.grey1,
-    flex: 1,
-    marginRight: 8,
-  },
-  dateText: {
-    fontSize: 13,
-    color: theme.colors.grey1,
-  },
-  separator: {
-    height: 1,
-    backgroundColor: theme.colors.separator,
-    marginTop: 10,
+  cardIcon: {
     marginBottom: 8,
   },
-  unstartedWarning: {
+  cardValue: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: theme.colors.black,
+    marginBottom: 4,
+  },
+  cardLabel: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#c8401a',
+    color: theme.colors.grey1,
+    lineHeight: 16,
   },
   skeletonBlock: {
     backgroundColor: '#0d0d0d',
-    opacity: 0.15,
+    opacity: 0.1,
     borderRadius: 6,
-    height: 14,
   },
-  centeredState: {
+  centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 60,
+    gap: 12,
   },
   errorText: {
     fontSize: 15,
-    color: theme.colors.error,
-    marginBottom: 16,
+    color: theme.colors.grey1,
   },
   retryButton: {
     paddingHorizontal: 24,
@@ -394,24 +336,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
   },
-  list: {
-    flex: 1,
+  noPricingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 18,
   },
-  emptyList: {
-    flexGrow: 1,
-  },
-  emptyIcon: {
-    fontSize: 40,
-    color: theme.colors.grey1,
-    marginBottom: 8,
-  },
-  emptyText: {
+  noPricingText: {
     fontSize: 14,
-    color: theme.colors.grey1,
-  },
-  emptySubText: {
-    fontSize: 13,
-    color: theme.colors.grey1,
-    marginTop: 4,
+    color: '#d97706',
+    fontWeight: '600',
+    flex: 1,
   },
 });

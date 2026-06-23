@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { TouchableOpacity } from 'react-native';
 import { useLogout } from '@/hooks/useLogout';
 import { theme } from '@/constants/theme';
@@ -7,6 +7,7 @@ import PillTabBar from '@/components/PillTabBar';
 
 export default function TripAdminLayout() {
   const { handleLogout } = useLogout();
+  const router = useRouter();
 
   return (
     <Tabs
@@ -37,6 +38,18 @@ export default function TripAdminLayout() {
       <Tabs.Screen
         name="drivers"
         options={{ title: 'Drivers', tabBarLabel: 'Drivers' }}
+      />
+      <Tabs.Screen
+        name="trip-detail"
+        options={{
+          title: 'Trip Detail',
+          href: null,
+          headerLeft: () => (
+            <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 16 }}>
+              <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
+            </TouchableOpacity>
+          ),
+        }}
       />
     </Tabs>
   );

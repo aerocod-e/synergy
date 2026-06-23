@@ -1,0 +1,14 @@
+After all steps are complete and TypeScript is clean, run the following tests. For frontend tests, perform live App Testing in a browser session, navigating only by tapping real UI elements. No URL-based navigation between in-app screens. Do not test browser Back navigation in this session.
+Backend Tests
+Test 1 -- GET /api/trips/:id returns all required fields: vehicle registration number (not just vehicle_id), driver name, loading and unloading state names, fee amounts. Report the exact response shape.
+Test 2 -- Confirm the trip events endpoint or field is included in the trip detail response if it was added.
+Frontend App Tests (live browser, tapping only)
+Test 3 -- Super Admin login lands on the Dashboard tab. Confirm the dashboard shows real data: user counts by role, state count, active pricing chart summary, and platform grand total. Confirm pull-to-refresh works.
+Test 4 -- Tap the Trips tab on Super Admin. Confirm the trip list loads with filter pills and trip cards. Confirm there is no create-trip button or FAB anywhere on this screen.
+Test 5 -- Tap a trip card from the Super Admin Trips tab. Confirm it navigates to the trip detail screen and shows real trip data (trip code, vehicle, driver, route, fees).
+Test 6 -- Login as a Trip Admin. Tap the Trips tab. Tap a trip card. Confirm it navigates to the Trip Admin trip detail screen with the same real data.
+Test 7 -- On the Trip Admin trips list, find a trip with status in_transit (create one first if needed by creating a trip and marking it started via the backend). Tap Request Cancellation on it. Confirm the amber warning banner appears inside the modal.
+Test 8 -- Confirm the warning banner does NOT appear when requesting cancellation on a created trip.
+Test 9 -- Console is clean throughout.
+
+Report every file created or modified, every backend test with exact response bodies, and every frontend test with pass or fail and exactly what was seen on screen. Flag any findings that need physical device re-verification.

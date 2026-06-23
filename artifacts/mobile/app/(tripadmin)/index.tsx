@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
+  Alert,
   View,
   Text,
   StyleSheet,
@@ -16,7 +17,7 @@ import {
   Pressable,
   Platform,
 } from 'react-native';
-import { useFocusEffect, useNavigation } from 'expo-router';
+import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
 import VehicleSearchInput, { type Vehicle } from '@/components/VehicleSearchInput';
@@ -80,6 +81,7 @@ const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
 
 export default function TripAdminTrips() {
   const navigation = useNavigation();
+  const router = useRouter();
   const { handleLogout } = useLogout();
 
   // trips list
@@ -325,7 +327,11 @@ export default function TripAdminTrips() {
   const renderTrip = ({ item }: { item: TripItem }) => {
     const statusStyle = STATUS_STYLES[item.status] ?? STATUS_STYLES['cancelled']!;
     return (
-      <View style={styles.card}>
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => router.push(`/(tripadmin)/trip-detail?id=${item.id}`)}
+        activeOpacity={0.9}
+      >
         <View style={styles.cardTop}>
           <View style={styles.plateBadge}>
             <Text style={styles.plateText}>{item.vehicleNumber}</Text>
@@ -352,16 +358,35 @@ export default function TripAdminTrips() {
           <TouchableOpacity
             style={styles.cancelRequestBtn}
             onPress={() => {
-              setCancelModalTripId(item.id);
-              setCancelReason('');
-              setCancelError(null);
+              if (item.status === 'in_transit') {
+                Alert.alert(
+                  'Trip Is In Transit',
+                  'This trip has already started. Requesting cancellation for an in-transit trip will require State Admin approval and may take longer to process.\n\nDo you want to continue?',
+                  [
+                    { text: 'Go Back', style: 'cancel' },
+                    {
+                      text: 'Continue',
+                      style: 'destructive',
+                      onPress: () => {
+                        setCancelModalTripId(item.id);
+                        setCancelReason('');
+                        setCancelError(null);
+                      },
+                    },
+                  ],
+                );
+              } else {
+                setCancelModalTripId(item.id);
+                setCancelReason('');
+                setCancelError(null);
+              }
             }}
             activeOpacity={0.7}
           >
             <Text style={styles.cancelRequestBtnText}>Request Cancellation</Text>
           </TouchableOpacity>
         )}
-      </View>
+      </TouchableOpacity>
     );
   };
 

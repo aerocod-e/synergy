@@ -586,6 +586,7 @@ export async function getTripById(req: Request, res: Response): Promise<void> {
   try {
     const { rows } = await pool.query<{
       id:                    string;
+      trip_code:             string | null;
       vehicle_number:        string;
       status:                string;
       origin_description:    string | null;
@@ -604,6 +605,7 @@ export async function getTripById(req: Request, res: Response): Promise<void> {
     }>(
       `SELECT
          t.id,
+         t.trip_code,
          v.registration_number AS vehicle_number,
          t.status,
          t.origin_description,
@@ -670,6 +672,7 @@ export async function getTripById(req: Request, res: Response): Promise<void> {
       data: {
         trip: {
           id:              trip.id,
+          tripCode:        trip.trip_code,
           vehicleNumber:   trip.vehicle_number,
           status:          trip.status,
           loadingState:    { id: trip.loading_state_id,   name: trip.loading_state_name,   code: trip.loading_state_code   },

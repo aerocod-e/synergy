@@ -36,6 +36,12 @@ export default function SuperAdminLayout() {
       <Tabs.Screen
         name="index"
         options={{
+          title: 'Dashboard',
+        }}
+      />
+      <Tabs.Screen
+        name="trips"
+        options={{
           title: 'Trips',
         }}
       />
