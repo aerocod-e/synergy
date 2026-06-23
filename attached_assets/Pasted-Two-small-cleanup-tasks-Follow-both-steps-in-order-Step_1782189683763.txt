@@ -1,0 +1,16 @@
+Two small cleanup tasks. Follow both steps in order.
+Step 1 -- Remove the stale vehicle_number column from trips table
+First, confirm that vehicle_number is no longer read or written anywhere in the active codebase. Search for every reference to vehicle_number across the entire codebase and report what you find. If any active code path still reads or writes it (outside of migration files and comments), report that and do not proceed with the column removal.
+If it is confirmed unused in active code, add the following to artifacts/api-server/src/db/migrate.ts as a new migration block at the end:
+sqlALTER TABLE trips DROP COLUMN IF EXISTS vehicle_number;
+Run the migration and confirm the column no longer exists on the trips table.
+Step 2 -- LEFT JOIN robustness review on stakeholder ledger
+Open artifacts/api-server/src/controllers/walletController.ts. Find the getMyLedger function. It joins states twice (aliased for loading and unloading state names) via trips.loading_state_id and trips.unloading_state_id. These joins were added in Feature 7.
+Check whether these joins are LEFT JOIN or INNER JOIN. If they are INNER JOIN, any ledger entry whose trip has a null or orphaned loading_state_id or unloading_state_id would be silently excluded from the results -- the ledger entry would just disappear. Convert any INNER JOIN on these state name lookups to LEFT JOIN with a COALESCE fallback (e.g. COALESCE(sl.name, 'Unknown')) so that a missing state reference never causes a ledger row to vanish from the result.
+Also apply the same check and fix to publicLookupController.ts where state names are joined for the public trip search, since that join was added in Feature 8.
+Run both TypeScript checks after:
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.
+
+Report every reference found to vehicle_number, whether the column removal proceeded or was blocked, the exact join type found in both controllers, and whether any changes were needed. Confirm both TypeScript checks pass.
