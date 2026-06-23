@@ -1,0 +1,27 @@
+Two small improvements to the Stakeholder ledger screen. Follow both steps in order.
+Step 1 -- Ledger summary totals
+In artifacts/mobile/app/(stakeholder)/index.tsx, below the wallet balance card and above the ledger list, add a summary row showing three figures derived from the ledger entries currently loaded:
+
+Total Credits (sum of all entries where entryType === 'credit')
+Total Reversals (sum of all entries where entryType === 'reversal', shown as a positive number with a minus prefix or in red)
+Net Total (credits minus absolute value of reversals)
+
+All amounts formatted in Naira via formatCurrency.ts. These should be computed client-side from the already-fetched ledger data -- no new API call needed. The summary row should update automatically when the date filter changes, since it derives from whatever entries are currently displayed.
+Display as a compact horizontal row of three small cards or a single card with three columns. Use green for credits, red for reversals, and the primary color for net total. Keep it visually subordinate to the main balance card at the top.
+Step 2 -- Load-more pagination on the stakeholder ledger
+The stakeholder ledger currently fetches all entries at once. Add pagination so the list loads 20 entries at a time with a "Load more" button at the bottom of the list.
+Check whether GET /api/wallets/my/ledger already supports page and limit query params. If it does, use them. If not, add page (default 1) and limit (default 20) support to getMyLedger in walletController.ts -- add LIMIT $n OFFSET $m to the ledger query and return a pagination object in the response ({ page, limit, total, hasMore }).
+On the frontend:
+
+Start with page 1, limit 20
+Show a "Load more" button at the bottom of the list (only when hasMore is true)
+Tapping it fetches the next page and appends entries to the existing list (not replaces)
+The summary totals from Step 1 should reflect ALL loaded entries so far, not just the first page
+Pull-to-refresh resets to page 1 and clears previously loaded entries
+The existing date filter should reset pagination to page 1 when changed
+
+Step 3 -- TypeScript check
+Run both:
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.
