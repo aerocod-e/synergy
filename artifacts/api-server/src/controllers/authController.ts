@@ -41,10 +41,17 @@ export async function login(req: Request, res: Response): Promise<void> {
 
     const user = rows[0];
 
-    if (!user || user.deleted_at !== null || !user.is_active) {
+    if (!user || user.deleted_at !== null) {
       res
         .status(401)
         .json({ error: "UNAUTHORIZED", message: "Invalid credentials" });
+      return;
+    }
+
+    if (!user.is_active) {
+      res
+        .status(403)
+        .json({ error: "FORBIDDEN", message: "This account has been deactivated" });
       return;
     }
 
