@@ -168,7 +168,6 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
     const { rows: [trip] } = await client.query<{
       id: string;
       trip_code: string;
-      vehicle_number: string;
       vehicle_id: string;
       driver_id: string | null;
       loading_state_id: string;
@@ -181,12 +180,11 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
       updated_at: Date;
     }>(
       `INSERT INTO trips
-         (vehicle_number, vehicle_id, driver_id, loading_state_id, unloading_state_id,
+         (vehicle_id, driver_id, loading_state_id, unloading_state_id,
           origin_description, destination_description, created_by, trip_code)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
       [
-        vehicle.registration_number,
         vehicleId,
         driverId,
         loadingStateId,
@@ -309,7 +307,7 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
         trip: {
           id: trip.id,
           tripCode: trip.trip_code,
-          vehicleNumber: trip.vehicle_number,
+          vehicleNumber: vehicle.registration_number,
           status: trip.status,
           loadingStateId: trip.loading_state_id,
           unloadingStateId: trip.unloading_state_id,
@@ -483,6 +481,7 @@ export async function listTrips(req: Request, res: Response): Promise<void> {
 
     const baseFrom = `
       FROM trips t
+      JOIN vehicles v ON t.vehicle_id = v.id
       JOIN states ls ON t.loading_state_id   = ls.id
       JOIN states us ON t.unloading_state_id = us.id
       LEFT JOIN users d ON t.driver_id = d.id
@@ -521,7 +520,7 @@ export async function listTrips(req: Request, res: Response): Promise<void> {
       }>(
         `SELECT
            t.id,
-           t.vehicle_number,
+           v.registration_number AS vehicle_number,
            t.status,
            t.origin_description,
            t.destination_description,
@@ -605,7 +604,7 @@ export async function getTripById(req: Request, res: Response): Promise<void> {
     }>(
       `SELECT
          t.id,
-         t.vehicle_number,
+         v.registration_number AS vehicle_number,
          t.status,
          t.origin_description,
          t.destination_description,
@@ -621,6 +620,7 @@ export async function getTripById(req: Request, res: Response): Promise<void> {
          us.code AS unloading_state_code,
          (t.status = 'created' AND t.created_at < NOW() - INTERVAL '2 hours') AS unstarted_flag
        FROM trips t
+       JOIN vehicles v ON t.vehicle_id = v.id
        JOIN states ls ON t.loading_state_id   = ls.id
        JOIN states us ON t.unloading_state_id = us.id
        LEFT JOIN users d ON t.driver_id = d.id

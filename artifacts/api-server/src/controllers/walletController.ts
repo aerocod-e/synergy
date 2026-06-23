@@ -106,6 +106,7 @@ export async function getMyLedger(req: Request, res: Response): Promise<void> {
       FROM wallet_ledger wl
       JOIN trip_fees tf ON wl.trip_fee_id    = tf.id
       JOIN trips t      ON wl.trip_id        = t.id
+      JOIN vehicles v   ON t.vehicle_id      = v.id
       LEFT JOIN states sl    ON sl.id             = t.loading_state_id
       LEFT JOIN states su    ON su.id             = t.unloading_state_id
       WHERE wl.wallet_id = $1 ${whereClause}`;
@@ -143,7 +144,7 @@ export async function getMyLedger(req: Request, res: Response): Promise<void> {
       `SELECT
          wl.id          AS ledger_id,
          wl.trip_id,
-         t.vehicle_number,
+         v.registration_number AS vehicle_number,
          tf.fee_type,
          wl.amount,
          wl.entry_type,

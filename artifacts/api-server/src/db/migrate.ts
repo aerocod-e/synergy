@@ -109,7 +109,6 @@ async function migrate(): Promise<void> {
     await client.query(`
       CREATE TABLE IF NOT EXISTS trips (
         id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        vehicle_number          VARCHAR(50) NOT NULL,
         driver_id               UUID REFERENCES users(id),
         loading_state_id        UUID REFERENCES states(id),
         unloading_state_id      UUID REFERENCES states(id),
@@ -130,32 +129,48 @@ async function migrate(): Promise<void> {
         ADD COLUMN IF NOT EXISTS vehicle_id UUID REFERENCES vehicles(id)
     `);
 
-    // Backfill: insert one vehicle per distinct plate seen in ANY trip (including
-    // soft-deleted), then link ALL trips — so vehicle_id is never null.
+    // Backfill: only runs when the legacy vehicle_number column is still present
+    // (existing databases). On a fresh install the column was never created, so
+    // this block is a no-op and vehicle_id is populated at INSERT time instead.
     await client.query(`
-      INSERT INTO vehicles (registration_number, created_by, is_active)
-      SELECT DISTINCT ON (vehicle_number)
-        vehicle_number,
-        created_by,
-        true
-      FROM trips
-      ON CONFLICT (registration_number) DO NOTHING
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'trips' AND column_name = 'vehicle_number'
+        ) THEN
+          -- Insert one vehicle row per distinct plate seen in ANY trip
+          INSERT INTO vehicles (registration_number, created_by, is_active)
+          SELECT DISTINCT ON (vehicle_number)
+            vehicle_number,
+            created_by,
+            true
+          FROM trips
+          ON CONFLICT (registration_number) DO NOTHING;
+
+          -- Link all trips that still have a NULL vehicle_id
+          UPDATE trips t
+          SET    vehicle_id = v.id
+          FROM   vehicles v
+          WHERE  v.registration_number = t.vehicle_number
+            AND  t.vehicle_id IS NULL;
+        END IF;
+      END;
+      $$
     `);
 
-    await client.query(`
-      UPDATE trips t
-      SET    vehicle_id = v.id
-      FROM   vehicles v
-      WHERE  v.registration_number = t.vehicle_number
-        AND  t.vehicle_id IS NULL
-    `);
-
-    // Enforce the constraint now that every row is covered.
+    // Enforce the NOT NULL constraint (idempotent — errors if already set, but
+    // PostgreSQL silently ignores setting a constraint that is already enforced).
     await client.query(`
       ALTER TABLE trips ALTER COLUMN vehicle_id SET NOT NULL
     `);
 
-    console.log('✓ Backfilled vehicle_id on trips (all rows) and enforced NOT NULL');
+    // Drop the now-redundant column (IF EXISTS makes this idempotent).
+    await client.query(`
+      ALTER TABLE trips DROP COLUMN IF EXISTS vehicle_number
+    `);
+
+    console.log('✓ vehicle_id backfill done (if needed), NOT NULL enforced, vehicle_number dropped');
 
     // trip_fees — amounts stored as INTEGER in kobo, never floats
     await client.query(`

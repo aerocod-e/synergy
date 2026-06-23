@@ -31,7 +31,7 @@ export async function searchTrips(req: Request, res: Response): Promise<void> {
       `SELECT
          t.id,
          t.trip_code,
-         t.vehicle_number,
+         v.registration_number AS vehicle_number,
          t.status,
          t.origin_description,
          t.destination_description,
@@ -40,6 +40,7 @@ export async function searchTrips(req: Request, res: Response): Promise<void> {
          COALESCE(us.name, 'Unknown') AS unloading_state_name,
          dr.full_name AS driver_full_name
        FROM trips t
+       JOIN vehicles v ON t.vehicle_id = v.id
        LEFT JOIN  states ls ON t.loading_state_id   = ls.id
        LEFT JOIN  states us ON t.unloading_state_id = us.id
        LEFT JOIN drivers dr ON dr.id = t.driver_id
@@ -47,7 +48,7 @@ export async function searchTrips(req: Request, res: Response): Promise<void> {
          AND t.status IN ('created', 'in_transit', 'completed', 'cancelled')
          AND (
                t.trip_code             ILIKE $1
-           OR  t.vehicle_number        ILIKE $1
+           OR  v.registration_number   ILIKE $1
            OR  t.origin_description    ILIKE $1
            OR  t.destination_description ILIKE $1
            OR  ls.name                 ILIKE $1

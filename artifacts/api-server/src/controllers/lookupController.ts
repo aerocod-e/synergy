@@ -25,7 +25,7 @@ export async function lookupVehicle(req: Request, res: Response): Promise<void> 
     }>(
       `SELECT
          t.id,
-         t.vehicle_number,
+         v.registration_number AS vehicle_number,
          t.status,
          t.created_at,
          ls.name  AS loading_state_name,
@@ -35,10 +35,11 @@ export async function lookupVehicle(req: Request, res: Response): Promise<void> 
          d.id     AS driver_id,
          d.email  AS driver_email
        FROM trips t
+       JOIN vehicles v ON t.vehicle_id = v.id
        JOIN states ls ON t.loading_state_id = ls.id
        JOIN states us ON t.unloading_state_id = us.id
        LEFT JOIN users d ON t.driver_id = d.id
-       WHERE LOWER(t.vehicle_number) = LOWER($1)
+       WHERE LOWER(v.registration_number) = LOWER($1)
          AND t.deleted_at IS NULL
          AND t.status IN ('created', 'in_transit', 'completed')
        ORDER BY t.created_at DESC

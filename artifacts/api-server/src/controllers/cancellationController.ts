@@ -217,13 +217,14 @@ export async function listCancellationRequests(req: Request, res: Response): Pro
          cr.status,
          cr.previous_trip_status,
          cr.created_at,
-         t.vehicle_number,
+         v.registration_number AS vehicle_number,
          d.full_name        AS driver_name,
          ls.name            AS loading_state,
          us2.name           AS unloading_state,
          u.email            AS requested_by_email
        FROM cancellation_requests cr
        JOIN trips   t   ON t.id  = cr.trip_id
+       JOIN vehicles v  ON v.id  = t.vehicle_id
        JOIN users   u   ON u.id  = cr.requested_by
        LEFT JOIN drivers d ON d.id = t.driver_id
        JOIN states  ls  ON ls.id = t.loading_state_id
