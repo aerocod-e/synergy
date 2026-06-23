@@ -36,12 +36,12 @@ export async function searchTrips(req: Request, res: Response): Promise<void> {
          t.origin_description,
          t.destination_description,
          t.created_at,
-         ls.name AS loading_state_name,
-         us.name AS unloading_state_name,
+         COALESCE(ls.name, 'Unknown') AS loading_state_name,
+         COALESCE(us.name, 'Unknown') AS unloading_state_name,
          dr.full_name AS driver_full_name
        FROM trips t
-       JOIN  states ls ON t.loading_state_id   = ls.id
-       JOIN  states us ON t.unloading_state_id = us.id
+       LEFT JOIN  states ls ON t.loading_state_id   = ls.id
+       LEFT JOIN  states us ON t.unloading_state_id = us.id
        LEFT JOIN drivers dr ON dr.id = t.driver_id
        WHERE (t.deleted_at IS NULL OR t.status = 'cancelled')
          AND t.status IN ('created', 'in_transit', 'completed', 'cancelled')

@@ -106,8 +106,8 @@ export async function getMyLedger(req: Request, res: Response): Promise<void> {
       FROM wallet_ledger wl
       JOIN trip_fees tf ON wl.trip_fee_id    = tf.id
       JOIN trips t      ON wl.trip_id        = t.id
-      JOIN states sl    ON sl.id             = t.loading_state_id
-      JOIN states su    ON su.id             = t.unloading_state_id
+      LEFT JOIN states sl    ON sl.id             = t.loading_state_id
+      LEFT JOIN states su    ON su.id             = t.unloading_state_id
       WHERE wl.wallet_id = $1 ${whereClause}`;
 
     const [summaryRes, countRes] = await Promise.all([
@@ -150,8 +150,8 @@ export async function getMyLedger(req: Request, res: Response): Promise<void> {
          wl.cleared,
          wl.cleared_at,
          wl.created_at,
-         sl.name        AS loading_state_name,
-         su.name        AS unloading_state_name
+         COALESCE(sl.name, 'Unknown') AS loading_state_name,
+         COALESCE(su.name, 'Unknown') AS unloading_state_name
        ${baseQuery}
        ORDER BY wl.created_at DESC
        LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
