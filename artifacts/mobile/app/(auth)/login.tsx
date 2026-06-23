@@ -133,7 +133,11 @@ export default function LoginScreen() {
     try {
       await login(email.trim(), password);
     } catch (err: any) {
-      setError(err?.message ?? 'Login failed. Please try again.');
+      if (err?.error === 'FORBIDDEN') {
+        setError('This account has been deactivated. Please contact your administrator.');
+      } else {
+        setError(err?.message ?? 'Login failed. Please try again.');
+      }
     }
   };
 
