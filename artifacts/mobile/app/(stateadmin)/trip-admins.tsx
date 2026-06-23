@@ -28,6 +28,7 @@ interface TripAdmin {
   isActive: boolean;
   canCancelWithoutApproval: boolean;
   createdAt: string;
+  tripCount: number;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -186,7 +187,10 @@ export default function StateAdminTripAdmins() {
       <View style={styles.cardTop}>
         <View style={styles.emailRow}>
           <Ionicons name="person-circle-outline" size={20} color={theme.colors.grey1} />
-          <Text style={styles.emailText} numberOfLines={1}>{item.email}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.emailText} numberOfLines={1}>{item.email}</Text>
+            <Text style={styles.tripCountText}>{item.tripCount} {item.tripCount === 1 ? 'trip' : 'trips'}</Text>
+          </View>
         </View>
         <View style={[styles.statusBadge, item.isActive ? styles.statusActive : styles.statusInactive]}>
           <Text style={[styles.statusText, item.isActive ? styles.statusTextActive : styles.statusTextInactive]}>
@@ -471,7 +475,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: theme.colors.black,
-    flex: 1,
+  },
+  tripCountText: {
+    fontSize: 12,
+    color: theme.colors.grey1,
+    marginTop: 1,
   },
   statusBadge: {
     borderRadius: 6,

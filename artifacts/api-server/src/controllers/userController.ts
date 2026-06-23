@@ -65,13 +65,17 @@ export async function listTripAdmins(req: Request, res: Response): Promise<void>
       is_active: boolean;
       can_cancel_without_approval: boolean;
       created_at: Date;
+      trip_count: string;
     }>(
-      `SELECT id, email, is_active, can_cancel_without_approval, created_at
-       FROM users
-       WHERE role = 'trip_admin'
-         AND entity_id = $1
-         AND deleted_at IS NULL
-       ORDER BY created_at DESC`,
+      `SELECT u.id, u.email, u.is_active, u.can_cancel_without_approval, u.created_at,
+              COUNT(t.id) AS trip_count
+       FROM users u
+       LEFT JOIN trips t ON t.created_by = u.id AND t.deleted_at IS NULL
+       WHERE u.role = 'trip_admin'
+         AND u.entity_id = $1
+         AND u.deleted_at IS NULL
+       GROUP BY u.id, u.email, u.is_active, u.can_cancel_without_approval, u.created_at
+       ORDER BY u.created_at DESC`,
       [callerEntityId],
     );
 
@@ -83,6 +87,7 @@ export async function listTripAdmins(req: Request, res: Response): Promise<void>
           isActive: r.is_active,
           canCancelWithoutApproval: r.can_cancel_without_approval,
           createdAt: r.created_at,
+          tripCount: Number(r.trip_count),
         })),
       },
       message: "Trip admins retrieved",
