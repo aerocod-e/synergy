@@ -123,54 +123,23 @@ async function migrate(): Promise<void> {
     `);
     console.log('✓ Table created: trips');
 
-    // vehicles ← trips: add vehicle_id FK and backfill from vehicle_number
+    // vehicles ← trips: add vehicle_id FK (populated at INSERT time on fresh installs)
     await client.query(`
       ALTER TABLE trips
         ADD COLUMN IF NOT EXISTS vehicle_id UUID REFERENCES vehicles(id)
     `);
 
-    // Backfill: only runs when the legacy vehicle_number column is still present
-    // (existing databases). On a fresh install the column was never created, so
-    // this block is a no-op and vehicle_id is populated at INSERT time instead.
-    await client.query(`
-      DO $$
-      BEGIN
-        IF EXISTS (
-          SELECT 1 FROM information_schema.columns
-          WHERE table_name = 'trips' AND column_name = 'vehicle_number'
-        ) THEN
-          -- Insert one vehicle row per distinct plate seen in ANY trip
-          INSERT INTO vehicles (registration_number, created_by, is_active)
-          SELECT DISTINCT ON (vehicle_number)
-            vehicle_number,
-            created_by,
-            true
-          FROM trips
-          ON CONFLICT (registration_number) DO NOTHING;
-
-          -- Link all trips that still have a NULL vehicle_id
-          UPDATE trips t
-          SET    vehicle_id = v.id
-          FROM   vehicles v
-          WHERE  v.registration_number = t.vehicle_number
-            AND  t.vehicle_id IS NULL;
-        END IF;
-      END;
-      $$
-    `);
-
-    // Enforce the NOT NULL constraint (idempotent — errors if already set, but
-    // PostgreSQL silently ignores setting a constraint that is already enforced).
+    // Enforce the NOT NULL constraint (idempotent).
     await client.query(`
       ALTER TABLE trips ALTER COLUMN vehicle_id SET NOT NULL
     `);
 
-    // Drop the now-redundant column (IF EXISTS makes this idempotent).
+    // Drop the legacy column if it somehow still exists (IF EXISTS makes this idempotent).
     await client.query(`
       ALTER TABLE trips DROP COLUMN IF EXISTS vehicle_number
     `);
 
-    console.log('✓ vehicle_id backfill done (if needed), NOT NULL enforced, vehicle_number dropped');
+    console.log('✓ vehicle_id FK enforced NOT NULL, legacy vehicle_number dropped (if present)');
 
     // trip_fees — amounts stored as INTEGER in kobo, never floats
     await client.query(`
