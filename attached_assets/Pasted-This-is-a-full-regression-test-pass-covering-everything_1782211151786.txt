@@ -1,0 +1,64 @@
+This is a full regression test pass covering everything built and fixed in Stage 3A. Do not make any changes. Run every test in order and report results.
+For all frontend tests: perform live App Testing in a fresh browser session, navigating only by tapping real visible UI elements. Never navigate by typing or editing a URL to jump between in-app screens. Do not test browser Back navigation in this session. If a screen cannot be reached by tapping a visible element, report that as a failure.
+
+SECTION A -- Data Integrity (backend checks only)
+A1. Confirm the trips table has no vehicle_number column. Query information_schema.columns and report.
+A2. Confirm all trips have a non-null vehicle_id and a non-null trip_code in the format SYN-YYYY-NNNNNN.
+A3. Confirm all wallet_ledger entries have a valid wallet_id, trip_id, and trip_fee_id (no orphaned rows).
+A4. Confirm wallets.total_collected reconciles correctly for every wallet using SUM(amount) directly on wallet_ledger (no CASE statement -- amounts are already signed). Report any wallet where these do not match.
+A5. Confirm no users have role outside the four valid values (super_admin, state_admin, trip_admin, stakeholder). Soft-deleted users are acceptable as long as deleted_at IS NOT NULL.
+
+SECTION B -- Super Admin
+B1. Login as Super Admin. Confirm the landing screen is the Dashboard tab, not a trip list.
+B2. Dashboard shows real data: user counts by role (State Admins, Trip Admins, Stakeholders), total States, active pricing chart (loading fee, unloading fee), and platform grand total collected. Confirm pull-to-refresh works.
+B3. Tap the Trips tab. Confirm the trip list loads with status filter pills and a search bar. Confirm there is no create-trip button or FAB anywhere.
+B4. Type a partial vehicle number or driver name in the search bar. Confirm results filter correctly. Clear the search. Confirm all trips return.
+B5. Set a date range filter. Confirm results narrow correctly. Clear it.
+B6. Tap a trip card. Confirm it navigates to the trip detail screen showing: trip code, status badge, vehicle registration, driver, route, fees, and event timeline. Tap back. Confirm return to the trip list.
+B7. Navigate to the Config tab. Confirm the "Verify Trip Payment" link is visible at the bottom. Tap it. Confirm it navigates to the public lookup screen. Tap back.
+B8. Navigate to the Users tab. Confirm user list loads with correct role badges. Confirm the create user modal works (open it, confirm role picker shows only State Admin and Stakeholder, close without submitting).
+
+SECTION C -- State Admin
+C1. Login as a State Admin. Confirm two tabs load: Requests and Trip Admins.
+C2. Trip Admins tab: confirm each card shows email, active/inactive status, pre-approved cancellation toggle, trip count, and a Deactivate button.
+C3. Confirm the trip count on at least one card matches a known value (cross-check against trips created by that admin in earlier testing).
+C4. Tap Deactivate on an active Trip Admin. Confirm the card visually dims and the button changes to Reactivate. Tap Reactivate. Confirm it reverts.
+C5. Confirm the Public Lookup entry point is accessible from the State Admin screen. Tap it and confirm it reaches the lookup screen.
+C6. Requests tab: confirm the empty state or pending request list displays correctly.
+
+SECTION D -- Trip Admin
+D1. Login as a Trip Admin whose account is active. Confirm login succeeds and lands on the Trips tab.
+D2. Deactivate this Trip Admin's account as State Admin (via a quick API call, not UI). Attempt to login again. Confirm login is blocked with a clear "account deactivated" message. Reactivate via API before proceeding.
+D3. Trips tab: confirm trip list loads with correct status badges and a header "+" button.
+D4. Tap a trip card. Confirm it navigates to the trip detail screen with real data. Confirm a "Verify this trip's payment status" link is visible at the bottom. Tap it. Confirm it navigates to the public lookup with the trip code pre-filled and results showing.
+D5. Open the trip creation form. Confirm all stakeholder toggles are OFF by default. Confirm the vehicle search and driver search components work.
+D6. On a trip with status in_transit, tap Request Cancellation. Confirm the amber warning banner appears inside the modal. Close without submitting.
+D7. On a trip with status created, tap Request Cancellation. Confirm no warning banner appears. Close without submitting.
+D8. Vehicles tab: confirm the vehicle list loads with trip counts and the "+" button opens the registration modal.
+D9. Drivers tab: confirm the driver list loads and the registration flow works.
+
+SECTION E -- Stakeholder
+E1. Login as a Stakeholder. Confirm the home screen shows the wallet balance card, the summary row (CREDITS, REVERSALS, NET TOTAL), and the ledger list.
+E2. Confirm the NET TOTAL equals CREDITS plus REVERSALS mathematically (REVERSALS is a negative number, so NET = credits + reversals, e.g. ₦7,000 credits and -₦3,000 reversals = ₦4,000 net, not ₦10,000).
+E3. Tap the "Last 7 days" filter chip. Confirm summary totals update to reflect only filtered entries and the ledger list updates.
+E4. Pull to refresh. Confirm the list resets correctly and summary totals remain consistent.
+E5. If the stakeholder has more than 20 ledger entries, confirm the "Load more" button appears and works. If not, confirm no "Load more" button is shown (correct behavior).
+E6. Confirm the "Verify a payment publicly" link is visible at the bottom of the screen. Tap it. Confirm it navigates to the public lookup.
+
+SECTION F -- Public Lookup
+F1. From the login screen (not logged in), tap "Verify a trip payment". Confirm the screen loads with no auth prompt.
+F2. Search for a known trip code. Confirm results appear with correct status and payment badges.
+F3. Search for a cancelled trip code. Confirm it appears clearly marked as cancelled with "Reversed" badges on all fees.
+F4. Search for something with no matches. Confirm the "No results found" state.
+F5. Open the public lookup from the Trip Admin trip detail screen (Section D4 above). Confirm the q param pre-fills the search and results show automatically without the user having to type anything.
+
+SECTION G -- Cross-Cutting
+G1. Attempt to access a Super Admin API endpoint with a Trip Admin token. Confirm 403.
+G2. Attempt to access GET /api/users/trip-admins with a Super Admin token. Confirm 403.
+G3. Attempt to deactivate a Trip Admin from another state using a State Admin token from a different state. Confirm 403.
+G4. Confirm GET /api/wallets/my/ledger?page=1&limit=3 returns exactly 3 entries with a pagination object for a stakeholder with more than 3 entries.
+
+SECTION H -- Console and Stability
+H1. Throughout all of the above, note any console errors, JavaScript warnings, or layout warnings. Confirm the shadow and pointer-events deprecation warnings fixed in Stage 3A are no longer present.
+
+At the end, compile a single list of every FAIL and PARTIAL result plus any unexpected console warnings, formatted as a numbered backlog list. Do not fix anything -- report only.
