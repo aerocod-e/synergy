@@ -1,0 +1,24 @@
+I need to build Group 2 of Stage 3A. This covers four things: a real Super Admin dashboard, a Super Admin Trips tab, a real trip detail screen shared between Super Admin and Trip Admin, and a UI warning for in-transit trip cancellations. Follow all steps in order.Step 1 -- Convert Super Admin layout to two tabsUpdate artifacts/mobile/app/(superadmin)/_layout.tsx. Convert the current tab structure to have two tabs:
+
+index -- title "Dashboard" (new screen, built in Step 2)
+trips -- title "Trips" (the existing trip list content, moved here)
+Keep trip-detail as a hidden Stack screen (href: null) as it already is.Step 2 -- Build the Super Admin dashboard (new index.tsx)Replace the current trip-list content in artifacts/mobile/app/(superadmin)/index.tsx with a proper system-wide dashboard. On mount, make these API calls in parallel:
+
+GET /api/users -- count results by role and display: Total State Admins, Total Trip Admins, Total Stakeholders
+GET /api/states -- count and display: Total States
+GET /api/stakeholders -- count and display: Total Stakeholders (cross-check)
+GET /api/pricing/active -- display the active chart's loading fee, unloading fee, and number of stakeholder rates configured
+GET /api/wallets/all -- display the overall platform grand total collected
+Display as a grid of summary cards, each with a label, a large bold number or amount, and a subtle icon. Use the existing design system throughout (primary color #1a6ec8, white cards, bold typography). Include a pull-to-refresh. Show skeleton placeholders while loading. Show a clear error state with retry if any fetch fails.Step 3 -- Create a Trips tab screen for Super AdminCreate artifacts/mobile/app/(superadmin)/trips.tsx. Move the existing trip list content (currently in index.tsx) into this new file -- the FlatList, filter pills, TripCard component, status badges, and the navigation to trip-detail. This is a read-only view for Super Admin oversight. No create-trip button or FAB of any kind.Step 4 -- Build a real trip detail screenReplace the placeholder in artifacts/mobile/app/(superadmin)/trip-detail.tsx with a real screen. It should:
+
+Read the id query param from the route
+Fetch the trip details from GET /api/trips/:id
+Display: trip code, status badge, vehicle registration number, driver name, loading state, unloading state, origin description, destination description, created date, and current status
+Display a fees section showing the loading fee, unloading fee, and each stakeholder fee (amounts in Naira via formatCurrency.ts)
+Display a trip events timeline (from the trip_events table if accessible via the trips endpoint, or skip if not currently returned)
+This is a read-only screen for Super Admin -- no action buttons
+Follow the existing design system
+Then make trip cards in (tripadmin)/index.tsx tappable. Wrap each trip card in a TouchableOpacity or Pressable that navigates to a trip detail screen. Since Trip Admin has its own route group, create artifacts/mobile/app/(tripadmin)/trip-detail.tsx that renders the same content as the Super Admin version -- you can extract the shared display logic into a reusable component at artifacts/mobile/components/TripDetailView.tsx and use it in both screens, since the content is identical.Check whether GET /api/trips/:id currently returns all the fields needed (vehicle registration, driver name, fee amounts, state names). If any are missing, update the getTripById function in tripController.ts to JOIN and return them.Step 5 -- In-transit cancellation UI warningIn (tripadmin)/index.tsx, find the "Request Cancellation" button and the cancellation reason modal. Add a clear visual warning when the trip being cancelled has status in_transit -- something like a yellow/amber warning banner inside the modal that says "This trip is currently in transit. Cancelling will reverse all fee allocations." The warning should only show for in_transit trips, not for created trips. No backend change needed -- behavior is unchanged, this is purely a UI safeguard.Step 6 -- TypeScript checkRun both:
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.
