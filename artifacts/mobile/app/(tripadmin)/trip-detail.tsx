@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
 import { getTripById } from '@/services/api';
@@ -8,6 +8,7 @@ import TripDetailView, { type TripDetail } from '@/components/TripDetailView';
 
 export default function TripAdminTripDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -50,7 +51,19 @@ export default function TripAdminTripDetail() {
     );
   }
 
-  return <TripDetailView trip={trip} />;
+  const verifyFooter = trip.tripCode ? (
+    <TouchableOpacity
+      style={styles.verifyRow}
+      onPress={() => router.push(`/(public)/lookup?q=${encodeURIComponent(trip.tripCode!)}`)}
+      activeOpacity={0.7}
+    >
+      <Ionicons name="search-outline" size={18} color={theme.colors.primary} />
+      <Text style={styles.verifyRowText}>Verify this trip's payment status</Text>
+      <Ionicons name="chevron-forward" size={16} color={theme.colors.grey1} />
+    </TouchableOpacity>
+  ) : undefined;
+
+  return <TripDetailView trip={trip} footer={verifyFooter} />;
 }
 
 const styles = StyleSheet.create({
@@ -60,6 +73,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 12,
     backgroundColor: theme.colors.background,
+  },
+  verifyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 16,
+    backgroundColor: '#f0f4ff',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+  },
+  verifyRowText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.primary,
   },
   errorText: {
     fontSize: 15,

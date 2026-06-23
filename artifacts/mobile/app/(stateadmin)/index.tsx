@@ -12,7 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
 import {
@@ -40,6 +40,7 @@ interface CancellationRequest {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function StateAdminHome() {
+  const router = useRouter();
   const [requests, setRequests] = useState<CancellationRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -234,6 +235,17 @@ export default function StateAdminHome() {
             <Text style={styles.emptyTitle}>All clear</Text>
             <Text style={styles.emptySubtitle}>No pending cancellation requests</Text>
           </View>
+        }
+        ListFooterComponent={
+          <TouchableOpacity
+            style={styles.verifyRow}
+            onPress={() => router.push('/(public)/lookup')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="search-outline" size={18} color={theme.colors.primary} />
+            <Text style={styles.verifyRowText}>Public Lookup</Text>
+            <Ionicons name="chevron-forward" size={16} color={theme.colors.grey1} />
+          </TouchableOpacity>
         }
       />
 
@@ -458,6 +470,25 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: theme.colors.white,
+  },
+
+  verifyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 8,
+    marginBottom: 8,
+    backgroundColor: theme.colors.white,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    ...theme.shadows.card,
+  },
+  verifyRowText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.black,
   },
 
   // reject modal

@@ -9,7 +9,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'expo-router';
 import { getActivePricingChart, createPricingChart, activatePricingChart, getStakeholders } from '@/services/api';
 import type { Stakeholder } from '@/types/index';
 import { theme } from '@/constants/theme';
@@ -127,6 +129,7 @@ function PendingChartCard({
 }
 
 export default function ConfigScreen() {
+  const router = useRouter();
   const [pageLoading, setPageLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
   const [activeChart, setActiveChart] = useState<PricingChart | null>(null);
@@ -346,6 +349,17 @@ export default function ConfigScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* ── Verify Trip Payment ── */}
+        <TouchableOpacity
+          style={styles.verifyRow}
+          onPress={() => router.push('/(public)/lookup')}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="search-outline" size={20} color={theme.colors.primary} />
+          <Text style={styles.verifyRowText}>Verify Trip Payment</Text>
+          <Ionicons name="chevron-forward" size={16} color={theme.colors.grey1} />
+        </TouchableOpacity>
+
         <View style={styles.bottomSpacer} />
       </ScrollView>
     </KeyboardAvoidingView>
@@ -515,4 +529,22 @@ const styles = StyleSheet.create({
   },
   retryText: { color: theme.colors.white, fontWeight: '600', fontSize: 14 },
   bottomSpacer: { height: 24 },
+  verifyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 20,
+    marginTop: 28,
+    backgroundColor: theme.colors.white,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    ...theme.shadows.card,
+  },
+  verifyRowText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.colors.black,
+  },
 });

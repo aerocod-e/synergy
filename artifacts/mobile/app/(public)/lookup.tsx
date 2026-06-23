@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -165,7 +165,8 @@ function TripCard({
 
 export default function LookupScreen() {
   const router = useRouter();
-  const [query, setQuery] = useState('');
+  const { q: initialQ } = useLocalSearchParams<{ q?: string }>();
+  const [query, setQuery] = useState(typeof initialQ === 'string' ? initialQ : '');
   const [results, setResults] = useState<TripResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);

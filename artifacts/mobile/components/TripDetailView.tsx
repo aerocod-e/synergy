@@ -95,9 +95,10 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 interface TripDetailViewProps {
   trip: TripDetail;
+  footer?: React.ReactNode;
 }
 
-export default function TripDetailView({ trip }: TripDetailViewProps) {
+export default function TripDetailView({ trip, footer }: TripDetailViewProps) {
   const badge = STATUS_BADGE[trip.status] ?? { bg: '#e8f0fb', text: '#1a6ec8', label: trip.status };
 
   const loadingFees  = trip.fees.filter((f) => f.feeType === 'loading');
@@ -208,6 +209,8 @@ export default function TripDetailView({ trip }: TripDetailViewProps) {
           </View>
         )}
       </View>
+
+      {footer}
     </ScrollView>
   );
 }

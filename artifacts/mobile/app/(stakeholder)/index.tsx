@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import { useRouter } from 'expo-router';
 import {
   View,
   Text,
@@ -62,6 +63,7 @@ function getFilterParams(filter: FilterKey): Record<string, string> {
 }
 
 export default function StakeholderHome() {
+  const router = useRouter();
   const [wallet,      setWallet]      = useState<WalletData | null>(null);
   const [entries,     setEntries]     = useState<LedgerEntry[]>([]);
   const [loading,     setLoading]     = useState(true);
@@ -192,6 +194,16 @@ export default function StakeholderHome() {
                 : 'No entries in this date range'}
             </Text>
           </View>
+        }
+        ListFooterComponent={
+          <TouchableOpacity
+            style={styles.verifyLink}
+            onPress={() => router.push('/(public)/lookup')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.verifyLinkText}>Verify a payment publicly</Text>
+            <Ionicons name="open-outline" size={14} color={theme.colors.primary} />
+          </TouchableOpacity>
         }
       />
     </View>
@@ -346,5 +358,18 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: theme.colors.white,
+  },
+  verifyLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 16,
+    paddingBottom: 24,
+  },
+  verifyLinkText: {
+    fontSize: 13,
+    color: theme.colors.primary,
+    fontWeight: '500',
   },
 });
