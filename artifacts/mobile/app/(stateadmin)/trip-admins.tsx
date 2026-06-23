@@ -365,7 +365,7 @@ export default function StateAdminTripAdmins() {
         <View style={styles.overlayBackdrop}>
           <View style={styles.warningCard}>
             <View style={styles.warningIconRow}>
-              <Ionicons name="warning-outline" size={28} color={theme.colors.warning} />
+              <Ionicons name="warning-outline" size={28} color="#F59E0B" />
             </View>
             <Text style={styles.warningTitle}>Active Trips Warning</Text>
             <Text style={styles.warningBody}>

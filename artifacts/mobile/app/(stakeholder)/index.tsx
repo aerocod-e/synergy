@@ -41,6 +41,8 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'all', label: 'All time' },
 ];
 
+const PAGE_LIMIT = 20;
+
 function formatWAT(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('en-NG', {
     timeZone: 'Africa/Lagos',
@@ -64,25 +66,36 @@ function getFilterParams(filter: FilterKey): Record<string, string> {
 
 export default function StakeholderHome() {
   const router = useRouter();
-  const [wallet,      setWallet]      = useState<WalletData | null>(null);
-  const [entries,     setEntries]     = useState<LedgerEntry[]>([]);
-  const [loading,     setLoading]     = useState(true);
-  const [refreshing,  setRefreshing]  = useState(false);
-  const [fetchError,  setFetchError]  = useState<string | null>(null);
+  const [wallet,       setWallet]       = useState<WalletData | null>(null);
+  const [entries,      setEntries]      = useState<LedgerEntry[]>([]);
+  const [loading,      setLoading]      = useState(true);
+  const [refreshing,   setRefreshing]   = useState(false);
+  const [fetchError,   setFetchError]   = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
+
+  // pagination
+  const [page,         setPage]         = useState(1);
+  const [hasMore,      setHasMore]      = useState(false);
+  const [loadingMore,  setLoadingMore]  = useState(false);
+
+  // ── initial / filter / refresh fetch (always replaces entries) ───────────
 
   const fetchData = useCallback(async (filter: FilterKey, isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else           setLoading(true);
     setFetchError(null);
+    setPage(1);
     try {
-      const params = getFilterParams(filter);
+      const dateParams = getFilterParams(filter);
+      const params: Record<string, string> = { ...dateParams, page: '1', limit: String(PAGE_LIMIT) };
       const [walletRes, ledgerRes] = await Promise.all([
         getMyWallet(),
-        getMyLedger(Object.keys(params).length > 0 ? params : undefined),
+        getMyLedger(params),
       ]);
       setWallet(walletRes.wallet ?? null);
       setEntries(ledgerRes.entries ?? []);
+      const pg = ledgerRes.pagination ?? {};
+      setHasMore((pg.page ?? 1) < (pg.totalPages ?? 1));
     } catch {
       setFetchError("Couldn't load your wallet");
     } finally {
@@ -97,8 +110,42 @@ export default function StakeholderHome() {
 
   const handleFilterChange = (filter: FilterKey) => {
     setActiveFilter(filter);
+    setEntries([]);
     fetchData(filter);
   };
+
+  // ── load more (appends) ──────────────────────────────────────────────────
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const nextPage = page + 1;
+    try {
+      const dateParams = getFilterParams(activeFilter);
+      const params: Record<string, string> = {
+        ...dateParams,
+        page: String(nextPage),
+        limit: String(PAGE_LIMIT),
+      };
+      const ledgerRes = await getMyLedger(params);
+      setEntries((prev) => [...prev, ...(ledgerRes.entries ?? [])]);
+      const pg = ledgerRes.pagination ?? {};
+      setHasMore((pg.page ?? nextPage) < (pg.totalPages ?? nextPage));
+      setPage(nextPage);
+    } catch {
+      // silent — existing entries stay, user can tap again
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, hasMore, page, activeFilter]);
+
+  // ── summary computed from currently-loaded entries ───────────────────────
+
+  const totalCredits   = entries.reduce((s, e) => e.entryType === 'credit'   ? s + e.amount : s, 0);
+  const totalReversals = entries.reduce((s, e) => e.entryType === 'reversal' ? s + e.amount : s, 0);
+  const netTotal       = totalCredits - totalReversals;
+
+  // ── loading / error guards ───────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -124,6 +171,8 @@ export default function StakeholderHome() {
     );
   }
 
+  // ── render helpers ───────────────────────────────────────────────────────
+
   const renderEntry = ({ item }: { item: LedgerEntry }) => (
     <View style={styles.card}>
       <View style={styles.cardMain}>
@@ -148,8 +197,38 @@ export default function StakeholderHome() {
     </View>
   );
 
+  const renderFooter = () => (
+    <>
+      {hasMore && (
+        <TouchableOpacity
+          style={styles.loadMoreBtn}
+          onPress={loadMore}
+          disabled={loadingMore}
+          activeOpacity={0.8}
+        >
+          {loadingMore ? (
+            <ActivityIndicator size="small" color={theme.colors.primary} />
+          ) : (
+            <Text style={styles.loadMoreText}>Load more</Text>
+          )}
+        </TouchableOpacity>
+      )}
+      <TouchableOpacity
+        style={styles.verifyLink}
+        onPress={() => router.push('/(public)/lookup')}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.verifyLinkText}>Verify a payment publicly</Text>
+        <Ionicons name="open-outline" size={14} color={theme.colors.primary} />
+      </TouchableOpacity>
+    </>
+  );
+
+  // ── main render ──────────────────────────────────────────────────────────
+
   return (
     <View style={styles.container}>
+      {/* Balance card */}
       <View style={styles.balanceCard}>
         <Text style={styles.balanceLabel}>TOTAL COLLECTED</Text>
         <Text style={styles.balanceAmount}>
@@ -157,6 +236,7 @@ export default function StakeholderHome() {
         </Text>
       </View>
 
+      {/* Filter chips */}
       <View style={styles.filterRow}>
         {FILTERS.map((f) => (
           <TouchableOpacity
@@ -172,6 +252,27 @@ export default function StakeholderHome() {
         ))}
       </View>
 
+      {/* Summary row */}
+      {entries.length > 0 && (
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>CREDITS</Text>
+            <Text style={[styles.summaryAmount, styles.summaryCredit]}>{formatNaira(totalCredits)}</Text>
+          </View>
+          <View style={styles.summarySeparator} />
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>REVERSALS</Text>
+            <Text style={[styles.summaryAmount, styles.summaryReversal]}>−{formatNaira(totalReversals)}</Text>
+          </View>
+          <View style={styles.summarySeparator} />
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>NET TOTAL</Text>
+            <Text style={[styles.summaryAmount, styles.summaryNet]}>{formatNaira(netTotal)}</Text>
+          </View>
+        </View>
+      )}
+
+      {/* Ledger list */}
       <FlatList
         data={entries}
         keyExtractor={(e) => e.ledgerId}
@@ -195,16 +296,7 @@ export default function StakeholderHome() {
             </Text>
           </View>
         }
-        ListFooterComponent={
-          <TouchableOpacity
-            style={styles.verifyLink}
-            onPress={() => router.push('/(public)/lookup')}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.verifyLinkText}>Verify a payment publicly</Text>
-            <Ionicons name="open-outline" size={14} color={theme.colors.primary} />
-          </TouchableOpacity>
-        }
+        ListFooterComponent={renderFooter}
       />
     </View>
   );
@@ -222,6 +314,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     padding: 24,
   },
+
+  // balance card
   balanceCard: {
     margin: 16,
     marginBottom: 12,
@@ -242,11 +336,13 @@ const styles = StyleSheet.create({
     color: theme.colors.white,
     letterSpacing: 0.5,
   },
+
+  // filter chips
   filterRow: {
     flexDirection: 'row',
     gap: 8,
     paddingHorizontal: 16,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   chip: {
     paddingHorizontal: 14,
@@ -268,9 +364,52 @@ const styles = StyleSheet.create({
   chipTextActive: {
     color: theme.colors.primary,
   },
+
+  // summary row
+  summaryRow: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginBottom: 10,
+    backgroundColor: theme.colors.white,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    ...theme.shadows.card,
+  },
+  summaryItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+  },
+  summarySeparator: {
+    width: 1,
+    backgroundColor: theme.colors.separator,
+    marginVertical: 4,
+  },
+  summaryLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: theme.colors.grey1,
+    letterSpacing: 0.5,
+  },
+  summaryAmount: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  summaryCredit: {
+    color: theme.colors.greenText,
+  },
+  summaryReversal: {
+    color: theme.colors.error,
+  },
+  summaryNet: {
+    color: theme.colors.primary,
+  },
+
+  // list
   listContent: {
     padding: 16,
-    paddingTop: 8,
+    paddingTop: 4,
     paddingBottom: 40,
   },
   card: {
@@ -325,6 +464,40 @@ const styles = StyleSheet.create({
   reversal: {
     color: theme.colors.error,
   },
+
+  // load more
+  loadMoreBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.white,
+    borderRadius: 12,
+    paddingVertical: 13,
+    marginBottom: 10,
+    minHeight: 44,
+    ...theme.shadows.card,
+  },
+  loadMoreText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.primary,
+  },
+
+  // verify link
+  verifyLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 16,
+    paddingBottom: 24,
+  },
+  verifyLinkText: {
+    fontSize: 13,
+    color: theme.colors.primary,
+    fontWeight: '500',
+  },
+
+  // empty / error
   empty: {
     alignItems: 'center',
     paddingTop: 60,
@@ -358,18 +531,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: theme.colors.white,
-  },
-  verifyLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 16,
-    paddingBottom: 24,
-  },
-  verifyLinkText: {
-    fontSize: 13,
-    color: theme.colors.primary,
-    fontWeight: '500',
   },
 });
