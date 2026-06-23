@@ -143,7 +143,7 @@ export default function StakeholderHome() {
 
   const totalCredits   = entries.reduce((s, e) => e.entryType === 'credit'   ? s + e.amount : s, 0);
   const totalReversals = entries.reduce((s, e) => e.entryType === 'reversal' ? s + e.amount : s, 0);
-  const netTotal       = totalCredits - totalReversals;
+  const netTotal       = totalCredits + totalReversals;
 
   // ── loading / error guards ───────────────────────────────────────────────
 

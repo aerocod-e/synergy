@@ -1,0 +1,18 @@
+
+3:36 PM
+That confirms it -- the net total calculation is wrong. It's adding credits and reversals instead of subtracting them. The reversal amounts are stored as negative integers in the database, so when the code does credits + reversals it's effectively doing 7000 + (-3000) = 4000 in kobo terms, but something in the display logic is going wrong.
+The totalCollected showing ₦4,000 is correct (that's the wallet balance after reversals). The NET TOTAL showing ₦10,000 suggests the code is doing credits + Math.abs(reversals) somewhere -- adding the absolute value of reversals instead of subtracting them, giving 7000 + 3000 = 10000.
+Paste this into the Replit Agent:
+There is a bug in the NET TOTAL calculation on the Stakeholder ledger screen. Do not make any other changes.
+Open artifacts/mobile/app/(stakeholder)/index.tsx. Find where totalCredits, totalReversals, and netTotal are computed from the entries array.
+The stakeholder currently shows:
+CREDITS: ₦7,000.00 (correct)
+REVERSALS: -₦3,000.00 (correct display after the Math.abs fix)
+NET TOTAL: ₦10,000.00 (wrong -- should be ₦4,000.00)
+The wallet's totalCollected correctly shows ₦4,000.00, which confirms the correct net is ₦4,000.
+Identify the exact line where netTotal is computed. The bug is most likely that after the Math.abs fix was applied to the reversal display, the netTotal computation is now using Math.abs(totalReversals) as well, turning it into an addition instead of a subtraction. The correct formula is:
+netTotal = totalCredits + totalReversals
+Where totalReversals is already negative (sum of negative kobo amounts), so adding it naturally subtracts. Do NOT apply Math.abs to totalReversals when computing netTotal -- only apply it when displaying the reversal figure in the UI.
+Fix the net total computation, confirm the display now shows ₦4,000.00 for NET TOTAL, and run:
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Report the exact line that was wrong, the fix applied, and confirm TypeScript passes with zero errors.
