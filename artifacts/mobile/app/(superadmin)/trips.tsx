@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FlatList,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -58,6 +59,14 @@ function formatDate(dateStr: string): string {
   }
 }
 
+/** Parse a YYYY-MM-DD string into a midnight Date, or null if invalid */
+function parseDate(raw: string): Date | null {
+  const trimmed = raw.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null;
+  const d = new Date(trimmed + 'T00:00:00');
+  return isNaN(d.getTime()) ? null : d;
+}
+
 function SkeletonCard() {
   return (
     <View style={styles.card}>
@@ -108,6 +117,12 @@ export default function SuperAdminTripsList() {
   const [error, setError] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterOption>('All');
 
+  // Search & date filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [showDateFilters, setShowDateFilters] = useState(false);
+
   const fetchTrips = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
@@ -133,10 +148,50 @@ export default function SuperAdminTripsList() {
   ).length;
   const unstartedCount = trips.filter((t) => t.unstartedFlag === true).length;
 
+  // Build filtered list
   const statusFilter = STATUS_FILTER_MAP[activeFilter];
-  const filteredTrips = statusFilter
-    ? trips.filter((t) => t.status === statusFilter)
-    : trips;
+  const fromDate = parseDate(dateFrom);
+  const toDate = parseDate(dateTo);
+
+  const filteredTrips = trips.filter((t) => {
+    // Status filter
+    if (statusFilter && t.status !== statusFilter) return false;
+
+    // Search filter: vehicle number or driver email
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      const matchVehicle = t.vehicleNumber.toLowerCase().includes(q);
+      const matchDriver = (t.driver?.email ?? '').toLowerCase().includes(q);
+      if (!matchVehicle && !matchDriver) return false;
+    }
+
+    // Date range filter
+    if (fromDate || toDate) {
+      const created = new Date(t.createdAt);
+      if (fromDate && created < fromDate) return false;
+      if (toDate) {
+        // Include the entire "to" day
+        const toEnd = new Date(toDate);
+        toEnd.setHours(23, 59, 59, 999);
+        if (created > toEnd) return false;
+      }
+    }
+
+    return true;
+  });
+
+  // Count active extra filters (search + date from + date to)
+  const extraFilterCount =
+    (searchQuery.trim() ? 1 : 0) +
+    (fromDate ? 1 : 0) +
+    (toDate ? 1 : 0);
+
+  function clearAllFilters() {
+    setSearchQuery('');
+    setDateFrom('');
+    setDateTo('');
+    setActiveFilter('All');
+  }
 
   return (
     <View style={styles.container}>
@@ -155,6 +210,76 @@ export default function SuperAdminTripsList() {
       </View>
 
       <View style={styles.contentArea}>
+        {/* Search bar */}
+        <View style={styles.searchRow}>
+          <View style={styles.searchInputWrapper}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search vehicle or driver email…"
+              placeholderTextColor={theme.colors.grey1}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={styles.clearIcon}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <TouchableOpacity
+            style={[styles.dateToggleBtn, showDateFilters && styles.dateToggleBtnActive]}
+            onPress={() => setShowDateFilters((v) => !v)}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.dateToggleIcon, showDateFilters && styles.dateToggleIconActive]}>
+              📅
+            </Text>
+            {(fromDate || toDate) && (
+              <View style={styles.dateBadge}>
+                <Text style={styles.dateBadgeText}>{(fromDate ? 1 : 0) + (toDate ? 1 : 0)}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Date range filters (collapsible) */}
+        {showDateFilters && (
+          <View style={styles.dateRangeRow}>
+            <View style={styles.dateField}>
+              <Text style={styles.dateFieldLabel}>From</Text>
+              <TextInput
+                style={styles.dateInput}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={theme.colors.grey1}
+                value={dateFrom}
+                onChangeText={setDateFrom}
+                keyboardType="numbers-and-punctuation"
+                maxLength={10}
+                returnKeyType="next"
+              />
+            </View>
+            <View style={styles.dateSeparatorLine} />
+            <View style={styles.dateField}>
+              <Text style={styles.dateFieldLabel}>To</Text>
+              <TextInput
+                style={styles.dateInput}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={theme.colors.grey1}
+                value={dateTo}
+                onChangeText={setDateTo}
+                keyboardType="numbers-and-punctuation"
+                maxLength={10}
+                returnKeyType="done"
+              />
+            </View>
+          </View>
+        )}
+
+        {/* Status pills + active filter badge */}
         <View style={styles.pillsWrapper}>
           <ScrollView
             horizontal
@@ -177,6 +302,14 @@ export default function SuperAdminTripsList() {
               );
             })}
           </ScrollView>
+          {extraFilterCount > 0 && (
+            <TouchableOpacity style={styles.filterBadgeBtn} onPress={clearAllFilters} activeOpacity={0.75}>
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{extraFilterCount} filter{extraFilterCount > 1 ? 's' : ''} active</Text>
+                <Text style={styles.filterBadgeClear}> ✕</Text>
+              </View>
+            </TouchableOpacity>
+          )}
         </View>
 
         {loading && !refreshing ? (
@@ -211,8 +344,10 @@ export default function SuperAdminTripsList() {
               <View style={styles.centeredState}>
                 <Text style={styles.emptyIcon}>○</Text>
                 <Text style={styles.emptyText}>No trips found</Text>
-                {activeFilter !== 'All' && (
-                  <Text style={styles.emptySubText}>Try selecting a different filter</Text>
+                {(activeFilter !== 'All' || extraFilterCount > 0) && (
+                  <TouchableOpacity onPress={clearAllFilters} style={styles.clearFiltersBtn}>
+                    <Text style={styles.clearFiltersText}>Clear all filters</Text>
+                  </TouchableOpacity>
                 )}
               </View>
             }
@@ -263,13 +398,123 @@ const styles = StyleSheet.create({
   contentArea: {
     flex: 1,
   },
-  pillsWrapper: {
-    height: 50,
+  // Search
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    gap: 10,
+  },
+  searchInputWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.white,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e4e8ef',
+    paddingHorizontal: 12,
+    height: 42,
+    ...theme.shadows.card,
+  },
+  searchIcon: {
+    fontSize: 15,
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: theme.colors.black,
+    paddingVertical: 0,
+  },
+  clearIcon: {
+    fontSize: 14,
+    color: theme.colors.grey1,
+    paddingLeft: 6,
+  },
+  dateToggleBtn: {
+    width: 42,
+    height: 42,
+    backgroundColor: theme.colors.white,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e4e8ef',
+    alignItems: 'center',
     justifyContent: 'center',
+    ...theme.shadows.card,
+  },
+  dateToggleBtnActive: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  dateToggleIcon: {
+    fontSize: 18,
+  },
+  dateToggleIconActive: {
+    // emoji stays the same but button turns primary
+  },
+  dateBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#c8401a',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  dateBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  // Date range
+  dateRangeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginBottom: 10,
+    backgroundColor: theme.colors.white,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e4e8ef',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    ...theme.shadows.card,
+  },
+  dateField: {
+    flex: 1,
+  },
+  dateFieldLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.colors.grey1,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  dateInput: {
+    fontSize: 14,
+    color: theme.colors.black,
+    paddingVertical: 0,
+  },
+  dateSeparatorLine: {
+    width: 1,
+    height: 36,
+    backgroundColor: theme.colors.separator,
+    marginHorizontal: 12,
+  },
+  // Pills
+  pillsWrapper: {
+    paddingBottom: 4,
   },
   pillsContainer: {
     paddingHorizontal: 20,
     alignItems: 'center',
+    paddingVertical: 6,
   },
   skeletonArea: {
     flex: 1,
@@ -301,6 +546,32 @@ const styles = StyleSheet.create({
   },
   pillTextInactive: {
     color: theme.colors.grey1,
+  },
+  // Active filter badge
+  filterBadgeBtn: {
+    alignSelf: 'flex-start',
+    marginLeft: 20,
+    marginBottom: 4,
+  },
+  filterBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff3e8',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+  },
+  filterBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#b45309',
+  },
+  filterBadgeClear: {
+    fontSize: 11,
+    color: '#b45309',
+    fontWeight: '700',
   },
   listContent: {
     paddingBottom: 140,
@@ -402,9 +673,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: theme.colors.grey1,
   },
-  emptySubText: {
+  clearFiltersBtn: {
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: theme.colors.primary,
+    borderRadius: 10,
+  },
+  clearFiltersText: {
+    color: theme.colors.white,
     fontSize: 13,
-    color: theme.colors.grey1,
-    marginTop: 4,
+    fontWeight: '600',
   },
 });
