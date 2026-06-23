@@ -1,0 +1,46 @@
+diff --git a/lib/module/views/ScreenFallback.js b/lib/module/views/ScreenFallback.js
+index e27e9c2de250819ed3519fb1dbd32af652bc89c3..c92b18061534283e769be9aa782a4016ce02efcd 100644
+--- a/lib/module/views/ScreenFallback.js
++++ b/lib/module/views/ScreenFallback.js
+@@ -11,31 +11,41 @@ try {
+ }
+ export const MaybeScreenContainer = ({
+   enabled,
++  pointerEvents,
++  style,
+   ...rest
+ }) => {
++  const mergedStyle = pointerEvents != null ? [style, { pointerEvents }] : style;
+   if (Screens?.screensEnabled?.()) {
+     return /*#__PURE__*/_jsx(Screens.ScreenContainer, {
+       enabled: enabled,
++      style: mergedStyle,
+       ...rest
+     });
+   }
+   return /*#__PURE__*/_jsx(View, {
++    style: mergedStyle,
+     ...rest
+   });
+ };
+ export function MaybeScreen({
+   enabled,
+   active,
++  pointerEvents,
++  style,
+   ...rest
+ }) {
++  const mergedStyle = pointerEvents != null ? [style, { pointerEvents }] : style;
+   if (Screens?.screensEnabled?.()) {
+     return /*#__PURE__*/_jsx(Screens.Screen, {
+       enabled: enabled,
+       activityState: active,
++      style: mergedStyle,
+       ...rest
+     });
+   }
+   return /*#__PURE__*/_jsx(View, {
++    style: mergedStyle,
+     ...rest
+   });
+ }

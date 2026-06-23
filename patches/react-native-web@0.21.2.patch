@@ -1,0 +1,26 @@
+diff --git a/dist/cjs/modules/createDOMProps/index.js b/dist/cjs/modules/createDOMProps/index.js
+index d643013ccf5b6e343a4aa468346cd02a10a45035..d643013ccf5b6e343a4aa468346cd02a10a45035 100644
+--- a/dist/cjs/modules/createDOMProps/index.js
++++ b/dist/cjs/modules/createDOMProps/index.js
+@@ -805,8 +805,5 @@ var createDOMProps = (elementType, props, options) => {
+   }
+ 
+   // Resolve styles
+-  if (pointerEvents != null) {
+-    (0, _warnOnce.warnOnce)('pointerEvents', "props.pointerEvents is deprecated. Use style.pointerEvents");
+-  }
+   var _StyleSheet = (0, _StyleSheet2.default)([style, pointerEvents && pointerEventsStyles[pointerEvents]], (0, _objectSpread2.default)({
+       writingDirection: 'ltr'
+diff --git a/dist/modules/createDOMProps/index.js b/dist/modules/createDOMProps/index.js
+index 18f5e8b769d49d0168e109a1e8b4a402a5a39f79..18f5e8b769d49d0168e109a1e8b4a402a5a39f79 100644
+--- a/dist/modules/createDOMProps/index.js
++++ b/dist/modules/createDOMProps/index.js
+@@ -801,8 +801,5 @@ var createDOMProps = (elementType, props, options) => {
+   }
+ 
+   // Resolve styles
+-  if (pointerEvents != null) {
+-    warnOnce('pointerEvents', "props.pointerEvents is deprecated. Use style.pointerEvents");
+-  }
+   var _StyleSheet = StyleSheet([style, pointerEvents && pointerEventsStyles[pointerEvents]], _objectSpread({
+       writingDirection: 'ltr'

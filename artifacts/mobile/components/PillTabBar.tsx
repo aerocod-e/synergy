@@ -66,7 +66,7 @@ export default function PillTabBar(props: any) {
   return (
     // Bottom-anchored absolute container — only as tall as the pill itself,
     // so it never sits over screen content above it.
-    <View style={[styles.wrapper, { bottom: pillBottom }]}>
+    <View style={[styles.wrapper, { bottom: pillBottom, pointerEvents: 'box-none' }]}>
       <View
         style={styles.pill}
         onLayout={(e) => setPillWidth(e.nativeEvent.layout.width)}
@@ -74,9 +74,9 @@ export default function PillTabBar(props: any) {
           {pillWidth > 0 && (
             <Animated.View
               style={[
-                { pointerEvents: 'none' },
                 styles.slider,
                 {
+                  pointerEvents: 'none',
                   width: slotWidth,
                   transform: [{ translateX: sliderTranslateX }],
                 },
@@ -135,7 +135,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 20,
     right: 20,
-    pointerEvents: 'box-none',
   },
   pill: {
     flexDirection: 'row',

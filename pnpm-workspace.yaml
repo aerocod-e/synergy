@@ -125,3 +125,6 @@ overrides:
   rollup>@rollup/rollup-win32-ia32-msvc: '-'
   rollup>@rollup/rollup-win32-x64-gnu: '-'
   rollup>@rollup/rollup-win32-x64-msvc: '-'
+
+patchedDependencies:
+  '@react-navigation/bottom-tabs@7.16.1': patches/@react-navigation__bottom-tabs@7.16.1.patch

@@ -12,5 +12,12 @@
   "devDependencies": {
     "prettier": "^3.8.3",
     "typescript": "~5.9.3"
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "@react-navigation/bottom-tabs@7.16.1": "patches/@react-navigation__bottom-tabs@7.16.1.patch",
+      "@react-navigation/elements@2.9.18": "patches/@react-navigation__elements@2.9.18.patch",
+      "react-native-web@0.21.2": "patches/react-native-web@0.21.2.patch"
+    }
   }
 }
