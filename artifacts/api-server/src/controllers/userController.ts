@@ -172,6 +172,54 @@ export async function toggleUserActive(req: Request, res: Response): Promise<voi
   }
 }
 
+export async function getTripAdminActiveTripsCount(req: Request, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const caller = req.user!;
+
+    const { rows } = await pool.query<{
+      id: string;
+      role: string;
+      entity_id: string | null;
+    }>(
+      `SELECT id, role, entity_id FROM users WHERE id = $1 AND deleted_at IS NULL`,
+      [id],
+    );
+
+    if (rows.length === 0) {
+      res.status(404).json({ error: "NOT_FOUND", message: "User not found" });
+      return;
+    }
+
+    const target = rows[0]!;
+
+    if (target.role !== "trip_admin") {
+      res.status(400).json({ error: "BAD_REQUEST", message: "User is not a trip admin" });
+      return;
+    }
+
+    if (target.entity_id !== caller.entityId) {
+      res.status(403).json({ error: "FORBIDDEN", message: "Cannot query a trip admin from a different state" });
+      return;
+    }
+
+    const { rows: countRows } = await pool.query<{ count: string }>(
+      `SELECT COUNT(*) AS count FROM trips WHERE created_by = $1 AND status = 'in_progress' AND deleted_at IS NULL`,
+      [id],
+    );
+
+    const activeTripsCount = Number(countRows[0]?.count ?? 0);
+
+    res.json({
+      data: { activeTripsCount },
+      message: "Active trips count retrieved",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to retrieve active trips count" });
+  }
+}
+
 const VALID_ROLES = ["super_admin", "state_admin", "trip_admin", "stakeholder"] as const;
 type ValidRole = (typeof VALID_ROLES)[number];
 

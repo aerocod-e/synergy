@@ -112,6 +112,9 @@ export const updateCancellationRights = (userId: string, canCancelWithoutApprova
 export const toggleUserActive = (userId: string, isActive: boolean) =>
   apiRequest(`/api/users/${userId}/active`, { method: 'PATCH', body: JSON.stringify({ isActive }) });
 
+export const getTripAdminActiveTripsCount = (userId: string) =>
+  apiRequest(`/api/users/${userId}/active-trips-count`);
+
 // ── Wallets ─────────────────────────────────────────────────────────────────
 export const getMyWallet = () =>
   apiRequest('/api/wallets/my');

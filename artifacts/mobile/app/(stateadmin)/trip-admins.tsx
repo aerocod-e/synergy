@@ -17,7 +17,7 @@ import {
 import { useFocusEffect, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
-import { listTripAdmins, createUser, updateCancellationRights, toggleUserActive } from '@/services/api';
+import { listTripAdmins, createUser, updateCancellationRights, toggleUserActive, getTripAdminActiveTripsCount } from '@/services/api';
 import { useAuthContext } from '@/app/_layout';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -48,6 +48,13 @@ export default function StateAdminTripAdmins() {
   // per-card active toggle state
   const [activeToggling, setActiveToggling] = useState<Record<string, boolean>>({});
   const [activeToggleError, setActiveToggleError] = useState<Record<string, string>>({});
+
+  // deactivation confirmation modal
+  const [confirmDeactivate, setConfirmDeactivate] = useState<{
+    admin: TripAdmin;
+    activeTripsCount: number;
+  } | null>(null);
+  const [confirmDeactivating, setConfirmDeactivating] = useState(false);
 
   // create modal
   const [modalVisible, setModalVisible] = useState(false);
@@ -108,17 +115,15 @@ export default function StateAdminTripAdmins() {
 
   // ── toggle active status ──────────────────────────────────────────────────────
 
-  const handleToggleActive = useCallback(async (admin: TripAdmin, isActive: boolean) => {
+  const executeToggleActive = useCallback(async (admin: TripAdmin, isActive: boolean) => {
     setActiveToggling((prev) => ({ ...prev, [admin.id]: true }));
     setActiveToggleError((prev) => { const n = { ...prev }; delete n[admin.id]; return n; });
-    // optimistic update
     setAdmins((prev) =>
       prev.map((a) => (a.id === admin.id ? { ...a, isActive } : a))
     );
     try {
       await toggleUserActive(admin.id, isActive);
     } catch (err: any) {
-      // revert
       setAdmins((prev) =>
         prev.map((a) => (a.id === admin.id ? { ...a, isActive: admin.isActive } : a))
       );
@@ -130,6 +135,34 @@ export default function StateAdminTripAdmins() {
       setActiveToggling((prev) => { const n = { ...prev }; delete n[admin.id]; return n; });
     }
   }, []);
+
+  const handleToggleActive = useCallback(async (admin: TripAdmin, isActive: boolean) => {
+    // Reactivation never needs a warning
+    if (isActive) {
+      executeToggleActive(admin, isActive);
+      return;
+    }
+    // Deactivation: check for in-progress trips first
+    setActiveToggling((prev) => ({ ...prev, [admin.id]: true }));
+    setActiveToggleError((prev) => { const n = { ...prev }; delete n[admin.id]; return n; });
+    try {
+      const res = await getTripAdminActiveTripsCount(admin.id);
+      const activeTripsCount: number = (res as any)?.activeTripsCount ?? 0;
+      if (activeTripsCount > 0) {
+        setConfirmDeactivate({ admin, activeTripsCount });
+      } else {
+        executeToggleActive(admin, false);
+      }
+    } catch {
+      // Fail safe: if we can't verify active trips, do not deactivate
+      setActiveToggleError((prev) => ({
+        ...prev,
+        [admin.id]: "Couldn't verify active trips. Try again.",
+      }));
+    } finally {
+      setActiveToggling((prev) => { const n = { ...prev }; delete n[admin.id]; return n; });
+    }
+  }, [executeToggleActive]);
 
   // ── toggle pre-approval ──────────────────────────────────────────────────────
 
@@ -321,6 +354,57 @@ export default function StateAdminTripAdmins() {
           <Ionicons name="add" size={28} color={theme.colors.white} />
         </TouchableOpacity>
       )}
+
+      {/* ── Deactivation warning modal ── */}
+      <Modal
+        visible={!!confirmDeactivate}
+        animationType="fade"
+        transparent
+        onRequestClose={() => !confirmDeactivating && setConfirmDeactivate(null)}
+      >
+        <View style={styles.overlayBackdrop}>
+          <View style={styles.warningCard}>
+            <View style={styles.warningIconRow}>
+              <Ionicons name="warning-outline" size={28} color={theme.colors.warning} />
+            </View>
+            <Text style={styles.warningTitle}>Active Trips Warning</Text>
+            <Text style={styles.warningBody}>
+              {confirmDeactivate
+                ? `This Trip Admin has ${confirmDeactivate.activeTripsCount} active trip${confirmDeactivate.activeTripsCount === 1 ? '' : 's'}. Deactivating them will not cancel those trips. Continue?`
+                : ''}
+            </Text>
+            <View style={styles.warningActions}>
+              <TouchableOpacity
+                style={[styles.warningBtn, styles.warningBtnCancel]}
+                onPress={() => setConfirmDeactivate(null)}
+                disabled={confirmDeactivating}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.warningBtnCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.warningBtn, styles.warningBtnConfirm, confirmDeactivating && styles.activeToggleBtnDisabled]}
+                disabled={confirmDeactivating}
+                activeOpacity={0.8}
+                onPress={async () => {
+                  if (!confirmDeactivate) return;
+                  setConfirmDeactivating(true);
+                  const { admin } = confirmDeactivate;
+                  setConfirmDeactivate(null);
+                  await executeToggleActive(admin, false);
+                  setConfirmDeactivating(false);
+                }}
+              >
+                {confirmDeactivating ? (
+                  <ActivityIndicator size="small" color={theme.colors.white} />
+                ) : (
+                  <Text style={styles.warningBtnConfirmText}>Deactivate</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* ── Create Trip Admin modal ── */}
       <Modal
@@ -704,6 +788,67 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {
     fontSize: 16,
+    fontWeight: '700',
+    color: theme.colors.white,
+  },
+
+  // warning modal
+  overlayBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  warningCard: {
+    backgroundColor: theme.colors.white,
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 360,
+    gap: 12,
+  },
+  warningIconRow: {
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  warningTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: theme.colors.black,
+    textAlign: 'center',
+  },
+  warningBody: {
+    fontSize: 14,
+    color: theme.colors.grey2,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  warningActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 8,
+  },
+  warningBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  warningBtnCancel: {
+    backgroundColor: theme.colors.grey3,
+  },
+  warningBtnConfirm: {
+    backgroundColor: theme.colors.error,
+  },
+  warningBtnCancelText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.colors.grey1,
+  },
+  warningBtnConfirmText: {
+    fontSize: 14,
     fontWeight: '700',
     color: theme.colors.white,
   },
