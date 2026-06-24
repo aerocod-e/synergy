@@ -97,8 +97,8 @@ export const requestCancellation = (tripId: string, reason: string) =>
   apiRequest(`/api/trips/${tripId}/request-cancellation`, { method: 'PATCH', body: JSON.stringify({ reason }) });
 
 // ── Cancellation Requests (State Admin) ──────────────────────────────────────
-export const listCancellationRequests = () =>
-  apiRequest('/api/cancellation-requests');
+export const listCancellationRequests = (params?: Record<string, string>) =>
+  apiRequest('/api/cancellation-requests' + (params ? '?' + new URLSearchParams(params).toString() : ''));
 
 export const approveCancellationRequest = (id: string) =>
   apiRequest(`/api/cancellation-requests/${id}/approve`, { method: 'PATCH' });
@@ -138,9 +138,11 @@ export const searchPublicTrips = (q: string) =>
   );
 
 // ── Users (Super Admin / State Admin) ────────────────────────────────────────
-export const getUsers = () => apiRequest('/api/users');
+export const getUsers = (params?: Record<string, string>) =>
+  apiRequest('/api/users' + (params ? '?' + new URLSearchParams(params).toString() : ''));
 
-export const listTripAdmins = () => apiRequest('/api/users/trip-admins');
+export const listTripAdmins = (params?: Record<string, string>) =>
+  apiRequest('/api/users/trip-admins' + (params ? '?' + new URLSearchParams(params).toString() : ''));
 
 export const createUser = (body: unknown) =>
   apiRequest('/api/users', { method: 'POST', body: JSON.stringify(body) });
@@ -165,8 +167,8 @@ export const activatePricingChart = (id: string) =>
   apiRequest(`/api/pricing/${id}/activate`, { method: 'POST' });
 
 // ── Vehicles (Trip Admin) ─────────────────────────────────────────────────────
-export const listVehicles = () =>
-  apiRequest('/api/vehicles');
+export const listVehicles = (params?: Record<string, string>) =>
+  apiRequest('/api/vehicles' + (params ? '?' + new URLSearchParams(params).toString() : ''));
 
 export const searchVehicles = (q: string) =>
   apiRequest('/api/vehicles/search?' + new URLSearchParams({ q }).toString());
@@ -178,8 +180,8 @@ export const deleteVehicle = (id: string) =>
   apiRequest(`/api/vehicles/${id}`, { method: 'DELETE' });
 
 // ── Drivers (Trip Admin) ──────────────────────────────────────────────────────
-export const listDrivers = () =>
-  apiRequest('/api/drivers');
+export const listDrivers = (params?: Record<string, string>) =>
+  apiRequest('/api/drivers' + (params ? '?' + new URLSearchParams(params).toString() : ''));
 
 export const searchDrivers = (q: string) =>
   apiRequest('/api/drivers/search?' + new URLSearchParams({ q }).toString());

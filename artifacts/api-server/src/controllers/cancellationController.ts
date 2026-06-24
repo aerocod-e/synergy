@@ -235,59 +235,82 @@ export async function requestCancellation(req: Request, res: Response): Promise<
 export async function listCancellationRequests(req: Request, res: Response): Promise<void> {
   const callerEntityId = req.user!.entityId;
 
+  const rawPage  = parseInt((req.query.page  as string) ?? "1",  10);
+  const rawLimit = parseInt((req.query.limit as string) ?? "20", 10);
+  const page     = Number.isFinite(rawPage)  && rawPage  > 0 ? rawPage                   : 1;
+  const limit    = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100)   : 20;
+  const offset   = (page - 1) * limit;
+
   try {
-    const { rows } = await pool.query<{
-      id: string;
-      trip_id: string;
-      reason: string;
-      status: string;
-      previous_trip_status: string;
-      created_at: Date;
-      vehicle_number: string;
-      driver_name: string | null;
-      loading_state: string;
-      unloading_state: string;
-      requested_by_email: string;
-    }>(
-      `SELECT
-         cr.id,
-         cr.trip_id,
-         cr.reason,
-         cr.status,
-         cr.previous_trip_status,
-         cr.created_at,
-         v.registration_number AS vehicle_number,
-         d.full_name        AS driver_name,
-         ls.name            AS loading_state,
-         us2.name           AS unloading_state,
-         u.email            AS requested_by_email
-       FROM cancellation_requests cr
-       JOIN trips   t   ON t.id  = cr.trip_id
-       JOIN vehicles v  ON v.id  = t.vehicle_id
-       JOIN users   u   ON u.id  = cr.requested_by
-       LEFT JOIN drivers d ON d.id = t.driver_id
-       JOIN states  ls  ON ls.id = t.loading_state_id
-       JOIN states  us2 ON us2.id = t.unloading_state_id
-       WHERE cr.status = 'pending'
-         AND u.entity_id = $1
-       ORDER BY cr.created_at DESC`,
-      [callerEntityId]
-    );
+    const [countRes, rowsRes] = await Promise.all([
+      pool.query<{ total: string }>(
+        `SELECT COUNT(*) AS total
+         FROM cancellation_requests cr
+         JOIN users u ON u.id = cr.requested_by
+         WHERE cr.status = 'pending'
+           AND u.entity_id = $1`,
+        [callerEntityId]
+      ),
+      pool.query<{
+        id: string;
+        trip_id: string;
+        reason: string;
+        status: string;
+        previous_trip_status: string;
+        created_at: Date;
+        vehicle_number: string;
+        driver_name: string | null;
+        loading_state: string;
+        unloading_state: string;
+        requested_by_email: string;
+      }>(
+        `SELECT
+           cr.id,
+           cr.trip_id,
+           cr.reason,
+           cr.status,
+           cr.previous_trip_status,
+           cr.created_at,
+           v.registration_number AS vehicle_number,
+           d.full_name           AS driver_name,
+           ls.name               AS loading_state,
+           us2.name              AS unloading_state,
+           u.email               AS requested_by_email
+         FROM cancellation_requests cr
+         JOIN trips    t   ON t.id   = cr.trip_id
+         JOIN vehicles v   ON v.id   = t.vehicle_id
+         JOIN users    u   ON u.id   = cr.requested_by
+         LEFT JOIN drivers d ON d.id = t.driver_id
+         JOIN states   ls  ON ls.id  = t.loading_state_id
+         JOIN states   us2 ON us2.id = t.unloading_state_id
+         WHERE cr.status = 'pending'
+           AND u.entity_id = $1
+         ORDER BY cr.created_at DESC
+         LIMIT $2 OFFSET $3`,
+        [callerEntityId, limit, offset]
+      ),
+    ]);
+
+    const total      = parseInt(countRes.rows[0]!.total, 10);
+    const totalPages = Math.ceil(total / limit) || 1;
 
     res.json({
-      data: rows.map((r) => ({
-        id: r.id,
-        tripId: r.trip_id,
-        reason: r.reason,
-        status: r.status,
-        previousTripStatus: r.previous_trip_status,
-        createdAt: r.created_at,
-        vehicleNumber: r.vehicle_number,
-        driverName: r.driver_name,
-        loadingState: r.loading_state,
-        unloadingState: r.unloading_state,
-        requestedByEmail: r.requested_by_email,
-      })),
+      data: {
+        requests: rowsRes.rows.map((r) => ({
+          id:                 r.id,
+          tripId:             r.trip_id,
+          reason:             r.reason,
+          status:             r.status,
+          previousTripStatus: r.previous_trip_status,
+          createdAt:          r.created_at,
+          vehicleNumber:      r.vehicle_number,
+          driverName:         r.driver_name,
+          loadingState:       r.loading_state,
+          unloadingState:     r.unloading_state,
+          requestedByEmail:   r.requested_by_email,
+        })),
+        pagination: { page, limit, total, totalPages },
+      },
       message: "Cancellation requests retrieved",
     });
   } catch (err) {

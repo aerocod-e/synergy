@@ -57,10 +57,14 @@ const ROLE_OPTIONS: { value: CreatableRole; label: string }[] = [
 ];
 
 export default function UsersScreen() {
+  const PAGE_LIMIT = 20;
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const [states, setStates] = useState<State[]>([]);
   const [stakeholders, setStakeholders] = useState<Stakeholder[]>([]);
@@ -76,12 +80,32 @@ export default function UsersScreen() {
   const fetchUsers = useCallback(async () => {
     try {
       setError(null);
-      const data = await getUsers();
+      setPage(1);
+      const data = await getUsers({ page: '1', limit: String(PAGE_LIMIT) });
       setUsers(data.users ?? []);
+      const pg = data.pagination ?? {};
+      setHasMore((pg.page ?? 1) < (pg.totalPages ?? 1));
     } catch {
       setError('Failed to load users');
     }
   }, []);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = page + 1;
+      const data = await getUsers({ page: String(nextPage), limit: String(PAGE_LIMIT) });
+      setUsers((prev) => [...prev, ...(data.users ?? [])]);
+      const pg = data.pagination ?? {};
+      setHasMore((pg.page ?? nextPage) < (pg.totalPages ?? nextPage));
+      setPage(nextPage);
+    } catch {
+      // silent fail
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, hasMore, page]);
 
   useEffect(() => {
     let active = true;
@@ -200,7 +224,24 @@ export default function UsersScreen() {
           </View>
         }
         contentContainerStyle={styles.listContent}
-        ListFooterComponent={() => <View style={{ height: theme.PILL_NAV_BOTTOM_PADDING }} />}
+        ListFooterComponent={() => (
+          <View>
+            {hasMore && (
+              <TouchableOpacity
+                style={styles.loadMoreBtn}
+                onPress={loadMore}
+                disabled={loadingMore}
+                activeOpacity={0.7}
+              >
+                {loadingMore
+                  ? <ActivityIndicator size="small" color={theme.colors.primary} />
+                  : <Text style={styles.loadMoreText}>Load more</Text>
+                }
+              </TouchableOpacity>
+            )}
+            <View style={{ height: theme.PILL_NAV_BOTTOM_PADDING }} />
+          </View>
+        )}
       />
 
       {/* FAB */}
@@ -526,4 +567,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   buttonDisabled: { opacity: 0.6 },
+  loadMoreBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 12,
+    backgroundColor: theme.colors.white,
+    ...theme.shadows.card,
+  },
+  loadMoreText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.primary,
+  },
 });

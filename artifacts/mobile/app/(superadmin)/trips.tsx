@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   RefreshControl,
   ScrollView,
@@ -111,11 +112,15 @@ function TripCard({ trip, onPress }: { trip: Trip; onPress: () => void }) {
 
 export default function SuperAdminTripsList() {
   const router = useRouter();
+  const PAGE_LIMIT = 20;
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterOption>('All');
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // Search & date filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -127,36 +132,59 @@ export default function SuperAdminTripsList() {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setError(false);
+    setPage(1);
     try {
-      const data = await getTrips();
+      const statusValue = STATUS_FILTER_MAP[activeFilter];
+      const params: Record<string, string> = { page: '1', limit: String(PAGE_LIMIT) };
+      if (statusValue) params.status = statusValue;
+      const data = await getTrips(params);
       const list: Trip[] = Array.isArray(data?.trips) ? data.trips : [];
       setTrips(list);
+      const pg = data?.pagination ?? {};
+      setHasMore((pg.page ?? 1) < (pg.totalPages ?? 1));
     } catch {
       setError(true);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [activeFilter]);
 
   useEffect(() => {
     fetchTrips();
   }, [fetchTrips]);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = page + 1;
+      const statusValue = STATUS_FILTER_MAP[activeFilter];
+      const params: Record<string, string> = { page: String(nextPage), limit: String(PAGE_LIMIT) };
+      if (statusValue) params.status = statusValue;
+      const data = await getTrips(params);
+      const list: Trip[] = Array.isArray(data?.trips) ? data.trips : [];
+      setTrips((prev) => [...prev, ...list]);
+      const pg = data?.pagination ?? {};
+      setHasMore((pg.page ?? nextPage) < (pg.totalPages ?? nextPage));
+      setPage(nextPage);
+    } catch {
+      // silent fail
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, hasMore, page, activeFilter]);
 
   const activeCount = trips.filter(
     (t) => t.status === 'created' || t.status === 'in_transit',
   ).length;
   const unstartedCount = trips.filter((t) => t.unstartedFlag === true).length;
 
-  // Build filtered list
-  const statusFilter = STATUS_FILTER_MAP[activeFilter];
+  // Build filtered list (status is now server-side; search + date remain client-side)
   const fromDate = parseDate(dateFrom);
   const toDate = parseDate(dateTo);
 
   const filteredTrips = trips.filter((t) => {
-    // Status filter
-    if (statusFilter && t.status !== statusFilter) return false;
-
     // Search filter: vehicle number or driver email
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
@@ -351,7 +379,24 @@ export default function SuperAdminTripsList() {
                 )}
               </View>
             }
-            ListFooterComponent={() => <View style={{ height: theme.PILL_NAV_BOTTOM_PADDING }} />}
+            ListFooterComponent={() => (
+              <View>
+                {hasMore && (
+                  <TouchableOpacity
+                    style={styles.loadMoreBtn}
+                    onPress={loadMore}
+                    disabled={loadingMore}
+                    activeOpacity={0.7}
+                  >
+                    {loadingMore
+                      ? <ActivityIndicator size="small" color={theme.colors.primary} />
+                      : <Text style={styles.loadMoreText}>Load more</Text>
+                    }
+                  </TouchableOpacity>
+                )}
+                <View style={{ height: theme.PILL_NAV_BOTTOM_PADDING }} />
+              </View>
+            )}
           />
         )}
       </View>
@@ -690,5 +735,20 @@ const styles = StyleSheet.create({
     color: theme.colors.white,
     fontSize: 13,
     fontWeight: '600',
+  },
+  loadMoreBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 12,
+    backgroundColor: theme.colors.white,
+    ...theme.shadows.card,
+  },
+  loadMoreText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.primary,
   },
 });

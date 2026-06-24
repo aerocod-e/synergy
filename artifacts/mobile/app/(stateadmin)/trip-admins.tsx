@@ -37,10 +37,14 @@ export default function StateAdminTripAdmins() {
   const { user } = useAuthContext();
   const navigation = useNavigation();
 
+  const PAGE_LIMIT = 20;
   const [admins, setAdmins] = useState<TripAdmin[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // toggle error per-card (cancellation rights)
   const [toggleError, setToggleError] = useState<string | null>(null);
@@ -71,9 +75,12 @@ export default function StateAdminTripAdmins() {
   const fetchAdmins = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
+    setPage(1);
     try {
-      const data = await listTripAdmins();
+      const data = await listTripAdmins({ page: '1', limit: String(PAGE_LIMIT) });
       setAdmins((data as any).tripAdmins as TripAdmin[]);
+      const pg = (data as any).pagination ?? {};
+      setHasMore((pg.page ?? 1) < (pg.totalPages ?? 1));
       setFetchError(null);
     } catch {
       setFetchError("Couldn't load trip admins");
@@ -82,6 +89,23 @@ export default function StateAdminTripAdmins() {
       setRefreshing(false);
     }
   }, []);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = page + 1;
+      const data = await listTripAdmins({ page: String(nextPage), limit: String(PAGE_LIMIT) });
+      setAdmins((prev) => [...prev, ...((data as any).tripAdmins as TripAdmin[])]);
+      const pg = (data as any).pagination ?? {};
+      setHasMore((pg.page ?? nextPage) < (pg.totalPages ?? nextPage));
+      setPage(nextPage);
+    } catch {
+      // silent fail
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, hasMore, page]);
 
   useFocusEffect(
     useCallback(() => {
@@ -354,7 +378,24 @@ export default function StateAdminTripAdmins() {
             <Text style={styles.emptySubtitle}>Tap + to add the first Trip Admin</Text>
           </View>
         }
-        ListFooterComponent={() => <View style={{ height: theme.PILL_NAV_BOTTOM_PADDING }} />}
+        ListFooterComponent={() => (
+          <View>
+            {hasMore && (
+              <TouchableOpacity
+                style={styles.loadMoreBtn}
+                onPress={loadMore}
+                disabled={loadingMore}
+                activeOpacity={0.7}
+              >
+                {loadingMore
+                  ? <ActivityIndicator size="small" color={theme.colors.primary} />
+                  : <Text style={styles.loadMoreText}>Load more</Text>
+                }
+              </TouchableOpacity>
+            )}
+            <View style={{ height: theme.PILL_NAV_BOTTOM_PADDING }} />
+          </View>
+        )}
       />
 
       {Platform.OS !== 'web' && (
@@ -866,5 +907,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: theme.colors.white,
+  },
+  loadMoreBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 12,
+    backgroundColor: theme.colors.white,
+    ...theme.shadows.card,
+  },
+  loadMoreText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.primary,
   },
 });

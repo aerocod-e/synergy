@@ -2,50 +2,67 @@ import { type Request, type Response } from "express";
 import bcrypt from "bcrypt";
 import pool from "../db/connection.js";
 
-export async function listUsers(_req: Request, res: Response): Promise<void> {
+export async function listUsers(req: Request, res: Response): Promise<void> {
+  const rawPage  = parseInt((req.query.page  as string) ?? "1",  10);
+  const rawLimit = parseInt((req.query.limit as string) ?? "20", 10);
+  const page     = Number.isFinite(rawPage)  && rawPage  > 0 ? rawPage                   : 1;
+  const limit    = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100)   : 20;
+  const offset   = (page - 1) * limit;
+
   try {
-    const { rows } = await pool.query<{
-      id: string;
-      email: string;
-      role: string;
-      entity_type: string | null;
-      entity_id: string | null;
-      is_active: boolean;
-      created_at: Date;
-      entity_name: string | null;
-    }>(
-      `SELECT
-         u.id,
-         u.email,
-         u.role,
-         u.entity_type,
-         u.entity_id,
-         u.is_active,
-         u.created_at,
-         CASE
-           WHEN u.entity_type = 'state'       THEN s.name
-           WHEN u.entity_type = 'stakeholder' THEN sh.name
-           ELSE NULL
-         END AS entity_name
-       FROM users u
-       LEFT JOIN states      s  ON u.entity_type = 'state'       AND u.entity_id = s.id
-       LEFT JOIN stakeholders sh ON u.entity_type = 'stakeholder' AND u.entity_id = sh.id
-       WHERE u.deleted_at IS NULL
-       ORDER BY u.role ASC, u.email ASC`,
-    );
+    const [countRes, rowsRes] = await Promise.all([
+      pool.query<{ total: string }>(
+        `SELECT COUNT(*) AS total FROM users WHERE deleted_at IS NULL`
+      ),
+      pool.query<{
+        id: string;
+        email: string;
+        role: string;
+        entity_type: string | null;
+        entity_id: string | null;
+        is_active: boolean;
+        created_at: Date;
+        entity_name: string | null;
+      }>(
+        `SELECT
+           u.id,
+           u.email,
+           u.role,
+           u.entity_type,
+           u.entity_id,
+           u.is_active,
+           u.created_at,
+           CASE
+             WHEN u.entity_type = 'state'       THEN s.name
+             WHEN u.entity_type = 'stakeholder' THEN sh.name
+             ELSE NULL
+           END AS entity_name
+         FROM users u
+         LEFT JOIN states       s  ON u.entity_type = 'state'       AND u.entity_id = s.id
+         LEFT JOIN stakeholders sh ON u.entity_type = 'stakeholder' AND u.entity_id = sh.id
+         WHERE u.deleted_at IS NULL
+         ORDER BY u.role ASC, u.email ASC
+         LIMIT $1 OFFSET $2`,
+        [limit, offset]
+      ),
+    ]);
+
+    const total      = parseInt(countRes.rows[0]!.total, 10);
+    const totalPages = Math.ceil(total / limit) || 1;
 
     res.json({
       data: {
-        users: rows.map((r) => ({
-          id: r.id,
-          email: r.email,
-          role: r.role,
+        users: rowsRes.rows.map((r) => ({
+          id:         r.id,
+          email:      r.email,
+          role:       r.role,
           entityType: r.entity_type,
-          entityId: r.entity_id,
+          entityId:   r.entity_id,
           entityName: r.entity_name,
-          isActive: r.is_active,
-          createdAt: r.created_at,
+          isActive:   r.is_active,
+          createdAt:  r.created_at,
         })),
+        pagination: { page, limit, total, totalPages },
       },
       message: "Users retrieved",
     });
@@ -56,39 +73,60 @@ export async function listUsers(_req: Request, res: Response): Promise<void> {
 }
 
 export async function listTripAdmins(req: Request, res: Response): Promise<void> {
-  try {
-    const callerEntityId = req.user!.entityId;
+  const callerEntityId = req.user!.entityId;
 
-    const { rows } = await pool.query<{
-      id: string;
-      email: string;
-      is_active: boolean;
-      can_cancel_without_approval: boolean;
-      created_at: Date;
-      trip_count: string;
-    }>(
-      `SELECT u.id, u.email, u.is_active, u.can_cancel_without_approval, u.created_at,
-              COUNT(t.id) AS trip_count
-       FROM users u
-       LEFT JOIN trips t ON t.created_by = u.id AND t.deleted_at IS NULL
-       WHERE u.role = 'trip_admin'
-         AND u.entity_id = $1
-         AND u.deleted_at IS NULL
-       GROUP BY u.id, u.email, u.is_active, u.can_cancel_without_approval, u.created_at
-       ORDER BY u.created_at DESC`,
-      [callerEntityId],
-    );
+  const rawPage  = parseInt((req.query.page  as string) ?? "1",  10);
+  const rawLimit = parseInt((req.query.limit as string) ?? "20", 10);
+  const page     = Number.isFinite(rawPage)  && rawPage  > 0 ? rawPage                   : 1;
+  const limit    = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100)   : 20;
+  const offset   = (page - 1) * limit;
+
+  try {
+    const [countRes, rowsRes] = await Promise.all([
+      pool.query<{ total: string }>(
+        `SELECT COUNT(*) AS total
+         FROM users
+         WHERE role = 'trip_admin'
+           AND entity_id = $1
+           AND deleted_at IS NULL`,
+        [callerEntityId]
+      ),
+      pool.query<{
+        id: string;
+        email: string;
+        is_active: boolean;
+        can_cancel_without_approval: boolean;
+        created_at: Date;
+        trip_count: string;
+      }>(
+        `SELECT u.id, u.email, u.is_active, u.can_cancel_without_approval, u.created_at,
+                COUNT(t.id) AS trip_count
+         FROM users u
+         LEFT JOIN trips t ON t.created_by = u.id AND t.deleted_at IS NULL
+         WHERE u.role = 'trip_admin'
+           AND u.entity_id = $1
+           AND u.deleted_at IS NULL
+         GROUP BY u.id, u.email, u.is_active, u.can_cancel_without_approval, u.created_at
+         ORDER BY u.created_at DESC
+         LIMIT $2 OFFSET $3`,
+        [callerEntityId, limit, offset],
+      ),
+    ]);
+
+    const total      = parseInt(countRes.rows[0]!.total, 10);
+    const totalPages = Math.ceil(total / limit) || 1;
 
     res.json({
       data: {
-        tripAdmins: rows.map((r) => ({
-          id: r.id,
-          email: r.email,
-          isActive: r.is_active,
+        tripAdmins: rowsRes.rows.map((r) => ({
+          id:                       r.id,
+          email:                    r.email,
+          isActive:                 r.is_active,
           canCancelWithoutApproval: r.can_cancel_without_approval,
-          createdAt: r.created_at,
-          tripCount: Number(r.trip_count),
+          createdAt:                r.created_at,
+          tripCount:                Number(r.trip_count),
         })),
+        pagination: { page, limit, total, totalPages },
       },
       message: "Trip admins retrieved",
     });

@@ -109,41 +109,64 @@ export async function createDriver(req: Request, res: Response): Promise<void> {
 export async function listDrivers(req: Request, res: Response): Promise<void> {
   const createdBy = req.user!.userId;
 
+  const rawPage  = parseInt((req.query.page  as string) ?? "1",  10);
+  const rawLimit = parseInt((req.query.limit as string) ?? "20", 10);
+  const page     = Number.isFinite(rawPage)  && rawPage  > 0 ? rawPage                   : 1;
+  const limit    = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100)   : 20;
+  const offset   = (page - 1) * limit;
+
   try {
-    const { rows } = await pool.query<{
-      id: string;
-      full_name: string;
-      license_number: string;
-      phone_number: string;
-      created_by: string;
-      is_active: boolean;
-      created_at: Date;
-      trip_count: string;
-    }>(
-      `SELECT d.id, d.full_name, d.license_number, d.phone_number,
-              d.created_by, d.is_active, d.created_at,
-              COUNT(t.id) AS trip_count
-       FROM   drivers d
-       LEFT   JOIN trips t ON t.driver_id = d.id
-       WHERE  d.created_by = $1
-         AND  d.is_active = true
-         AND  d.deleted_at IS NULL
-       GROUP  BY d.id
-       ORDER  BY d.full_name`,
-      [createdBy]
-    );
+    const [countRes, rowsRes] = await Promise.all([
+      pool.query<{ total: string }>(
+        `SELECT COUNT(*) AS total
+         FROM   drivers d
+         WHERE  d.created_by = $1
+           AND  d.is_active = true
+           AND  d.deleted_at IS NULL`,
+        [createdBy]
+      ),
+      pool.query<{
+        id: string;
+        full_name: string;
+        license_number: string;
+        phone_number: string;
+        created_by: string;
+        is_active: boolean;
+        created_at: Date;
+        trip_count: string;
+      }>(
+        `SELECT d.id, d.full_name, d.license_number, d.phone_number,
+                d.created_by, d.is_active, d.created_at,
+                COUNT(t.id) AS trip_count
+         FROM   drivers d
+         LEFT   JOIN trips t ON t.driver_id = d.id
+         WHERE  d.created_by = $1
+           AND  d.is_active = true
+           AND  d.deleted_at IS NULL
+         GROUP  BY d.id
+         ORDER  BY d.full_name
+         LIMIT  $2 OFFSET $3`,
+        [createdBy, limit, offset]
+      ),
+    ]);
+
+    const total      = parseInt(countRes.rows[0]!.total, 10);
+    const totalPages = Math.ceil(total / limit) || 1;
 
     res.json({
-      data: rows.map((d) => ({
-        id:            d.id,
-        fullName:      d.full_name,
-        licenseNumber: d.license_number,
-        phoneNumber:   d.phone_number,
-        createdBy:     d.created_by,
-        isActive:      d.is_active,
-        createdAt:     d.created_at,
-        tripCount:     Number(d.trip_count),
-      })),
+      data: {
+        drivers: rowsRes.rows.map((d) => ({
+          id:            d.id,
+          fullName:      d.full_name,
+          licenseNumber: d.license_number,
+          phoneNumber:   d.phone_number,
+          createdBy:     d.created_by,
+          isActive:      d.is_active,
+          createdAt:     d.created_at,
+          tripCount:     Number(d.trip_count),
+        })),
+        pagination: { page, limit, total, totalPages },
+      },
     });
   } catch (err) {
     console.error(err);

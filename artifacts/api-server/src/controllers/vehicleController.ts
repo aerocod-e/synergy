@@ -141,40 +141,63 @@ export async function searchVehicles(req: Request, res: Response): Promise<void>
 export async function listVehicles(req: Request, res: Response): Promise<void> {
   const ownerId = req.user!.userId;
 
+  const rawPage  = parseInt((req.query.page  as string) ?? "1",  10);
+  const rawLimit = parseInt((req.query.limit as string) ?? "20", 10);
+  const page     = Number.isFinite(rawPage)  && rawPage  > 0 ? rawPage                   : 1;
+  const limit    = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100)   : 20;
+  const offset   = (page - 1) * limit;
+
   try {
-    const { rows } = await pool.query<{
-      id: string;
-      registration_number: string;
-      is_active: boolean;
-      created_at: Date;
-      updated_at: Date;
-      trip_count: string;
-    }>(
-      `SELECT v.id,
-              v.registration_number,
-              v.is_active,
-              v.created_at,
-              v.updated_at,
-              COUNT(t.id) AS trip_count
-       FROM   vehicles v
-       LEFT   JOIN trips t ON t.vehicle_id = v.id AND t.deleted_at IS NULL
-       WHERE  v.created_by = $1
-         AND  v.is_active = true
-         AND  v.deleted_at IS NULL
-       GROUP  BY v.id
-       ORDER  BY v.created_at DESC`,
-      [ownerId]
-    );
+    const [countRes, rowsRes] = await Promise.all([
+      pool.query<{ total: string }>(
+        `SELECT COUNT(*) AS total
+         FROM   vehicles v
+         WHERE  v.created_by = $1
+           AND  v.is_active = true
+           AND  v.deleted_at IS NULL`,
+        [ownerId]
+      ),
+      pool.query<{
+        id: string;
+        registration_number: string;
+        is_active: boolean;
+        created_at: Date;
+        updated_at: Date;
+        trip_count: string;
+      }>(
+        `SELECT v.id,
+                v.registration_number,
+                v.is_active,
+                v.created_at,
+                v.updated_at,
+                COUNT(t.id) AS trip_count
+         FROM   vehicles v
+         LEFT   JOIN trips t ON t.vehicle_id = v.id AND t.deleted_at IS NULL
+         WHERE  v.created_by = $1
+           AND  v.is_active = true
+           AND  v.deleted_at IS NULL
+         GROUP  BY v.id
+         ORDER  BY v.created_at DESC
+         LIMIT  $2 OFFSET $3`,
+        [ownerId, limit, offset]
+      ),
+    ]);
+
+    const total      = parseInt(countRes.rows[0]!.total, 10);
+    const totalPages = Math.ceil(total / limit) || 1;
 
     res.json({
-      data: rows.map((v) => ({
-        id: v.id,
-        registrationNumber: v.registration_number,
-        isActive: v.is_active,
-        createdAt: v.created_at,
-        updatedAt: v.updated_at,
-        tripCount: parseInt(v.trip_count, 10),
-      })),
+      data: {
+        vehicles: rowsRes.rows.map((v) => ({
+          id:                 v.id,
+          registrationNumber: v.registration_number,
+          isActive:           v.is_active,
+          createdAt:          v.created_at,
+          updatedAt:          v.updated_at,
+          tripCount:          parseInt(v.trip_count, 10),
+        })),
+        pagination: { page, limit, total, totalPages },
+      },
     });
   } catch (err) {
     console.error(err);

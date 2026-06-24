@@ -1,0 +1,75 @@
+I need to add load-more pagination to all major lists that currently load everything at once. Follow all steps in order.
+Pagination pattern to use throughout:
+
+Mirror the exact pattern already implemented on the stakeholder ledger screen:
+
+PAGE_LIMIT = 20 constant
+page, hasMore, loadingMore state variables
+Initial fetch always resets to page 1
+loadMore function appends to existing list
+"Load more" button as ListFooterComponent (not onEndReached)
+Filter/search changes reset to page 1 and clear the list
+Backend returns { data: [...], pagination: { page, totalPages, total } }
+
+
+Step 1 -- Backend: add pagination to 5 endpoints
+For each of the following controllers, add page and limit query param support following the exact same pattern already used in listTrips:
+
+Read page = parseInt(req.query.page) || 1 and limit = Math.min(parseInt(req.query.limit) || 20, 100)
+Add LIMIT $n OFFSET $m to the SQL query
+Add a separate COUNT(*) query to get the total
+Return { data: [...], pagination: { page, limit, total, totalPages: Math.ceil(total/limit) } }
+
+Files to update:
+
+vehicleController.ts → listVehicles
+driverController.ts → listDrivers
+cancellationController.ts → listCancellationRequests
+userController.ts → listUsers
+userController.ts → listTripAdmins
+
+Step 2 -- Frontend: trips list pagination (Trip Admin)
+In (tripadmin)/index.tsx, the trips list already calls getTrips() with no params, and the backend already supports pagination but the frontend ignores it.
+Update the fetch to pass page and limit. Implement the full load-more pattern:
+
+Initial fetch: getTrips({ page: '1', limit: '20', ...statusFilter })
+Store hasMore from pagination.page < pagination.totalPages
+Add loadMore function that fetches next page and appends to existing trips
+Add "Load more" button as ListFooterComponent
+When the status filter pill changes, reset to page 1 and clear the list
+When the search filter changes, reset to page 1 and clear the list
+
+Update getTrips helper in services/api.ts to accept and pass through pagination params.
+Step 3 -- Frontend: trips list pagination (Super Admin)
+Same pattern as Step 2 for (superadmin)/trips.tsx. The Super Admin trips list also calls getTrips() with no params. Apply the same load-more pattern. When status filter, search filter, or date range filter changes, reset to page 1 and clear the list.
+Step 4 -- Frontend: vehicles list pagination
+In (tripadmin)/vehicles.tsx, update listVehicles() call to pass page and limit. Implement the full load-more pattern. Refresh (pull-to-refresh and after successful vehicle creation or edit) resets to page 1.
+Update listVehicles helper in services/api.ts to accept and pass through pagination params.
+Step 5 -- Frontend: drivers list pagination
+Same pattern as Step 4 for (tripadmin)/drivers.tsx. Update listDrivers() to accept pagination params.
+Step 6 -- Frontend: cancellation requests pagination
+In (stateadmin)/index.tsx, update listCancellationRequests() to pass page and limit. Implement load-more pattern. After approve or reject action, refresh from page 1.
+Step 7 -- Frontend: users list pagination (Super Admin)
+In (superadmin)/users.tsx, update getUsers() to pass page and limit. Implement load-more pattern. After creating a new user, refresh from page 1.
+Step 8 -- Frontend: trip admins list pagination (State Admin)
+In (stateadmin)/trip-admins.tsx, update listTripAdmins() to pass page and limit. Implement load-more pattern. After creating, deactivating, or toggling a Trip Admin, do not reset pagination -- update the existing item in place (optimistic update already handles this). Only a manual pull-to-refresh resets to page 1.
+Step 9 -- TypeScript check
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.
+
+PART 2 -- Testing
+Backend Tests:
+Test 1 -- GET /api/vehicles?page=1&limit=2 returns exactly 2 vehicles with a pagination object. Confirm totalPages is correct.
+Test 2 -- GET /api/drivers?page=1&limit=1 returns exactly 1 driver with pagination.
+Test 3 -- GET /api/cancellation-requests?page=1&limit=2 returns paginated results with pagination object.
+Test 4 -- GET /api/users?page=1&limit=5 as Super Admin returns exactly 5 users with pagination.
+Test 5 -- GET /api/users/trip-admins?page=1&limit=1 as State Admin returns exactly 1 Trip Admin with pagination.
+Frontend App Tests (390x844px, tap only, URL https://2f2a3156-e178-45fc-95e3-f3726442355f-00-2f9hl4ag0p8j2.expo.kirk.replit.dev):
+Test 6 -- Login as lagos.ta1@synergy.com. On Trips tab, confirm trips load correctly. If this Trip Admin has more than 20 trips, confirm "Load more" button appears. If not, confirm all trips show without a "Load more" button.
+Test 7 -- On Vehicles tab, confirm vehicles load and a "Load more" button appears only if there are more than 20 vehicles.
+Test 8 -- On Drivers tab, same check as Test 7.
+Test 9 -- Login as Super Admin. On Trips tab, confirm trips load with filter pills and search still working correctly after the pagination change.
+Test 10 -- On Users tab, confirm users load correctly with "Load more" appearing only if there are more than 20 users.
+Test 11 -- Login as State Admin. On Trip Admins tab, confirm the list loads correctly. Toggling a cancellation rights switch still works and does not reset the list.
+Test 12 -- Console is clean throughout.

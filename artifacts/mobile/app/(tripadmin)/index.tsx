@@ -84,10 +84,14 @@ export default function TripAdminTrips() {
   const { handleLogout } = useLogout();
 
   // trips list
+  const PAGE_LIMIT = 20;
   const [trips, setTrips] = useState<TripItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // form modal
   const [modalVisible, setModalVisible] = useState(false);
@@ -132,9 +136,12 @@ export default function TripAdminTrips() {
   const fetchTrips = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
+    setPage(1);
     try {
-      const data = await getTrips();
+      const data = await getTrips({ page: '1', limit: String(PAGE_LIMIT) });
       setTrips((data as any).trips as TripItem[]);
+      const pg = (data as any).pagination ?? {};
+      setHasMore((pg.page ?? 1) < (pg.totalPages ?? 1));
       setFetchError(null);
     } catch {
       setFetchError("Couldn't load your trips");
@@ -143,6 +150,23 @@ export default function TripAdminTrips() {
       setRefreshing(false);
     }
   }, []);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = page + 1;
+      const data = await getTrips({ page: String(nextPage), limit: String(PAGE_LIMIT) });
+      setTrips((prev) => [...prev, ...((data as any).trips as TripItem[])]);
+      const pg = (data as any).pagination ?? {};
+      setHasMore((pg.page ?? nextPage) < (pg.totalPages ?? nextPage));
+      setPage(nextPage);
+    } catch {
+      // silent fail
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, hasMore, page]);
 
   useFocusEffect(
     useCallback(() => {
@@ -421,7 +445,24 @@ export default function TripAdminTrips() {
             <Text style={styles.emptySubtitle}>Tap + to create your first trip</Text>
           </View>
         }
-        ListFooterComponent={() => <View style={{ height: theme.PILL_NAV_BOTTOM_PADDING }} />}
+        ListFooterComponent={() => (
+          <View>
+            {hasMore && (
+              <TouchableOpacity
+                style={styles.loadMoreBtn}
+                onPress={loadMore}
+                disabled={loadingMore}
+                activeOpacity={0.7}
+              >
+                {loadingMore
+                  ? <ActivityIndicator size="small" color={theme.colors.primary} />
+                  : <Text style={styles.loadMoreText}>Load more</Text>
+                }
+              </TouchableOpacity>
+            )}
+            <View style={{ height: theme.PILL_NAV_BOTTOM_PADDING }} />
+          </View>
+        )}
       />
 
       {Platform.OS !== 'web' && (
@@ -1231,5 +1272,20 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: theme.colors.white,
+  },
+  loadMoreBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 12,
+    backgroundColor: theme.colors.white,
+    ...theme.shadows.card,
+  },
+  loadMoreText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.primary,
   },
 });
