@@ -34,6 +34,11 @@ interface StakeholderRate {
   amount: number;
 }
 
+interface UnassignedStakeholder {
+  id: string;
+  name: string;
+}
+
 interface PricingChart {
   id: string;
   loading_fee: number;
@@ -41,7 +46,7 @@ interface PricingChart {
   is_active: boolean;
   created_at: string;
   stakeholder_rates: StakeholderRate[];
-  unassignedStakeholders?: Array<{ id: string; name: string }>;
+  unassignedStakeholders?: UnassignedStakeholder[];
 }
 
 interface StateRateItem {
@@ -160,6 +165,12 @@ export default function ConfigScreen() {
   const [pendingRateError, setPendingRateError] = useState<string | null>(null);
   const [pendingRateSaving, setPendingRateSaving] = useState(false);
   const [stateSearch, setStateSearch] = useState('');
+
+  const [setRateModalVisible, setSetRateModalVisible] = useState(false);
+  const [setRateStakeholder, setSetRateStakeholder] = useState<UnassignedStakeholder | null>(null);
+  const [setRateAmount, setSetRateAmount] = useState('');
+  const [setRateSubmitting, setSetRateSubmitting] = useState(false);
+  const [setRateError, setSetRateError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setPageError(null);
@@ -280,6 +291,35 @@ export default function ConfigScreen() {
     setEditLoadingRate((s.loadingRate / 100).toFixed(2));
     setEditUnloadingRate((s.unloadingRate / 100).toFixed(2));
     setStateRateError(null);
+  };
+
+  const openSetRateModal = (sh: UnassignedStakeholder) => {
+    setSetRateStakeholder(sh);
+    setSetRateAmount('');
+    setSetRateError(null);
+    setSetRateModalVisible(true);
+  };
+
+  const handleSetRate = async () => {
+    if (!setRateStakeholder || !activeChart) return;
+    if (!isValidNaira(setRateAmount)) {
+      setSetRateError('Please enter a valid amount greater than zero.');
+      return;
+    }
+    setSetRateSubmitting(true);
+    setSetRateError(null);
+    try {
+      await addStakeholderRate(activeChart.id, {
+        stakeholderId: setRateStakeholder.id,
+        amount: nairaToKobo(setRateAmount),
+      });
+      setSetRateModalVisible(false);
+      await loadData();
+    } catch (e: any) {
+      setSetRateError(e?.message ?? 'Failed to set rate.');
+    } finally {
+      setSetRateSubmitting(false);
+    }
   };
 
   const handleSaveStateRate = async (stateId: string) => {
@@ -459,23 +499,24 @@ export default function ConfigScreen() {
           </View>
         )}
 
-        {/* ── Stakeholders pending a rate on the active chart ── */}
+        {/* ── Stakeholders Pending Rate ── */}
         {activeChart && (activeChart.unassignedStakeholders ?? []).length > 0 && (
           <>
-            <Text style={[styles.sectionLabel, styles.sectionLabelSpaced]}>
-              Stakeholders Pending Rate
-            </Text>
+            <Text style={[styles.sectionLabel, styles.sectionLabelSpaced]}>Stakeholders Pending Rate</Text>
             <View style={styles.card}>
-              {(activeChart.unassignedStakeholders ?? []).map((sh) => (
-                <View key={sh.id} style={styles.pendingRateRow}>
-                  <Text style={styles.pendingRateName} numberOfLines={1}>{sh.name}</Text>
-                  <TouchableOpacity
-                    style={styles.setRateBtn}
-                    onPress={() => openPendingRateModal(sh)}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.setRateBtnText}>Set Rate</Text>
-                  </TouchableOpacity>
+              {(activeChart.unassignedStakeholders ?? []).map((sh, idx) => (
+                <View key={sh.id}>
+                  {idx > 0 && <View style={styles.divider} />}
+                  <View style={styles.pendingRateRow}>
+                    <Text style={styles.pendingRateName} numberOfLines={1}>{sh.name}</Text>
+                    <TouchableOpacity
+                      style={styles.setRateBtn}
+                      onPress={() => openSetRateModal(sh)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.setRateBtnText}>Set Rate</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               ))}
             </View>
@@ -551,60 +592,56 @@ export default function ConfigScreen() {
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+    </KeyboardAvoidingView>
 
-      {/* ── Set Stakeholder Rate Modal ── */}
+      {/* Set Rate Modal */}
       <Modal
-        visible={pendingRateModalVisible}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setPendingRateModalVisible(false)}
+        visible={setRateModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setSetRateModalVisible(false)}
       >
         <KeyboardAvoidingView
-          style={{ flex: 1 }}
+          style={styles.modalRoot}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          <View style={styles.pendingRateOverlay}>
-            <View style={styles.pendingRateCard}>
-              <Text style={styles.pendingRateTitle}>Set Stakeholder Rate</Text>
-              <Text style={styles.pendingRateSubtitle} numberOfLines={1}>
-                {selectedUnassignedSh?.name ?? ''}
-              </Text>
-              <Text style={styles.fieldLabel}>Rate (₦)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. 50000"
-                placeholderTextColor={theme.colors.placeholder}
-                keyboardType="decimal-pad"
-                value={pendingRateInput}
-                onChangeText={setPendingRateInput}
-              />
-              {pendingRateError ? (
-                <Text style={styles.errorText}>{pendingRateError}</Text>
-              ) : null}
-              <TouchableOpacity
-                style={[styles.submitButton, pendingRateSaving && styles.buttonDisabled]}
-                onPress={handleSetStakeholderRate}
-                disabled={pendingRateSaving}
-                activeOpacity={0.85}
-              >
-                {pendingRateSaving ? (
-                  <ActivityIndicator color={theme.colors.white} />
-                ) : (
-                  <Text style={styles.submitButtonText}>Confirm Rate</Text>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => setPendingRateModalVisible(false)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Set Rate</Text>
+            <TouchableOpacity onPress={() => setSetRateModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="close" size={24} color={theme.colors.grey2} />
+            </TouchableOpacity>
           </View>
+          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="handled">
+            {setRateStakeholder && (
+              <Text style={styles.modalSubtitle}>{setRateStakeholder.name}</Text>
+            )}
+            <Text style={styles.fieldLabel}>Amount (₦)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. 500.00"
+              placeholderTextColor={theme.colors.placeholder}
+              keyboardType="decimal-pad"
+              value={setRateAmount}
+              onChangeText={setSetRateAmount}
+            />
+            {setRateError && (
+              <Text style={styles.errorText}>{setRateError}</Text>
+            )}
+            <TouchableOpacity
+              style={[styles.submitButton, setRateSubmitting && styles.buttonDisabled]}
+              onPress={handleSetRate}
+              disabled={setRateSubmitting}
+              activeOpacity={0.85}
+            >
+              {setRateSubmitting ? (
+                <ActivityIndicator color={theme.colors.white} />
+              ) : (
+                <Text style={styles.submitButtonText}>Confirm Rate</Text>
+              )}
+            </TouchableOpacity>
+          </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
-    </KeyboardAvoidingView>
     </View>
   );
 }
@@ -903,17 +940,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: theme.colors.white,
   },
+  // ── Pending rate section ──────────────────────────────────────────────────
   pendingRateRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.separator,
+    paddingVertical: 8,
   },
   pendingRateName: {
     flex: 1,
     fontSize: 14,
     color: theme.colors.black,
+    fontWeight: '500',
     marginRight: 12,
   },
   setRateBtn: {
@@ -923,44 +960,42 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   setRateBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
     color: theme.colors.white,
+    fontSize: 13,
+    fontWeight: '700',
   },
-  pendingRateOverlay: {
+
+  // ── Set Rate Modal ────────────────────────────────────────────────────────
+  modalRoot: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'center',
+    backgroundColor: theme.colors.background,
+  },
+  modalHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  pendingRateCard: {
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 20 : 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.separator,
     backgroundColor: theme.colors.white,
-    borderRadius: 16,
-    padding: 24,
-    width: '100%',
   },
-  pendingRateTitle: {
-    fontSize: 16,
+  modalTitle: {
+    fontSize: 17,
     fontWeight: '700',
     color: theme.colors.black,
-    marginBottom: 4,
   },
-  pendingRateSubtitle: {
-    fontSize: 13,
-    color: theme.colors.grey2,
-    marginBottom: 16,
-  },
-  cancelBtn: {
-    backgroundColor: theme.colors.grey4,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center' as const,
-    marginTop: 10,
-  },
-  cancelBtnText: {
+  modalSubtitle: {
     fontSize: 15,
-    fontWeight: '600' as const,
+    fontWeight: '600',
     color: theme.colors.grey2,
+    marginBottom: 20,
+  },
+  modalScroll: {
+    flex: 1,
+  },
+  modalScrollContent: {
+    padding: 20,
   },
 });

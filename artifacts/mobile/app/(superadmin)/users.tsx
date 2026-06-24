@@ -15,8 +15,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useState } from 'react';
-import { getUsers, createUser, getStates, getStakeholders, resetUserPassword } from '@/services/api';
-import type { User, State, Stakeholder } from '@/types/index';
+import { getUsers, createUser, getStates, resetUserPassword } from '@/services/api';
+import type { User, State } from '@/types/index';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
 
@@ -78,7 +78,6 @@ export default function UsersScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
 
   const [states, setStates] = useState<State[]>([]);
-  const [stakeholders, setStakeholders] = useState<Stakeholder[]>([]);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [formFirstName, setFormFirstName] = useState('');
@@ -131,7 +130,6 @@ export default function UsersScreen() {
     Promise.all([
       fetchUsers(),
       getStates().then((d) => { if (active) setStates(d.states ?? []); }).catch(() => {}),
-      getStakeholders().then((d) => { if (active) setStakeholders((d.stakeholders ?? []).filter((s: Stakeholder) => s.isActive)); }).catch(() => {}),
     ]).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [fetchUsers]);
@@ -246,8 +244,6 @@ export default function UsersScreen() {
   const entityItems: { id: string; label: string }[] =
     formRole === 'state_admin'
       ? states.map((s) => ({ id: s.id, label: s.name }))
-      : formRole === 'stakeholder'
-      ? stakeholders.map((s) => ({ id: s.id, label: s.name }))
       : [];
 
   if (loading) {

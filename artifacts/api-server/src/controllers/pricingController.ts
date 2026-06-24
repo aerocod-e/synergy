@@ -167,7 +167,7 @@ export async function getActivePricingChart(_req: Request, res: Response): Promi
   );
 
   if (chartRes.rows.length === 0) {
-    res.status(404).json({ error: "NOT_FOUND", message: "No active pricing chart" });
+    res.json({ data: { chart: null, unassignedStakeholders: [] } });
     return;
   }
 
@@ -186,10 +186,11 @@ export async function getActivePricingChart(_req: Request, res: Response): Promi
   const unassignedRes = await pool.query<{ id: string; name: string }>(
     `SELECT s.id, s.name
      FROM stakeholders s
-     WHERE NOT EXISTS (
-       SELECT 1 FROM pricing_chart_stakeholder_rates r
-       WHERE r.pricing_chart_id = $1 AND r.stakeholder_id = s.id
-     )
+     WHERE s.is_active = true
+       AND NOT EXISTS (
+         SELECT 1 FROM pricing_chart_stakeholder_rates r
+         WHERE r.pricing_chart_id = $1 AND r.stakeholder_id = s.id
+       )
      ORDER BY s.name ASC`,
     [chart.id],
   );

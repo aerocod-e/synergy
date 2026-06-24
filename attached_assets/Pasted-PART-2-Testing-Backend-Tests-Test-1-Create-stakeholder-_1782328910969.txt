@@ -1,0 +1,15 @@
+PART 2 -- Testing
+Backend Tests:
+Test 1 -- Create stakeholder user with new organization: POST /api/users with role: 'stakeholder', firstName: 'John', lastName: 'Doe', email: 'john@newtransport.com', password: 'Test@1234', stakeholderName: 'New Transport Union'. Confirm 201. Confirm new stakeholder entity created in stakeholders table. Confirm wallet created for it. Confirm user linked to it.
+Test 2 -- Create stakeholder user with existing organization: POST /api/users with stakeholderName: 'Stakeholder Alpha'. Confirm 201. Confirm no duplicate stakeholder entity created -- user linked to existing Alpha entity.
+Test 3 -- Missing stakeholderName rejected: POST /api/users with role: 'stakeholder' but no stakeholderName. Confirm 400.
+Test 4 -- New stakeholder in unassignedStakeholders: After Test 1, call GET /api/pricing/active. Confirm "New Transport Union" appears in unassignedStakeholders and NOT in the stakeholder rates list.
+Test 5 -- Set rate for new stakeholder: POST /api/pricing/:chartId/stakeholders with { stakeholderId: newId, amount: 50000 }. Confirm 201. Call GET /api/pricing/active -- confirm "New Transport Union" now in rates list and removed from unassignedStakeholders.
+Test 6 -- Zero amount rejected: POST /api/pricing/:chartId/stakeholders with amount: 0. Confirm 400.
+Test 7 -- Duplicate rate rejected: Call the same endpoint again for the same stakeholder. Confirm 409.
+Frontend App Tests (390x844px, tap only):
+Test 8 -- Login as Super Admin. Users tab. Create User. Select Stakeholder role. Confirm a text input field appears labeled "Stakeholder / Organization Name" -- no Alpha/Beta/Gamma dropdown. Type "Test Union" and submit. Confirm new user appears in list.
+Test 9 -- Config tab. Confirm "Test Union" appears under "Stakeholders Pending Rate". Tap "Set Rate". Enter a rate. Submit. Confirm it moves to the configured rates section.
+Test 10 -- Console is clean throughout.
+
+Report every file changed, every test result, and flag anything needing physical iPhone re-verification.

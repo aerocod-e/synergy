@@ -352,46 +352,89 @@ export async function createUser(req: Request, res: Response): Promise<void> {
       }
     }
 
-    // ── Resolve stakeholder entity (lookup or create) ──────────────────────
-    let resolvedEntityType: string | null = (entity_type as string | undefined) ?? null;
-    let resolvedEntityId: string | null = (entity_id as string | undefined) ?? null;
+    // ── Hash password before entering any transaction ──────────────────────
+    const passwordHash = await bcrypt.hash(password, 10);
 
+    // ── Stakeholder path: fully atomic (resolve/create entity + user) ───────
     if (typedRole === "stakeholder") {
       const name = (stakeholderName as string).trim();
-      const existingSh = await pool.query<{ id: string }>(
-        `SELECT id FROM stakeholders WHERE LOWER(name) = LOWER($1)`,
-        [name],
-      );
-      if (existingSh.rows.length > 0) {
-        resolvedEntityId = existingSh.rows[0].id;
-      } else {
-        const client = await pool.connect();
-        try {
-          await client.query("BEGIN");
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+
+        // Case-insensitive lookup inside the transaction to avoid races
+        const existingSh = await client.query<{ id: string }>(
+          `SELECT id FROM stakeholders WHERE LOWER(name) = LOWER($1)`,
+          [name],
+        );
+        let resolvedShId: string;
+        if (existingSh.rows.length > 0) {
+          resolvedShId = existingSh.rows[0]!.id;
+        } else {
           const newSh = await client.query<{ id: string }>(
             `INSERT INTO stakeholders (name) VALUES ($1) RETURNING id`,
             [name],
           );
-          const newShId = newSh.rows[0].id;
+          resolvedShId = newSh.rows[0]!.id;
           await client.query(
             `INSERT INTO wallets (owner_type, owner_id, total_collected)
              VALUES ('stakeholder', $1, 0) ON CONFLICT DO NOTHING`,
-            [newShId],
+            [resolvedShId],
           );
-          await client.query("COMMIT");
-          resolvedEntityId = newShId;
-        } catch (err) {
-          await client.query("ROLLBACK");
-          throw err;
-        } finally {
-          client.release();
         }
+
+        const { rows } = await client.query<{
+          id: string; email: string; first_name: string; last_name: string;
+          role: string; entity_type: string | null; entity_id: string | null;
+          is_active: boolean; created_at: Date;
+        }>(
+          `INSERT INTO users (email, password_hash, role, entity_type, entity_id, is_active, first_name, last_name)
+           VALUES ($1, $2, $3, 'stakeholder', $4, true, $5, $6)
+           RETURNING id, email, first_name, last_name, role, entity_type, entity_id, is_active, created_at`,
+          [
+            (email as string).toLowerCase().trim(),
+            passwordHash,
+            typedRole,
+            resolvedShId,
+            (firstName as string).trim(),
+            (lastName as string).trim(),
+          ],
+        );
+
+        await client.query("COMMIT");
+        const user = rows[0]!;
+        res.status(201).json({
+          data: {
+            user: {
+              id: user.id,
+              email: user.email,
+              firstName: user.first_name,
+              lastName: user.last_name,
+              role: user.role,
+              entityType: user.entity_type,
+              entityId: user.entity_id,
+              isActive: user.is_active,
+              createdAt: user.created_at,
+            },
+          },
+          message: "User created",
+        });
+      } catch (err: any) {
+        await client.query("ROLLBACK");
+        if (err?.code === "23505") {
+          res.status(409).json({ error: "CONFLICT", message: "A user with this email already exists" });
+          return;
+        }
+        throw err;
+      } finally {
+        client.release();
       }
-      resolvedEntityType = "stakeholder";
+      return;
     }
 
-    // ── Hash + insert ──────────────────────────────────────────────────────
-    const passwordHash = await bcrypt.hash(password, 10);
+    // ── Non-stakeholder path ───────────────────────────────────────────────
+    const resolvedEntityType: string | null = (entity_type as string | undefined) ?? null;
+    const resolvedEntityId: string | null = (entity_id as string | undefined) ?? null;
 
     const { rows } = await pool.query<{
       id: string;
@@ -408,7 +451,7 @@ export async function createUser(req: Request, res: Response): Promise<void> {
        VALUES ($1, $2, $3, $4, $5, true, $6, $7)
        RETURNING id, email, first_name, last_name, role, entity_type, entity_id, is_active, created_at`,
       [
-        email.toLowerCase().trim(),
+        (email as string).toLowerCase().trim(),
         passwordHash,
         typedRole,
         resolvedEntityType,
