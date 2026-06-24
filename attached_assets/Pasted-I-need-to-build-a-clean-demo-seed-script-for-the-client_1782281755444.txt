@@ -1,0 +1,108 @@
+I need to build a clean demo seed script for the client demo. This replaces the current messy state with a coherent, realistic scenario. Follow all steps in order.
+Step 1 -- Soft-delete all test and regression accounts
+Before creating any new data, soft-delete all users that were created during testing and are not part of the clean demo scenario. Set deleted_at = NOW() and is_active = false for every user whose email matches any of these patterns (do NOT touch the five core seed state admins or the super admin or the three stakeholder users):
+Soft-delete these specific accounts:
+
+fab.test.user@synergy.com
+test.regression.stateadmin@synergy.com
+test.stateadmin.new@synergy.com
+test.regression.stakeholder@synergy.com
+test.lagos.tripadmin@synergy.com
+ta.alpha@synergy.com
+ta.beta@synergy.com
+c4.ta.regression@synergy.com
+c4.ta.v2@synergy.com
+regression.ta.test@synergy.com
+test.live.create@synergy.com
+test.tripadmin2@synergy.com
+test.ta.new.1782030688294@synergy.com
+kano.tripadmin.test@synergy.com
+
+Also soft-delete all vehicles and drivers that were created by any of the above users (set deleted_at = NOW(), is_active = false where created_by matches any of the above user IDs).
+Do NOT soft-delete any trips -- trips persist even when their creator is deactivated, and they are part of the historical record.
+Step 2 -- Update the seed script
+Update artifacts/api-server/src/db/seed.ts to create the full demo scenario. The script must remain idempotent (use ON CONFLICT ... DO UPDATE or DO NOTHING throughout). Add the following sections to the existing seed script after the existing state admin creation block:
+Pricing chart:
+
+Create one pricing chart with:
+
+Loading fee: 500000 kobo (₦5,000)
+Unloading fee: 300000 kobo (₦3,000)
+Stakeholder Alpha rate: 100000 kobo (₦1,000)
+Stakeholder Beta rate: 75000 kobo (₦750)
+Stakeholder Gamma rate: 50000 kobo (₦500)
+Set as active (deactivate any other active charts first)
+Created by the super admin
+
+Trip Admin accounts:
+
+Create these six Trip Admin accounts (all with password Demo@1234, bcrypt hashed):
+
+lagos.ta1@synergy.com -- linked to Lagos state, can_cancel_without_approval = true
+lagos.ta2@synergy.com -- linked to Lagos state, can_cancel_without_approval = false
+rivers.ta1@synergy.com -- linked to Rivers state
+kano.ta1@synergy.com -- linked to Kano state
+fct.ta1@synergy.com -- linked to FCT Abuja state
+ogun.ta1@synergy.com -- linked to Ogun state
+
+Use ON CONFLICT (email) DO UPDATE SET is_active = true, deleted_at = NULL so the script reactivates them if they were previously soft-deleted.
+Vehicles:
+
+Create these vehicles (use ON CONFLICT (registration_number) DO NOTHING):
+
+LAG-001-AA, LAG-002-BB, LAG-003-CC -- created by lagos.ta1
+LAG-004-DD, LAG-005-EE -- created by lagos.ta2
+KAN-001-AA, KAN-002-BB -- created by kano.ta1
+RIV-001-AA -- created by rivers.ta1
+
+Drivers:
+
+Create these drivers (use ON CONFLICT (license_number) DO NOTHING):
+
+Full Name: "Emeka Okafor", License: "LG-2021-001", Phone: "08012345671" -- created by lagos.ta1
+Full Name: "Chidi Nwosu", License: "LG-2021-002", Phone: "08012345672" -- created by lagos.ta1
+Full Name: "Bola Adeyemi", License: "LG-2022-001", Phone: "08012345673" -- created by lagos.ta2
+Full Name: "Musa Ibrahim", License: "KN-2021-001", Phone: "08012345674" -- created by kano.ta1
+Full Name: "Tunde Fashola", License: "RV-2021-001", Phone: "08012345675" -- created by rivers.ta1
+
+Trips:
+
+Create 9 demo trips. All trips use the active pricing chart rates for fees. For each trip, insert the trip row, then insert trip_fees rows (loading, unloading, and all three stakeholders with enabled = true), then insert wallet_ledger credit entries and update wallets.total_collected. All inside a transaction per trip.
+Use ON CONFLICT (trip_code) DO NOTHING on the trips table to make it idempotent.
+Generate trip codes manually starting from DEMO-2026-000001 through DEMO-2026-000009 (use a separate prefix so they don't conflict with the sequence-generated codes). Actually, use the real sequence -- fetch nextval('trip_code_seq') for each trip so codes are genuinely unique and auto-formatted as SYN-2026-NNNNNN.
+Trips to create:
+
+Lagos: LAG-001-AA, Emeka Okafor, Lagos→Kano, status completed, all stakeholders enabled. Created by lagos.ta1.
+Lagos: LAG-002-BB, Chidi Nwosu, Lagos→Rivers, status completed, all stakeholders enabled. Created by lagos.ta1.
+Lagos: LAG-003-CC, Emeka Okafor, Lagos→Abuja, status completed, all stakeholders enabled. Created by lagos.ta1.
+Lagos: LAG-004-DD, Bola Adeyemi, Lagos→Kano, status in_transit, all stakeholders enabled. Created by lagos.ta2.
+Lagos: LAG-005-EE, Bola Adeyemi, Lagos→Rivers, status in_transit, all stakeholders enabled. Created by lagos.ta2.
+Kano: KAN-001-AA, Musa Ibrahim, Kano→Lagos, status created, all stakeholders enabled. Created by kano.ta1.
+Kano: KAN-002-BB, Musa Ibrahim, Kano→Abuja, status created, all stakeholders enabled. Created by kano.ta1.
+Lagos: LAG-001-AA, Emeka Okafor, Lagos→Ogun, status cancelled. Created by lagos.ta1. Include wallet reversals for all fees (insert reversal ledger entries and decrement wallet totals). Set deleted_at = NOW().
+Lagos: LAG-004-DD, Bola Adeyemi, Lagos→Rivers, status cancellation_pending. Created by lagos.ta2. Insert a cancellation_requests row with status pending and reason "Cargo owner requested cancellation due to route change."
+
+For all trips, also insert a trip_events row for event_type = 'created'. For completed trips, also insert started and completed events. For the cancelled trip, insert cancelled event. For the cancellation_pending trip, insert cancellation_requested event.
+Use Lagos as loading state ID and look up state IDs by name/code from the states table -- do not hardcode UUIDs.
+Step 3 -- Run the seed script
+Run pnpm --filter @workspace/api-server run seed and confirm it completes with no errors. Then run it a second time to confirm idempotency (no duplicate data, no errors on second run).
+Step 4 -- Verify the demo state
+After seeding, run these queries and report results:
+
+Active users by role
+Total vehicles (active)
+Total drivers (active)
+Total trips by status
+Active pricing chart: loading fee, unloading fee, stakeholder rates
+Wallet totals for Stakeholder Alpha, Beta, Gamma (should reflect credits from trips minus any reversals from the cancelled trip)
+
+
+PART 2 -- Testing
+After the seed runs successfully, perform the following quick smoke tests using live App Testing in a browser session, navigating only by tapping UI elements:
+Test 1 -- Login as superadmin@synergy.com / Admin@1234. Confirm the dashboard shows clean, realistic data (no test account noise in user counts).
+Test 2 -- Login as lagos.admin@synergy.com / Admin@1234. Confirm the Trip Admins tab shows only lagos.ta1 and lagos.ta2 (no test accounts).
+Test 3 -- Login as lagos.ta1@synergy.com / Demo@1234. Confirm the Trips tab shows the Lagos trips with correct statuses.
+Test 4 -- Login as alpha.admin@synergy.com / Admin@1234. Confirm the stakeholder home screen shows a non-zero wallet balance reflecting the demo trips.
+Test 5 -- Open the public lookup without logging in. Search for a trip by vehicle number LAG-001-AA. Confirm results appear.
+
+Report every step with exact results, the verification query outputs from Step 4, and all test results.
