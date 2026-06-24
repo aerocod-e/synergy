@@ -150,6 +150,9 @@ export const createUser = (body: unknown) =>
 // ── States (Super Admin) ─────────────────────────────────────────────────────
 export const getStates = () => apiRequest('/api/states');
 
+export const updateStateRates = (id: string, body: { loading_rate: number; unloading_rate: number }) =>
+  apiRequest(`/api/states/${id}/rates`, { method: 'PATCH', body: JSON.stringify(body) });
+
 // ── Stakeholders (Super Admin) ───────────────────────────────────────────────
 export const getStakeholders = () => apiRequest('/api/stakeholders');
 

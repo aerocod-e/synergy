@@ -1,0 +1,38 @@
+Three quick UI fixes. Frontend only, no backend changes. Follow all steps in order.
+Critical testing setup:
+
+App URL: https://2f2a3156-e178-45fc-95e3-f3726442355f-00-2f9hl4ag0p8j2.expo.kirk.replit.dev
+Viewport: 390x844px for all browser tests
+
+Fix 1 -- Invisible password fields on profile screen
+Open artifacts/mobile/app/(profile)/index.tsx. The three password TextInput fields (Current Password, New Password, Confirm New Password) are currently invisible against the #f5f7fa background because they have no border or background color.
+Wrap all three fields and the Save Password button in a white card container:
+
+backgroundColor: '#ffffff'
+borderRadius: 12
+padding: 16
+marginBottom: 16
+Standard card shadow consistent with the rest of the app (use theme.shadows.card if it exists)
+
+Each individual TextInput inside the card should have:
+
+backgroundColor: theme.colors.background (#f5f7fa) or a very light gray to distinguish it from the white card
+borderRadius: 8
+padding: 14
+marginBottom: 12
+No border needed since the background contrast is sufficient
+
+Fix 2 -- Config page missing bottom padding
+Open artifacts/mobile/app/(superadmin)/config.tsx. The Config screen's ScrollView or main container is missing a bottom spacer to clear the pill nav. Add paddingBottom: theme.PILL_NAV_BOTTOM_PADDING to the ScrollView's contentContainerStyle, or add a View with height: theme.PILL_NAV_BOTTOM_PADDING as the last element inside the scroll content. Use the same constant used on all other screens.
+Fix 3 -- Confirm status bar fix landed
+Check whether app.json now has "statusBarStyle": "dark" under the iOS config and "androidStatusBar" at the top level. Also check whether <StatusBar style="dark" /> from expo-status-bar is present in app/_layout.tsx. Report what you find -- if either is missing, add it now.
+
+TypeScript check:
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Must return zero errors.
+
+PART 2 -- Testing (live browser, 390x844px, tap only)
+Test 1 -- Login as any role. Navigate to the profile screen by tapping the avatar. Confirm the three password fields are now clearly visible with a white card background behind them. Confirm they are tappable and accept input.
+Test 2 -- Login as Super Admin. Navigate to the Config tab. Scroll to the very bottom. Confirm the last element is fully visible and not obscured by the pill nav.
+Test 3 -- Confirm app.json has the status bar configuration. Report the exact values found.
+Test 4 -- Console is clean throughout.

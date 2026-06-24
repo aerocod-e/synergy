@@ -275,7 +275,23 @@ async function migrate(): Promise<void> {
     `);
     console.log('✓ users: first_name, last_name columns added (if not exists)');
 
-    console.log('\n✅ Migration complete: 13 tables, trip_code column + sequence + name columns.');
+    // ── per-state loading / unloading rates ──────────────────────────────
+    await client.query(`
+      ALTER TABLE states
+        ADD COLUMN IF NOT EXISTS loading_rate   INTEGER NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS unloading_rate INTEGER NOT NULL DEFAULT 0
+    `);
+    console.log('✓ states: loading_rate, unloading_rate columns added (if not exists)');
+
+    // Make legacy pricing_chart fee columns optional (deprecated in favour of per-state rates)
+    await client.query(`
+      ALTER TABLE pricing_charts
+        ALTER COLUMN loading_fee  SET DEFAULT 0,
+        ALTER COLUMN unloading_fee SET DEFAULT 0
+    `);
+    console.log('✓ pricing_charts: loading_fee / unloading_fee set DEFAULT 0 (deprecated)');
+
+    console.log('\n✅ Migration complete: 13 tables + per-state rate columns.');
   } finally {
     client.release();
     await pool.end();

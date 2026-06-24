@@ -20,19 +20,27 @@ function validateBody(
   body: PricingChartBody,
   res: Response,
 ): { loading_fee: number; unloading_fee: number; stakeholder_rates: StakeholderRateInput[] } | null {
-  if (!isPositiveInt(body.loading_fee)) {
-    res.status(400).json({ error: "BAD_REQUEST", message: "loading_fee must be a positive integer (kobo)" });
-    return null;
+  // loading_fee and unloading_fee are deprecated — per-state rates are now used for loading/unloading.
+  // Accept positive int if provided; otherwise default to 0.
+  let loading_fee = 0;
+  let unloading_fee = 0;
+  if (body.loading_fee !== undefined) {
+    if (!isPositiveInt(body.loading_fee) && body.loading_fee !== 0) {
+      res.status(400).json({ error: "BAD_REQUEST", message: "loading_fee must be a positive integer (kobo) if provided" });
+      return null;
+    }
+    loading_fee = (body.loading_fee as number) || 0;
   }
-  if (!isPositiveInt(body.unloading_fee)) {
-    res.status(400).json({ error: "BAD_REQUEST", message: "unloading_fee must be a positive integer (kobo)" });
-    return null;
+  if (body.unloading_fee !== undefined) {
+    if (!isPositiveInt(body.unloading_fee) && body.unloading_fee !== 0) {
+      res.status(400).json({ error: "BAD_REQUEST", message: "unloading_fee must be a positive integer (kobo) if provided" });
+      return null;
+    }
+    unloading_fee = (body.unloading_fee as number) || 0;
   }
-  if (!Array.isArray(body.stakeholder_rates)) {
-    res.status(400).json({ error: "BAD_REQUEST", message: "stakeholder_rates must be an array" });
-    return null;
-  }
-  for (const r of body.stakeholder_rates as StakeholderRateInput[]) {
+
+  const stakeholder_rates = Array.isArray(body.stakeholder_rates) ? body.stakeholder_rates : [];
+  for (const r of stakeholder_rates as StakeholderRateInput[]) {
     if (!r.stakeholder_id || typeof r.stakeholder_id !== "string") {
       res.status(400).json({ error: "BAD_REQUEST", message: "Each rate must have a valid stakeholder_id" });
       return null;
@@ -43,9 +51,9 @@ function validateBody(
     }
   }
   return {
-    loading_fee: body.loading_fee as number,
-    unloading_fee: body.unloading_fee as number,
-    stakeholder_rates: body.stakeholder_rates as StakeholderRateInput[],
+    loading_fee,
+    unloading_fee,
+    stakeholder_rates: stakeholder_rates as StakeholderRateInput[],
   };
 }
 

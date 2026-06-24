@@ -12,7 +12,14 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { getActivePricingChart, createPricingChart, activatePricingChart, getStakeholders } from '@/services/api';
+import {
+  getActivePricingChart,
+  createPricingChart,
+  activatePricingChart,
+  getStakeholders,
+  getStates,
+  updateStateRates,
+} from '@/services/api';
 import type { Stakeholder } from '@/types/index';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
@@ -34,6 +41,14 @@ interface PricingChart {
   stakeholder_rates: StakeholderRate[];
 }
 
+interface StateRateItem {
+  id: string;
+  name: string;
+  code: string;
+  loading_rate: number;
+  unloading_rate: number;
+}
+
 function nairaToKobo(val: string): number {
   return Math.round(parseFloat(val) * 100);
 }
@@ -52,17 +67,8 @@ function ActiveChartCard({ chart }: { chart: PricingChart }) {
           <Text style={styles.activeBadgeText}>ACTIVE</Text>
         </View>
       </View>
-      <View style={styles.feeRow}>
-        <Text style={styles.feeLabel}>Loading Fee</Text>
-        <Text style={styles.feeValue}>{formatNaira(chart.loading_fee)}</Text>
-      </View>
-      <View style={styles.feeRow}>
-        <Text style={styles.feeLabel}>Unloading Fee</Text>
-        <Text style={styles.feeValue}>{formatNaira(chart.unloading_fee)}</Text>
-      </View>
-      {chart.stakeholder_rates.length > 0 && (
+      {chart.stakeholder_rates.length > 0 ? (
         <>
-          <View style={styles.divider} />
           <Text style={styles.subLabel}>STAKEHOLDER RATES</Text>
           {chart.stakeholder_rates.map((r) => (
             <View key={r.id} style={styles.feeRow}>
@@ -71,6 +77,8 @@ function ActiveChartCard({ chart }: { chart: PricingChart }) {
             </View>
           ))}
         </>
+      ) : (
+        <Text style={styles.emptyRatesText}>No stakeholder rates configured</Text>
       )}
     </View>
   );
@@ -93,17 +101,8 @@ function PendingChartCard({
           <Text style={styles.inactiveBadgeText}>INACTIVE</Text>
         </View>
       </View>
-      <View style={styles.feeRow}>
-        <Text style={styles.feeLabel}>Loading Fee</Text>
-        <Text style={styles.feeValue}>{formatNaira(chart.loading_fee)}</Text>
-      </View>
-      <View style={styles.feeRow}>
-        <Text style={styles.feeLabel}>Unloading Fee</Text>
-        <Text style={styles.feeValue}>{formatNaira(chart.unloading_fee)}</Text>
-      </View>
-      {chart.stakeholder_rates.length > 0 && (
+      {chart.stakeholder_rates.length > 0 ? (
         <>
-          <View style={styles.divider} />
           <Text style={styles.subLabel}>STAKEHOLDER RATES</Text>
           {chart.stakeholder_rates.map((r) => (
             <View key={r.id} style={styles.feeRow}>
@@ -112,6 +111,8 @@ function PendingChartCard({
             </View>
           ))}
         </>
+      ) : (
+        <Text style={styles.emptyRatesText}>No stakeholder rates configured</Text>
       )}
       <TouchableOpacity
         style={[styles.activateButton, activating && styles.buttonDisabled]}
@@ -136,21 +137,27 @@ export default function ConfigScreen() {
   const [activeChart, setActiveChart] = useState<PricingChart | null>(null);
   const [stakeholders, setStakeholders] = useState<Stakeholder[]>([]);
   const [newChart, setNewChart] = useState<PricingChart | null>(null);
+  const [stateRates, setStateRates] = useState<StateRateItem[]>([]);
 
-  const [loadingFeeInput, setLoadingFeeInput] = useState('');
-  const [unloadingFeeInput, setUnloadingFeeInput] = useState('');
   const [stakeholderInputs, setStakeholderInputs] = useState<Record<string, string>>({});
 
   const [submitting, setSubmitting] = useState(false);
   const [activating, setActivating] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  const [editingStateId, setEditingStateId] = useState<string | null>(null);
+  const [editLoadingRate, setEditLoadingRate] = useState('');
+  const [editUnloadingRate, setEditUnloadingRate] = useState('');
+  const [savingStateId, setSavingStateId] = useState<string | null>(null);
+  const [stateRateError, setStateRateError] = useState<string | null>(null);
+
   const loadData = useCallback(async () => {
     setPageError(null);
     try {
-      const [chartResult, stakeholdersResult] = await Promise.allSettled([
+      const [chartResult, stakeholdersResult, statesResult] = await Promise.allSettled([
         getActivePricingChart(),
         getStakeholders(),
+        getStates(),
       ]);
 
       if (chartResult.status === 'fulfilled') {
@@ -168,6 +175,10 @@ export default function ConfigScreen() {
       } else {
         setPageError('Failed to load stakeholders');
       }
+
+      if (statesResult.status === 'fulfilled') {
+        setStateRates((statesResult.value?.states ?? []) as StateRateItem[]);
+      }
     } finally {
       setPageLoading(false);
     }
@@ -179,14 +190,6 @@ export default function ConfigScreen() {
 
   const handleSubmit = async () => {
     setSubmitError(null);
-    if (!isValidNaira(loadingFeeInput)) {
-      setSubmitError('Loading fee must be greater than zero.');
-      return;
-    }
-    if (!isValidNaira(unloadingFeeInput)) {
-      setSubmitError('Unloading fee must be greater than zero.');
-      return;
-    }
     for (const sh of stakeholders) {
       const val = stakeholderInputs[sh.id] ?? '';
       if (val.trim() !== '' && !isValidNaira(val)) {
@@ -205,14 +208,10 @@ export default function ConfigScreen() {
     setSubmitting(true);
     try {
       const result = await createPricingChart({
-        loading_fee: nairaToKobo(loadingFeeInput),
-        unloading_fee: nairaToKobo(unloadingFeeInput),
         stakeholder_rates: stakeholderRates,
       });
       const created: PricingChart = result?.chart ?? result;
       setNewChart(created);
-      setLoadingFeeInput('');
-      setUnloadingFeeInput('');
       setStakeholderInputs({});
     } catch (e: any) {
       setSubmitError(e?.message ?? 'Failed to create pricing chart.');
@@ -232,6 +231,41 @@ export default function ConfigScreen() {
       setSubmitError(e?.message ?? 'Failed to activate chart.');
     } finally {
       setActivating(false);
+    }
+  };
+
+  const handleEditState = (s: StateRateItem) => {
+    setEditingStateId(s.id);
+    setEditLoadingRate((s.loading_rate / 100).toFixed(2));
+    setEditUnloadingRate((s.unloading_rate / 100).toFixed(2));
+    setStateRateError(null);
+  };
+
+  const handleSaveStateRate = async (stateId: string) => {
+    if (!isValidNaira(editLoadingRate)) {
+      setStateRateError('Loading rate must be greater than zero.');
+      return;
+    }
+    if (!isValidNaira(editUnloadingRate)) {
+      setStateRateError('Unloading rate must be greater than zero.');
+      return;
+    }
+    setSavingStateId(stateId);
+    setStateRateError(null);
+    try {
+      const result = await updateStateRates(stateId, {
+        loading_rate: nairaToKobo(editLoadingRate),
+        unloading_rate: nairaToKobo(editUnloadingRate),
+      });
+      const updated = result?.state as StateRateItem;
+      setStateRates((prev) =>
+        prev.map((s) => (s.id === stateId ? { ...s, loading_rate: updated.loading_rate, unloading_rate: updated.unloading_rate } : s))
+      );
+      setEditingStateId(null);
+    } catch (e: any) {
+      setStateRateError(e?.message ?? 'Failed to save state rates.');
+    } finally {
+      setSavingStateId(null);
     }
   };
 
@@ -267,8 +301,99 @@ export default function ConfigScreen() {
       >
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
 
+        {/* ── State Rates ── */}
+        <Text style={styles.sectionLabel}>State Loading & Unloading Rates</Text>
+        {stateRates.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyText}>Loading state rates…</Text>
+          </View>
+        ) : (
+          <View style={styles.stateRatesCard}>
+            {stateRates.map((s, idx) => (
+              <View key={s.id}>
+                {idx > 0 && <View style={styles.rowDivider} />}
+                {editingStateId === s.id ? (
+                  <View style={styles.stateEditBlock}>
+                    <Text style={styles.stateEditName}>{s.name}</Text>
+                    <View style={styles.stateEditRow}>
+                      <View style={styles.stateEditField}>
+                        <Text style={styles.fieldLabel}>Loading (₦)</Text>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="0.00"
+                          placeholderTextColor={theme.colors.placeholder}
+                          keyboardType="decimal-pad"
+                          value={editLoadingRate}
+                          onChangeText={setEditLoadingRate}
+                        />
+                      </View>
+                      <View style={{ width: 10 }} />
+                      <View style={styles.stateEditField}>
+                        <Text style={styles.fieldLabel}>Unloading (₦)</Text>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="0.00"
+                          placeholderTextColor={theme.colors.placeholder}
+                          keyboardType="decimal-pad"
+                          value={editUnloadingRate}
+                          onChangeText={setEditUnloadingRate}
+                        />
+                      </View>
+                    </View>
+                    {stateRateError && (
+                      <Text style={styles.errorText}>{stateRateError}</Text>
+                    )}
+                    <View style={styles.stateEditActions}>
+                      <TouchableOpacity
+                        style={styles.cancelEditBtn}
+                        onPress={() => setEditingStateId(null)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.cancelEditBtnText}>Cancel</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.saveEditBtn, savingStateId === s.id && styles.buttonDisabled]}
+                        onPress={() => handleSaveStateRate(s.id)}
+                        disabled={savingStateId === s.id}
+                        activeOpacity={0.85}
+                      >
+                        {savingStateId === s.id ? (
+                          <ActivityIndicator color={theme.colors.white} size="small" />
+                        ) : (
+                          <Text style={styles.saveEditBtnText}>Save</Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.stateRateRow}>
+                    <Text style={styles.stateRateName} numberOfLines={1}>{s.name}</Text>
+                    <View style={styles.stateRateValues}>
+                      <View style={styles.stateRateValueGroup}>
+                        <Text style={styles.stateRateValueLabel}>Load</Text>
+                        <Text style={styles.stateRateValue}>{formatNaira(s.loading_rate)}</Text>
+                      </View>
+                      <View style={styles.stateRateValueGroup}>
+                        <Text style={styles.stateRateValueLabel}>Unload</Text>
+                        <Text style={styles.stateRateValue}>{formatNaira(s.unloading_rate)}</Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => handleEditState(s)}
+                        style={styles.editStateBtn}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="pencil-outline" size={15} color={theme.colors.primary} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* ── Active chart ── */}
-        <Text style={styles.sectionLabel}>Current Active Chart</Text>
+        <Text style={[styles.sectionLabel, styles.sectionLabelSpaced]}>Stakeholder Rate Chart</Text>
         {activeChart ? (
           <ActiveChartCard chart={activeChart} />
         ) : (
@@ -292,29 +417,8 @@ export default function ConfigScreen() {
         {/* ── Create new chart form ── */}
         <Text style={[styles.sectionLabel, styles.sectionLabelSpaced]}>Create New Chart</Text>
         <View style={styles.card}>
-          <Text style={styles.fieldLabel}>Loading Fee (₦)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="0.00"
-            placeholderTextColor={theme.colors.placeholder}
-            keyboardType="decimal-pad"
-            value={loadingFeeInput}
-            onChangeText={setLoadingFeeInput}
-          />
-
-          <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>Unloading Fee (₦)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="0.00"
-            placeholderTextColor={theme.colors.placeholder}
-            keyboardType="decimal-pad"
-            value={unloadingFeeInput}
-            onChangeText={setUnloadingFeeInput}
-          />
-
-          {stakeholders.length > 0 && (
+          {stakeholders.length > 0 ? (
             <>
-              <View style={styles.divider} />
               <Text style={styles.subLabel}>STAKEHOLDER RATES (₦)</Text>
               {stakeholders.map((sh) => (
                 <View key={sh.id}>
@@ -332,6 +436,8 @@ export default function ConfigScreen() {
                 </View>
               ))}
             </>
+          ) : (
+            <Text style={styles.emptyRatesText}>No active stakeholders configured</Text>
           )}
 
           {submitError ? (
@@ -476,13 +582,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: theme.colors.grey1,
   },
+  emptyRatesText: {
+    fontSize: 14,
+    color: theme.colors.grey1,
+    marginBottom: 4,
+  },
   fieldLabel: {
     fontSize: 13,
     fontWeight: '600',
     color: theme.colors.grey2,
     marginBottom: 6,
   },
-  fieldLabelSpaced: { marginTop: 12 },
   input: {
     backgroundColor: theme.colors.grey4,
     borderRadius: 10,
@@ -550,5 +660,102 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: theme.colors.black,
+  },
+
+  // ── State rates ──────────────────────────────────────────────────────────────
+  stateRatesCard: {
+    backgroundColor: theme.colors.white,
+    marginHorizontal: 20,
+    borderRadius: 16,
+    paddingVertical: 4,
+    ...theme.shadows.card,
+    overflow: 'hidden',
+  },
+  rowDivider: {
+    height: 1,
+    backgroundColor: theme.colors.separator,
+    marginHorizontal: 16,
+  },
+  stateRateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  stateRateName: {
+    flex: 1,
+    fontSize: 14,
+    color: theme.colors.black,
+    fontWeight: '500',
+  },
+  stateRateValues: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  stateRateValueGroup: {
+    alignItems: 'flex-end',
+    minWidth: 70,
+  },
+  stateRateValueLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: theme.colors.grey1,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  stateRateValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.colors.black,
+  },
+  editStateBtn: {
+    padding: 6,
+    marginLeft: 4,
+  },
+  stateEditBlock: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  stateEditName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.black,
+    marginBottom: 10,
+  },
+  stateEditRow: {
+    flexDirection: 'row',
+  },
+  stateEditField: {
+    flex: 1,
+  },
+  stateEditActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+  },
+  cancelEditBtn: {
+    flex: 1,
+    backgroundColor: theme.colors.grey4,
+    borderRadius: 10,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  cancelEditBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.grey2,
+  },
+  saveEditBtn: {
+    flex: 1,
+    backgroundColor: theme.colors.primary,
+    borderRadius: 10,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  saveEditBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.white,
   },
 });

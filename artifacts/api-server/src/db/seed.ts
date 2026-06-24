@@ -108,6 +108,26 @@ async function seed(): Promise<void> {
     }
     console.log(`✓ States upserted: ${statesUpserted}`);
 
+    // ── Per-state loading / unloading rates ───────────────────────────────
+    const STATE_RATES: Array<{ code: string; loading_rate: number; unloading_rate: number }> = [
+      { code: 'LG',  loading_rate: 500_000, unloading_rate: 300_000 },  // Lagos
+      { code: 'KN',  loading_rate: 400_000, unloading_rate: 250_000 },  // Kano
+      { code: 'RI',  loading_rate: 450_000, unloading_rate: 280_000 },  // Rivers
+      { code: 'FCT', loading_rate: 420_000, unloading_rate: 260_000 },  // FCT Abuja
+      { code: 'OG',  loading_rate: 350_000, unloading_rate: 200_000 },  // Ogun
+    ];
+    for (const r of STATE_RATES) {
+      await client.query(
+        `UPDATE states SET loading_rate = $1, unloading_rate = $2 WHERE code = $3`,
+        [r.loading_rate, r.unloading_rate, r.code],
+      );
+    }
+    // Default rate for every other state that hasn't been assigned yet
+    await client.query(
+      `UPDATE states SET loading_rate = 300000, unloading_rate = 200000 WHERE loading_rate = 0`,
+    );
+    console.log('✓ Per-state rates seeded');
+
     // ── Stakeholders ──────────────────────────────────────────────────────
     let stakeholdersUpserted = 0;
     const stakeholderIds: string[] = [];

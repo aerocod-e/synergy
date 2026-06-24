@@ -48,8 +48,6 @@ interface StakeholderRate {
 }
 
 interface PricingData {
-  loadingFee: number;
-  unloadingFee: number;
   stakeholderRates: StakeholderRate[];
 }
 
@@ -57,6 +55,8 @@ interface StateItem {
   id: string;
   name: string;
   code: string;
+  loading_rate: number;
+  unloading_rate: number;
 }
 
 // ── Status badge helpers ───────────────────────────────────────────────────────
@@ -193,8 +193,6 @@ export default function TripAdminTrips() {
       } else {
         const chart = (pricingRes as any).chart;
         const pd: PricingData = {
-          loadingFee:       chart.loading_fee as number,
-          unloadingFee:     chart.unloading_fee as number,
           stakeholderRates: (chart.stakeholder_rates ?? []) as StakeholderRate[],
         };
         setPricing(pd);
@@ -308,8 +306,6 @@ export default function TripAdminTrips() {
       originDescription:      originDescription.trim() || undefined,
       destinationDescription: destinationDescription.trim() || undefined,
       fees: {
-        loadingFee:    pricing.loadingFee,
-        unloadingFee:  pricing.unloadingFee,
         stakeholders,
       },
     };
@@ -519,41 +515,26 @@ export default function TripAdminTrips() {
                 </View>
               )}
 
-              {/* FEES section */}
-              {pricing && (
+              {/* STAKEHOLDERS */}
+              {pricing && pricing.stakeholderRates.length > 0 && (
                 <>
-                  <Text style={styles.sectionLabel}>FEES (FROM ACTIVE CHART)</Text>
-                  <View style={styles.feeRow}>
-                    <Text style={styles.feeLabel}>Loading Fee</Text>
-                    <Text style={styles.feeAmount}>{formatNaira(pricing.loadingFee)}</Text>
-                  </View>
-                  <View style={[styles.feeRow, styles.feeRowLast]}>
-                    <Text style={styles.feeLabel}>Unloading Fee</Text>
-                    <Text style={styles.feeAmount}>{formatNaira(pricing.unloadingFee)}</Text>
-                  </View>
-
-                  {/* STAKEHOLDERS */}
-                  {pricing.stakeholderRates.length > 0 && (
-                    <>
-                      <Text style={[styles.sectionLabel, { marginTop: 20 }]}>STAKEHOLDERS</Text>
-                      {pricing.stakeholderRates.map((rate) => (
-                        <View key={rate.stakeholder_id} style={styles.stakeholderRow}>
-                          <View style={styles.stakeholderLeft}>
-                            <Text style={styles.stakeholderName}>{rate.stakeholder_name}</Text>
-                            <Text style={styles.stakeholderAmount}>{formatNaira(rate.amount)}</Text>
-                          </View>
-                          <Switch
-                            value={toggles[rate.stakeholder_id] ?? false}
-                            onValueChange={(val) =>
-                              setToggles((prev) => ({ ...prev, [rate.stakeholder_id]: val }))
-                            }
-                            trackColor={{ false: theme.colors.inactive, true: theme.colors.primary }}
-                            thumbColor={theme.colors.white}
-                          />
-                        </View>
-                      ))}
-                    </>
-                  )}
+                  <Text style={styles.sectionLabel}>STAKEHOLDERS</Text>
+                  {pricing.stakeholderRates.map((rate) => (
+                    <View key={rate.stakeholder_id} style={styles.stakeholderRow}>
+                      <View style={styles.stakeholderLeft}>
+                        <Text style={styles.stakeholderName}>{rate.stakeholder_name}</Text>
+                        <Text style={styles.stakeholderAmount}>{formatNaira(rate.amount)}</Text>
+                      </View>
+                      <Switch
+                        value={toggles[rate.stakeholder_id] ?? false}
+                        onValueChange={(val) =>
+                          setToggles((prev) => ({ ...prev, [rate.stakeholder_id]: val }))
+                        }
+                        trackColor={{ false: theme.colors.inactive, true: theme.colors.primary }}
+                        thumbColor={theme.colors.white}
+                      />
+                    </View>
+                  ))}
                 </>
               )}
 
@@ -700,6 +681,29 @@ export default function TripAdminTrips() {
                   )}
                 </ScrollView>
               )}
+
+              {/* FEES (derived from selected state rates) */}
+              <Text style={[styles.sectionLabel, { marginTop: 20 }]}>FEES</Text>
+              <View style={styles.feeRow}>
+                <Text style={styles.feeLabel}>Loading Fee</Text>
+                {loadingStateId ? (
+                  <Text style={styles.feeAmount}>
+                    {formatNaira(states.find((s) => s.id === loadingStateId)?.loading_rate ?? 0)}
+                  </Text>
+                ) : (
+                  <Text style={[styles.feeAmount, styles.feePlaceholder]}>Select loading state</Text>
+                )}
+              </View>
+              <View style={[styles.feeRow, styles.feeRowLast]}>
+                <Text style={styles.feeLabel}>Unloading Fee</Text>
+                {unloadingStateId ? (
+                  <Text style={styles.feeAmount}>
+                    {formatNaira(states.find((s) => s.id === unloadingStateId)?.unloading_rate ?? 0)}
+                  </Text>
+                ) : (
+                  <Text style={[styles.feeAmount, styles.feePlaceholder]}>Select unloading state</Text>
+                )}
+              </View>
 
               {/* DESCRIPTION (optional) */}
               <Text style={[styles.sectionLabel, { marginTop: 20 }]}>DESCRIPTION (OPTIONAL)</Text>
@@ -1046,6 +1050,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: theme.colors.grey2,
     fontWeight: '700',
+  },
+  feePlaceholder: {
+    color: theme.colors.grey1,
+    fontWeight: '400',
+    fontSize: 14,
   },
 
   // stakeholder rows

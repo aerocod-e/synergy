@@ -8,8 +8,6 @@ interface StakeholderInput {
 }
 
 interface FeesInput {
-  loadingFee: number;
-  unloadingFee: number;
   stakeholders: StakeholderInput[];
 }
 
@@ -80,15 +78,6 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
     res.status(400).json({ error: "BAD_REQUEST", message: "fees object is required" });
     return;
   }
-  if (!isPositiveInt(fees.loadingFee)) {
-    res.status(400).json({ error: "BAD_REQUEST", message: "fees.loadingFee must be a positive integer (kobo)" });
-    return;
-  }
-  if (!isPositiveInt(fees.unloadingFee)) {
-    res.status(400).json({ error: "BAD_REQUEST", message: "fees.unloadingFee must be a positive integer (kobo)" });
-    return;
-  }
-
   if (!Array.isArray(fees.stakeholders)) {
     res.status(400).json({ error: "BAD_REQUEST", message: "fees.stakeholders must be an array" });
     return;
@@ -132,12 +121,12 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
           `SELECT id FROM drivers WHERE id = $1 AND is_active = true AND deleted_at IS NULL LIMIT 1`,
           [driverId]
         ),
-        client.query<{ id: string }>(
-          `SELECT id FROM states WHERE id = $1 LIMIT 1`,
+        client.query<{ id: string; loading_rate: number }>(
+          `SELECT id, loading_rate FROM states WHERE id = $1 LIMIT 1`,
           [loadingStateId]
         ),
-        client.query<{ id: string }>(
-          `SELECT id FROM states WHERE id = $1 LIMIT 1`,
+        client.query<{ id: string; unloading_rate: number }>(
+          `SELECT id, unloading_rate FROM states WHERE id = $1 LIMIT 1`,
           [unloadingStateId]
         ),
         ...enabledStakeholders.map((s) =>
@@ -166,6 +155,25 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
       res.status(400).json({ error: "BAD_REQUEST", message: "unloadingStateId does not reference an existing state" });
       return;
     }
+
+    const loadingFeeAmount  = loadingRes.rows[0]!.loading_rate;
+    const unloadingFeeAmount = unloadingRes.rows[0]!.unloading_rate;
+
+    if (loadingFeeAmount <= 0) {
+      res.status(422).json({
+        error: "UNPROCESSABLE",
+        message: "Loading state has no rate configured. Contact your administrator.",
+      });
+      return;
+    }
+    if (unloadingFeeAmount <= 0) {
+      res.status(422).json({
+        error: "UNPROCESSABLE",
+        message: "Unloading state has no rate configured. Contact your administrator.",
+      });
+      return;
+    }
+
     for (let i = 0; i < enabledStakeholders.length; i++) {
       if (stakeholderResults[i]!.rows.length === 0) {
         res.status(400).json({ error: "BAD_REQUEST", message: `stakeholderId ${enabledStakeholders[i]!.stakeholderId} does not reference an existing active stakeholder` });
@@ -240,8 +248,8 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
     };
 
     const feeEntries: FeeRow[] = [
-      { recipientType: "state", recipientId: loadingStateId, feeType: "loading", amount: fees.loadingFee },
-      { recipientType: "state", recipientId: unloadingStateId, feeType: "unloading", amount: fees.unloadingFee },
+      { recipientType: "state", recipientId: loadingStateId, feeType: "loading", amount: loadingFeeAmount },
+      { recipientType: "state", recipientId: unloadingStateId, feeType: "unloading", amount: unloadingFeeAmount },
       ...enabledStakeholders.map((s): FeeRow => ({
         recipientType: "stakeholder",
         recipientId: s.stakeholderId,
