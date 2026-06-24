@@ -1,0 +1,123 @@
+This is an edge case and boundary condition QA pass for the entire application. The goal is to find bugs, crashes, and unexpected behavior at the edges of normal usage. Do not fix anything you find -- document everything and compile a numbered backlog list at the end.
+Critical testing setup instructions -- follow these before starting any test:
+
+The app URL is https://2f2a3156-e178-45fc-95e3-f3726442355f-00-2f9hl4ag0p8j2.expo.kirk.replit.dev -- use this exact URL for every browser session. Do not use any other URL or proxy path.
+Before running any frontend test, set the browser viewport to mobile dimensions: 390px wide by 844px tall (iPhone 14 size). This must be done at the start of every new browser session in this task. Do not test at full desktop width -- the app is a mobile app and UI elements may not be reachable or visible at desktop dimensions.
+
+For all frontend tests: perform live App Testing, navigating only by tapping real visible UI elements. No URL navigation between in-app screens. Do not test browser Back navigation in this session.
+
+SECTION A -- Input Boundary Conditions
+A1. Trip creation -- very long strings:
+
+As lagos.ta1@synergy.com, open the trip creation form. Enter a 200-character string in the Origin Description field and a 200-character string in Destination Description. Submit a valid trip with these values. Confirm the trip is created without error, and the long strings display correctly (truncated or wrapped) on the trip card and trip detail screen.
+A2. Trip creation -- special characters:
+
+Submit a trip with origin description containing special characters: Lagos/Port-Harcourt (Sector A) & Zone #3 <Test>. Confirm it saves and displays correctly without escaping issues.
+A3. Driver registration -- duplicate license number:
+
+As a Trip Admin, try to register a driver with the same license number as an existing driver (e.g. "LG-2021-001"). Confirm a clear 409 error is shown and no duplicate is created.
+A4. Vehicle registration -- duplicate plate:
+
+Try to register a vehicle with the same plate as an existing one (e.g. "LAG-001-AA"). Confirm a clear 409 error is shown.
+A5. User creation -- duplicate email:
+
+As Super Admin, try to create a State Admin with the same email as an existing user. Confirm a clear 409 error is shown.
+A6. Cancellation reason -- empty string:
+
+As a Trip Admin, open the cancellation modal and try to submit without entering a reason. Confirm the form does not submit and shows a validation error.
+A7. Pricing chart -- zero fee:
+
+As Super Admin, attempt to create a pricing chart with a loading fee of ₦0. Confirm whether this is accepted or rejected, and report the behavior.
+A8. Search inputs -- special characters:
+
+In the public lookup search, type <script>alert('xss')</script>. Confirm no script executes and the app shows "No trips found" or handles it safely.
+A9. Search inputs -- very long string:
+
+Type a 200-character string in the public lookup search bar. Confirm the app does not crash and handles it gracefully.
+A10. Trip creation -- same loading and unloading state:
+
+Try to create a trip with Lagos as both the loading and unloading state. Confirm whether this is allowed or rejected, and report the behavior. If allowed, note it as a potential business rule gap.
+
+SECTION B -- Empty and Zero States
+B1. New Trip Admin with no trips:
+
+Login as fct.ta1@synergy.com / Demo@1234 (has no trips). Confirm the Trips tab shows a proper empty state ("No trips yet" or similar), not a crash or blank screen.
+B2. New Trip Admin with no vehicles:
+
+On the Vehicles tab for fct.ta1@synergy.com, confirm the empty state displays correctly.
+B3. New Trip Admin with no drivers:
+
+On the Drivers tab for fct.ta1@synergy.com, confirm the empty state displays correctly.
+B4. State Admin with no pending requests:
+
+Login as rivers.admin@synergy.com / Admin@1234 (no pending cancellation requests). Confirm the Requests tab shows the empty state correctly.
+B5. Public lookup with no results:
+
+Search for a string that definitely does not exist. Confirm "No trips found" state displays correctly and there is no crash.
+B6. Stakeholder with very low balance:
+
+If any stakeholder has a near-zero balance after reversals, confirm the wallet display shows ₦0.00 correctly rather than negative numbers or formatting errors.
+
+SECTION C -- Concurrent and Rapid Actions
+C1. Double-tap trip creation submit:
+
+In the trip creation form, fill in all fields and tap Submit twice rapidly. Confirm only one trip is created, not two. Check the database for duplicate trips with identical data.
+C2. Double-tap cancellation request:
+
+On a trip, tap "Request Cancellation" and then rapidly tap Submit twice. Confirm only one cancellation request is created.
+C3. Double-tap approve cancellation:
+
+As State Admin, tap Approve on a cancellation request twice rapidly. Confirm the trip is cancelled only once and no duplicate wallet reversals occur.
+C4. Rapid toggle of pre-approved cancellation rights:
+
+As State Admin, rapidly toggle the pre-approved cancellation toggle on a Trip Admin card on and off several times. Confirm the final state in the database matches what the UI shows, and no intermediate states are stuck.
+
+SECTION D -- Network and Error Handling
+D1. Trip creation with no active pricing chart:
+
+Temporarily deactivate all pricing charts via a direct database update (UPDATE pricing_charts SET is_active = false). Open the trip creation form as a Trip Admin. Confirm a clear message appears ("No active pricing chart" or similar) and the form cannot be submitted. Reactivate the pricing chart afterward.
+D2. API error handling on trip list:
+
+Simulate a backend failure on the trips list endpoint (temporarily rename a route or similar). Confirm the Trip Admin Trips tab shows an error state with a retry button, not a crash or blank screen. Restore after testing.
+D3. Session expiry handling:
+
+Using a direct API call, invalidate the current session token (or wait for expiry if easily testable). Confirm the app redirects to the login screen rather than showing a broken authenticated state.
+
+SECTION E -- Data Display Edge Cases
+E1. Trip with no driver assigned:
+
+Check if any existing trip has driver_id = null. If so, confirm the trip card and trip detail screen display "No driver" or similar gracefully rather than crashing.
+E2. Trip with very long vehicle registration:
+
+Attempt to register a vehicle with a registration number at the maximum field length (50 characters per the schema). Confirm it saves and displays without layout breakage.
+E3. Stakeholder with no ledger entries:
+
+If a stakeholder exists with zero ledger entries, confirm the ledger screen shows the empty state correctly rather than crashing.
+E4. Cancellation request with very long reason:
+
+Submit a cancellation request with a 500-character reason. Confirm it saves and displays correctly on the State Admin requests screen.
+E5. Trip detail for a cancelled trip:
+
+Open the trip detail screen for a cancelled trip (e.g. DEMO-2026-000008). Confirm all fields display correctly including the event timeline showing the cancellation event, and fees show as reversed.
+E6. Public lookup for a trip in every status:
+
+Search for one trip of each status (created, in_transit, completed, cancelled, cancellation_pending). Confirm each displays correctly with the right status badge and appropriate payment status badges.
+
+SECTION F -- Role Boundary Edge Cases
+F1. Trip Admin trying to access State Admin API:
+
+Using a Trip Admin JWT, call GET /api/cancellation-requests. Confirm 403.
+F2. State Admin trying to create a trip:
+
+Using a State Admin JWT, call POST /api/trips with valid trip data. Confirm 403.
+F3. Stakeholder trying to access wallet of another stakeholder:
+
+Using Stakeholder Alpha's JWT, call GET /api/wallets/my. Confirm the response contains only Alpha's wallet, not Beta's or Gamma's.
+F4. Trip Admin trying to approve their own cancellation request:
+
+Using a Trip Admin JWT, call PATCH /api/cancellation-requests/:id/approve for a request they submitted. Confirm 403.
+F5. Deactivated user's existing JWT:
+
+Deactivate lagos.ta2@synergy.com via State Admin. Using a previously issued JWT for that account, call a protected endpoint. Confirm whether the JWT is still accepted or rejected. Reactivate after testing.
+
+At the end, compile a single numbered backlog list of every FAIL, unexpected behavior, business rule gap, and security concern found across all sections. Format it clearly with the section reference and severity (Critical / High / Medium / Low). Do not fix anything.
