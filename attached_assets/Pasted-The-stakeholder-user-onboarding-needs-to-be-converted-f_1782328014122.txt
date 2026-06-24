@@ -1,0 +1,60 @@
+The stakeholder user onboarding needs to be converted from a dropdown selection to a free-text organization name input. This feature was planned but never implemented. Make the following changes across backend and frontend.Step 1 -- Backend: update createUser for stakeholder roleOpen artifacts/api-server/src/controllers/userController.ts. Find the createUser function. Currently for role = 'stakeholder' it requires entity_id pointing to an existing stakeholder. Replace this logic entirely:
+Accept stakeholderName (string, required) instead of entity_id and entity_type
+Trim and validate stakeholderName is non-empty -- return 400 if missing or blank
+Check whether a stakeholder with that name already exists using a case-insensitive match:
+
+sqlSELECT id FROM stakeholders WHERE LOWER(name) = LOWER($1)
+
+If exists: use the existing stakeholder's id as entity_id
+If not exists: inside the same transaction as the user insert, create a new stakeholder entity:
+
+sqlINSERT INTO stakeholders (name) VALUES ($1) RETURNING id
+Then immediately create a wallet for it:
+sqlINSERT INTO wallets (owner_type, owner_id, total_collected)
+VALUES ('stakeholder', $newStakeholderId, 0)
+ON CONFLICT (owner_type, owner_id) DO NOTHING
+
+Set entity_type = 'stakeholder' and entity_id = resolvedStakeholderId when inserting the user
+Do NOT add the new stakeholder to any pricing chart -- that is a separate explicit Super Admin action
+All of the above (stakeholder creation, wallet creation, user creation) must happen inside a single database transaction
+Step 2 -- Backend: expose unassigned stakeholders on pricing chartOpen artifacts/api-server/src/controllers/pricingController.ts. Find getActivePricingChart. Add a query that fetches all stakeholders that exist in the stakeholders table but have NO rate row on the active pricing chart:sqlSELECT s.id, s.name
+FROM stakeholders s
+WHERE s.is_active = true
+AND NOT EXISTS (
+  SELECT 1 FROM pricing_chart_stakeholder_rates pcsr
+  WHERE pcsr.pricing_chart_id = $activeChartId
+  AND pcsr.stakeholder_id = s.id
+)
+ORDER BY s.nameReturn this as unassignedStakeholders: [{ id, name }] in the response alongside the existing fields. If no active chart exists, return unassignedStakeholders: [].Step 3 -- Backend: add stakeholder rate to existing chartIn artifacts/api-server/src/controllers/pricingController.ts, add a new function addStakeholderRate:
+
+POST handler for /pricing/:chartId/stakeholders
+Super Admin only
+Accepts { stakeholderId, amount } -- amount in kobo, must be a positive integer greater than zero
+Returns 409 if the stakeholder already has a rate on this chart
+Returns 400 if amount is zero or negative
+Inserts into pricing_chart_stakeholder_rates
+Returns the created rate row
+Register in artifacts/api-server/src/routes/pricing.ts:
+POST /pricing/:chartId/stakeholders   authenticateToken + requireRole("super_admin") → addStakeholderRateStep 4 -- Frontend: update user creation modalOpen artifacts/mobile/app/(superadmin)/users.tsx.Find the section that renders when formRole === 'stakeholder' (currently shows a tappable list of existing stakeholders). Replace it entirely with:
+
+A plain TextInput labeled "Stakeholder / Organization Name"
+Placeholder: "e.g. Lagos Transport Union"
+Drives a formStakeholderName state variable (add this state)
+Required -- show inline validation error if empty on submit
+In handleSubmit, when role === 'stakeholder', build the request body as:
+ts{
+  firstName, lastName, email, password,
+  role: 'stakeholder',
+  stakeholderName: formStakeholderName.trim()
+}
+Remove entity_type and entity_id from the stakeholder submission entirely.Remove the stakeholders state, the getStakeholders() fetch call, and the entityItems logic that built the dropdown -- they are no longer needed for stakeholder user creation.Step 5 -- Frontend: update pricing chart screenOpen artifacts/mobile/app/(superadmin)/config.tsx. In the active pricing chart display section, after the existing configured stakeholder rates list, add a new subsection "Stakeholders Pending Rate":
+Reads unassignedStakeholders from the GET /api/pricing/active response
+Each unassigned stakeholder shown as a card with their name and a "Set Rate" button
+Tapping "Set Rate" opens a small modal with a single Naira amount input
+On submit, converts to kobo and calls POST /api/pricing/:chartId/stakeholders
+On success, re-fetches the active chart so the stakeholder moves from "Pending" to the configured rates list
+If unassignedStakeholders is empty, hide this section entirely
+Add addStakeholderRate(chartId, body) helper to services/api.ts.Step 6 -- TypeScript check
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.

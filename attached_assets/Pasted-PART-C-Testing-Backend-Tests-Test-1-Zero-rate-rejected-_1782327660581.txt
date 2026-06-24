@@ -1,0 +1,16 @@
+PART C -- Testing
+Backend Tests:
+Test 1 -- Zero rate rejected: PATCH /api/states/:id/rates with { loadingRate: 0, unloadingRate: 300000 }. Confirm 400.
+Test 2 -- Negative rate rejected: { loadingRate: -100, unloadingRate: 300000 }. Confirm 400.
+Test 3 -- Demo trip fees correct: Query trip_fees for the Lagos→Kano demo trip. Confirm loading fee = 500000 and unloading fee = 250000. Confirm all affected wallets reconcile (SUM(wallet_ledger.amount) = wallets.total_collected).
+Test 4 -- Create stakeholder user with new organization: POST /api/users with role: 'stakeholder', firstName: 'John', lastName: 'Doe', email: 'john@newtransport.com', password: 'Test@1234', stakeholderName: 'New Transport Union'. Confirm 201. Confirm new stakeholder entity and wallet were created. Confirm user is linked to it.
+Test 5 -- Create stakeholder user with existing organization: POST /api/users with stakeholderName: 'Stakeholder Alpha'. Confirm 201. Confirm no duplicate stakeholder entity created.
+Test 6 -- New stakeholder does NOT appear in active pricing chart rates: After Test 4, call GET /api/pricing/active. Confirm "New Transport Union" is in unassignedStakeholders, NOT in the stakeholder rates list.
+Test 7 -- Add rate for new stakeholder: POST /api/pricing/:chartId/stakeholders with { stakeholderId: newId, amount: 50000 }. Confirm 201. Call GET /api/pricing/active again -- confirm "New Transport Union" is now in the rates list and removed from unassignedStakeholders.
+Test 8 -- New stakeholder appears in trip creation form after rate is set: Create a trip as Trip Admin. Confirm "New Transport Union" appears as a toggleable stakeholder with ₦500.00 rate.
+Test 9 -- Missing stakeholderName rejected: POST /api/users with role: 'stakeholder' but no stakeholderName. Confirm 400.
+Frontend App Tests (390x844px, tap only):
+Test 10 -- Login as Super Admin. Users tab. Create User. Select Stakeholder role. Confirm a text input appears for organization name instead of a dropdown. Type "Test Union" and submit. Confirm new user appears in list.
+Test 11 -- Go to Config tab. Confirm "Test Union" appears under "Stakeholders Pending Rate". Tap "Set Rate". Enter a rate. Submit. Confirm it moves to the configured rates section.
+Test 12 -- Login as Trip Admin. Open trip creation form. Confirm "Test Union" now appears as a stakeholder toggle with the configured rate.
+Test 13 -- Console is clean throughout.

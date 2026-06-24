@@ -183,7 +183,74 @@ export async function getActivePricingChart(_req: Request, res: Response): Promi
     [chart.id],
   );
 
-  res.json({ data: { chart: { ...chart, stakeholder_rates: ratesRes.rows } } });
+  const unassignedRes = await pool.query<{ id: string; name: string }>(
+    `SELECT s.id, s.name
+     FROM stakeholders s
+     WHERE NOT EXISTS (
+       SELECT 1 FROM pricing_chart_stakeholder_rates r
+       WHERE r.pricing_chart_id = $1 AND r.stakeholder_id = s.id
+     )
+     ORDER BY s.name ASC`,
+    [chart.id],
+  );
+
+  res.json({
+    data: {
+      chart: {
+        ...chart,
+        stakeholder_rates: ratesRes.rows,
+        unassignedStakeholders: unassignedRes.rows,
+      },
+    },
+  });
+}
+
+export async function addStakeholderRate(req: Request, res: Response): Promise<void> {
+  try {
+    const { chartId } = req.params as { chartId: string };
+    const { stakeholderId, amount } = req.body as { stakeholderId?: unknown; amount?: unknown };
+
+    if (!stakeholderId || typeof stakeholderId !== "string") {
+      res.status(400).json({ error: "BAD_REQUEST", message: "stakeholderId is required" });
+      return;
+    }
+    if (typeof amount !== "number" || !Number.isInteger(amount) || amount <= 0) {
+      res.status(400).json({ error: "BAD_REQUEST", message: "amount must be a positive integer (kobo)" });
+      return;
+    }
+
+    const chartCheck = await pool.query<{ id: string }>(
+      `SELECT id FROM pricing_charts WHERE id = $1`,
+      [chartId],
+    );
+    if (chartCheck.rows.length === 0) {
+      res.status(404).json({ error: "NOT_FOUND", message: "Pricing chart not found" });
+      return;
+    }
+
+    const shCheck = await pool.query<{ id: string }>(
+      `SELECT id FROM stakeholders WHERE id = $1`,
+      [stakeholderId],
+    );
+    if (shCheck.rows.length === 0) {
+      res.status(404).json({ error: "NOT_FOUND", message: "Stakeholder not found" });
+      return;
+    }
+
+    const result = await pool.query<{ id: string; stakeholder_id: string; amount: number }>(
+      `INSERT INTO pricing_chart_stakeholder_rates (pricing_chart_id, stakeholder_id, amount)
+       VALUES ($1, $2, $3)
+       RETURNING id, stakeholder_id, amount`,
+      [chartId, stakeholderId, amount],
+    );
+    res.status(201).json({ data: { rate: result.rows[0] } });
+  } catch (err: any) {
+    if (err.code === "23505") {
+      res.status(409).json({ error: "CONFLICT", message: "Stakeholder already has a rate on this chart" });
+      return;
+    }
+    throw err;
+  }
 }
 
 export async function activatePricingChart(req: Request, res: Response): Promise<void> {

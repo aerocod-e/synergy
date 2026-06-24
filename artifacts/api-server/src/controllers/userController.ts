@@ -273,7 +273,7 @@ type ValidRole = (typeof VALID_ROLES)[number];
 
 export async function createUser(req: Request, res: Response): Promise<void> {
   try {
-    const { email, password, role, entity_type, entity_id, firstName, lastName } = req.body as {
+    const { email, password, role, entity_type, entity_id, firstName, lastName, stakeholderName } = req.body as {
       email?: unknown;
       password?: unknown;
       role?: unknown;
@@ -281,6 +281,7 @@ export async function createUser(req: Request, res: Response): Promise<void> {
       entity_id?: unknown;
       firstName?: unknown;
       lastName?: unknown;
+      stakeholderName?: unknown;
     };
 
     // ── Basic field validation ─────────────────────────────────────────────
@@ -340,13 +341,8 @@ export async function createUser(req: Request, res: Response): Promise<void> {
         return;
       }
     } else if (typedRole === "stakeholder") {
-      if (entity_type !== "stakeholder" || !entity_id || typeof entity_id !== "string") {
-        res.status(400).json({ error: "BAD_REQUEST", message: "stakeholder requires entity_type 'stakeholder' and a valid entity_id" });
-        return;
-      }
-      const shCheck = await pool.query<{ id: string }>("SELECT id FROM stakeholders WHERE id = $1", [entity_id]);
-      if (shCheck.rows.length === 0) {
-        res.status(400).json({ error: "BAD_REQUEST", message: "entity_id does not match any known stakeholder" });
+      if (!stakeholderName || typeof stakeholderName !== "string" || !stakeholderName.trim()) {
+        res.status(400).json({ error: "BAD_REQUEST", message: "stakeholderName is required for stakeholder users" });
         return;
       }
     } else if (typedRole === "super_admin") {
@@ -354,6 +350,44 @@ export async function createUser(req: Request, res: Response): Promise<void> {
         res.status(400).json({ error: "BAD_REQUEST", message: "super_admin must not have entity fields" });
         return;
       }
+    }
+
+    // ── Resolve stakeholder entity (lookup or create) ──────────────────────
+    let resolvedEntityType: string | null = (entity_type as string | undefined) ?? null;
+    let resolvedEntityId: string | null = (entity_id as string | undefined) ?? null;
+
+    if (typedRole === "stakeholder") {
+      const name = (stakeholderName as string).trim();
+      const existingSh = await pool.query<{ id: string }>(
+        `SELECT id FROM stakeholders WHERE LOWER(name) = LOWER($1)`,
+        [name],
+      );
+      if (existingSh.rows.length > 0) {
+        resolvedEntityId = existingSh.rows[0].id;
+      } else {
+        const client = await pool.connect();
+        try {
+          await client.query("BEGIN");
+          const newSh = await client.query<{ id: string }>(
+            `INSERT INTO stakeholders (name) VALUES ($1) RETURNING id`,
+            [name],
+          );
+          const newShId = newSh.rows[0].id;
+          await client.query(
+            `INSERT INTO wallets (owner_type, owner_id, total_collected)
+             VALUES ('stakeholder', $1, 0) ON CONFLICT DO NOTHING`,
+            [newShId],
+          );
+          await client.query("COMMIT");
+          resolvedEntityId = newShId;
+        } catch (err) {
+          await client.query("ROLLBACK");
+          throw err;
+        } finally {
+          client.release();
+        }
+      }
+      resolvedEntityType = "stakeholder";
     }
 
     // ── Hash + insert ──────────────────────────────────────────────────────
@@ -377,8 +411,8 @@ export async function createUser(req: Request, res: Response): Promise<void> {
         email.toLowerCase().trim(),
         passwordHash,
         typedRole,
-        (entity_type as string | undefined) ?? null,
-        (entity_id as string | undefined) ?? null,
+        resolvedEntityType,
+        resolvedEntityId,
         (firstName as string).trim(),
         (lastName as string).trim(),
       ],

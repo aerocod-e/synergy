@@ -166,6 +166,9 @@ export const createPricingChart = (body: unknown) =>
 export const updatePricingChart = (id: string, body: unknown) =>
   apiRequest(`/api/pricing/${id}`, { method: 'PUT', body: JSON.stringify(body) });
 
+export const addStakeholderRate = (chartId: string, body: { stakeholderId: string; amount: number }) =>
+  apiRequest(`/api/pricing/${chartId}/stakeholders`, { method: 'POST', body: JSON.stringify(body) });
+
 export const activatePricingChart = (id: string) =>
   apiRequest(`/api/pricing/${id}/activate`, { method: 'POST' });
 

@@ -87,6 +87,7 @@ export default function UsersScreen() {
   const [formPassword, setFormPassword] = useState('');
   const [formRole, setFormRole] = useState<CreatableRole | null>(null);
   const [formEntityId, setFormEntityId] = useState<string | null>(null);
+  const [formStakeholderName, setFormStakeholderName] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -175,6 +176,7 @@ export default function UsersScreen() {
   const handleRoleSelect = (role: CreatableRole) => {
     setFormRole(role);
     setFormEntityId(null);
+    setFormStakeholderName('');
   };
 
   const handleSubmit = async () => {
@@ -199,22 +201,37 @@ export default function UsersScreen() {
       setFormError('Please select a role.');
       return;
     }
-    if (!formEntityId) {
-      setFormError(`Please select a ${formRole === 'state_admin' ? 'state' : 'stakeholder'}.`);
+    if (formRole === 'state_admin' && !formEntityId) {
+      setFormError('Please select a state.');
+      return;
+    }
+    if (formRole === 'stakeholder' && !formStakeholderName.trim()) {
+      setFormError('Stakeholder / Organization Name is required.');
       return;
     }
 
     setSubmitting(true);
     try {
-      await createUser({
-        firstName: formFirstName.trim(),
-        lastName: formLastName.trim(),
-        email: formEmail.trim(),
-        password: formPassword,
-        role: formRole,
-        entity_type: formRole === 'state_admin' ? 'state' : 'stakeholder',
-        entity_id: formEntityId,
-      });
+      if (formRole === 'stakeholder') {
+        await createUser({
+          firstName: formFirstName.trim(),
+          lastName: formLastName.trim(),
+          email: formEmail.trim(),
+          password: formPassword,
+          role: formRole,
+          stakeholderName: formStakeholderName.trim(),
+        });
+      } else {
+        await createUser({
+          firstName: formFirstName.trim(),
+          lastName: formLastName.trim(),
+          email: formEmail.trim(),
+          password: formPassword,
+          role: formRole,
+          entity_type: 'state',
+          entity_id: formEntityId,
+        });
+      }
       setModalVisible(false);
       setRefreshing(true);
       await fetchUsers();
@@ -391,35 +408,52 @@ export default function UsersScreen() {
               })}
             </View>
 
-            {/* Entity picker */}
+            {/* Entity picker / Stakeholder name */}
             {formRole !== null && (
               <>
-                <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>
-                  {formRole === 'state_admin' ? 'State' : 'Stakeholder'}
-                </Text>
-                {entityItems.length === 0 ? (
-                  <Text style={styles.emptyText}>No options available</Text>
+                {formRole === 'stakeholder' ? (
+                  <>
+                    <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>
+                      Stakeholder / Organization Name
+                    </Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g. Lagos Transport Union"
+                      placeholderTextColor={theme.colors.placeholder}
+                      autoCapitalize="words"
+                      autoCorrect={false}
+                      value={formStakeholderName}
+                      onChangeText={setFormStakeholderName}
+                    />
+                  </>
                 ) : (
-                  <View style={styles.entityList}>
-                    {entityItems.map((item) => {
-                      const selected = formEntityId === item.id;
-                      return (
-                        <TouchableOpacity
-                          key={item.id}
-                          style={[styles.entityItem, selected && styles.entityItemSelected]}
-                          onPress={() => setFormEntityId(item.id)}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={[styles.entityItemText, selected && styles.entityItemTextSelected]}>
-                            {item.label}
-                          </Text>
-                          {selected && (
-                            <Ionicons name="checkmark" size={16} color={theme.colors.primary} />
-                          )}
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
+                  <>
+                    <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>State</Text>
+                    {entityItems.length === 0 ? (
+                      <Text style={styles.emptyText}>No options available</Text>
+                    ) : (
+                      <View style={styles.entityList}>
+                        {entityItems.map((item) => {
+                          const selected = formEntityId === item.id;
+                          return (
+                            <TouchableOpacity
+                              key={item.id}
+                              style={[styles.entityItem, selected && styles.entityItemSelected]}
+                              onPress={() => setFormEntityId(item.id)}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={[styles.entityItemText, selected && styles.entityItemTextSelected]}>
+                                {item.label}
+                              </Text>
+                              {selected && (
+                                <Ionicons name="checkmark" size={16} color={theme.colors.primary} />
+                              )}
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    )}
+                  </>
                 )}
               </>
             )}

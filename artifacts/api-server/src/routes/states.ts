@@ -43,16 +43,16 @@ async function updateStateRates(req: Request, res: Response): Promise<void> {
     unloadingRate?: unknown;
   };
 
-  function isNonNegativeInt(v: unknown): v is number {
-    return typeof v === "number" && Number.isInteger(v) && v >= 0;
+  function isPositiveInt(v: unknown): v is number {
+    return typeof v === "number" && Number.isInteger(v) && v > 0;
   }
 
-  if (!isNonNegativeInt(loadingRate)) {
-    res.status(400).json({ error: "BAD_REQUEST", message: "loadingRate must be a non-negative integer (kobo)" });
+  if (!isPositiveInt(loadingRate)) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "loadingRate must be a positive integer greater than zero (kobo)" });
     return;
   }
-  if (!isNonNegativeInt(unloadingRate)) {
-    res.status(400).json({ error: "BAD_REQUEST", message: "unloadingRate must be a non-negative integer (kobo)" });
+  if (!isPositiveInt(unloadingRate)) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "unloadingRate must be a positive integer greater than zero (kobo)" });
     return;
   }
 

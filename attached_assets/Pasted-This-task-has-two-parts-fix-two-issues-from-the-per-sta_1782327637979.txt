@@ -1,0 +1,64 @@
+This task has two parts: fix two issues from the per-state pricing implementation, then build the dynamic stakeholder onboarding feature.
+PART A -- Fix T2 and T6
+Fix T2 -- Reject zero and negative state rates
+Open the states controller. Find updateStateRates. Add validation rejecting loadingRate <= 0 or unloadingRate <= 0 with a clear 400 response and message for each.
+Fix T6 -- Re-seed demo trip fees with correct per-state amounts
+In artifacts/api-server/src/db/seed.ts, find the demo trips block. For each of the 9 demo trips, inside its own transaction:
+
+Delete existing trip_fees rows for that trip
+Delete existing wallet_ledger rows for that trip
+Decrement wallets.total_collected for each affected wallet by the old amounts
+Look up the loading state's loading_rate and unloading state's unloading_rate from the states table by name -- do not hardcode amounts
+Re-insert trip_fees using those looked-up rates
+Re-insert wallet_ledger credit entries with the new amounts
+Increment wallets.total_collected with the new amounts
+For the cancelled trip (DEMO-2026-000008), also re-insert reversal ledger entries and ensure wallet totals net to zero for that trip's fees
+
+After all 9 trips are re-seeded, run a reconciliation check: for every wallet touched, confirm SUM(amount) from wallet_ledger matches wallets.total_collected. If any wallet fails reconciliation, abort and report which one.
+Run the seed twice to confirm idempotency.
+
+PART B -- Dynamic stakeholder onboarding
+Step 1 -- Backend: update createUser for stakeholder role
+In userController.ts, update createUser:
+
+For role = 'stakeholder', accept stakeholderName (string, required) instead of entity_id and entity_type
+Check whether a stakeholder with that name already exists (case-insensitive match on stakeholders.name)
+If exists: link the new user to the existing entity
+If not exists: inside a single transaction, create a new stakeholder entity, create a wallet for it (INSERT INTO wallets (owner_type, owner_id, total_collected) VALUES ('stakeholder', $newId, 0) ON CONFLICT DO NOTHING), then link the new user
+Do NOT add the new stakeholder to any pricing chart -- that is an explicit Super Admin action done separately
+Return 400 if stakeholderName is missing or empty
+
+For state_admin and trip_admin, entity_type and entity_id remain required as before.
+Step 2 -- Backend: new stakeholders visible on pricing chart management
+Update getActivePricingChart in pricingController.ts to also return a list of stakeholders that exist in the stakeholders table but have NO rate row on the active pricing chart. Call this field unassignedStakeholders in the response -- an array of { id, name } objects.
+This allows the frontend to show Super Admin which stakeholders still need a rate configured.
+Step 3 -- Backend: add stakeholder rate to existing chart
+Add a new endpoint:
+POST /pricing/:chartId/stakeholders   authenticateToken + requireRole("super_admin") → addStakeholderRate
+addStakeholderRate accepts { stakeholderId, amount } (amount in kobo, must be > 0). Inserts a new row into pricing_chart_stakeholder_rates. Returns 409 if the stakeholder already has a rate on this chart. Returns 400 if amount is zero or negative.
+Register in artifacts/api-server/src/routes/pricing.ts.
+Step 4 -- Frontend: update user creation modal
+In (superadmin)/users.tsx, when role = 'Stakeholder' is selected:
+
+Replace the stakeholder dropdown with a plain TextInput labeled "Stakeholder / Organization Name"
+Placeholder: "e.g. Lagos Transport Union"
+Required -- show inline validation error if empty on submit
+Pass as stakeholderName in the API call, not entity_id or entity_type
+
+Update the createUser helper in services/api.ts to handle the new body shape for stakeholder users.
+Step 5 -- Frontend: update pricing chart screen to show unassigned stakeholders
+In (superadmin)/config.tsx, in the pricing chart display section:
+
+After the existing stakeholder rates list (which shows configured stakeholders with their rates), add a new subsection: "Stakeholders Pending Rate"
+This shows the unassignedStakeholders array from the GET /api/pricing/active response
+Each unassigned stakeholder appears as a card with their name and a "Set Rate" button
+Tapping "Set Rate" opens a small modal with a single amount input (in Naira, converted to kobo on submit)
+On submit, call POST /api/pricing/:chartId/stakeholders with the stakeholder ID and amount
+On success, the stakeholder moves from "Pending Rate" to the configured rates list
+If there are no unassigned stakeholders, this section is hidden
+
+Add addStakeholderRate(chartId, body) helper to services/api.ts.
+Step 6 -- TypeScript check
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.

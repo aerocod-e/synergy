@@ -411,6 +411,9 @@ async function seed(): Promise<void> {
       isCancellationPending?: boolean;
     };
 
+    // Track every wallet touched across all trips for final reconciliation
+    const touchedWalletIds = new Set<string>();
+
     const insertDemoTrip = async (spec: TripSpec): Promise<void> => {
       const vehicleId     = vehicleIdMap[spec.vehicleReg];
       const driverId      = driverIdMap[spec.driverLic];
@@ -418,8 +421,18 @@ async function seed(): Promise<void> {
       const unloadStateId = stateIdMap[spec.unloadCode];
       const creatorId     = taIdMap[spec.creatorEmail];
 
-      // Insert trip — idempotent via UNIQUE(trip_code)
-      const tripRes = await client.query<{ id: string }>(
+      // Look up per-state rates from DB (never hardcode amounts)
+      const stateRatesRes = await client.query<{ id: string; loading_rate: number; unloading_rate: number }>(
+        `SELECT id, loading_rate, unloading_rate FROM states WHERE id = ANY($1::uuid[])`,
+        [[loadStateId, unloadStateId]],
+      );
+      const loadStateRow  = stateRatesRes.rows.find(r => r.id === loadStateId)!;
+      const unloadStateRow = stateRatesRes.rows.find(r => r.id === unloadStateId)!;
+      const loadingFee   = Number(loadStateRow.loading_rate);
+      const unloadingFee = Number(unloadStateRow.unloading_rate);
+
+      // Upsert trip — ON CONFLICT DO NOTHING so events are not duplicated
+      const insertTripRes = await client.query<{ id: string }>(
         `INSERT INTO trips
            (trip_code, vehicle_id, driver_id, loading_state_id, unloading_state_id,
             origin_description, destination_description, status, created_by
@@ -432,148 +445,203 @@ async function seed(): Promise<void> {
          spec.originDesc, spec.destDesc, spec.status, creatorId],
       );
 
-      const tripRow = tripRes.rows[0];
-      if (!tripRow) {
-        console.log(`  ↩ Trip ${spec.code}: already exists, skipped`);
-        return;
-      }
-      const tripId = tripRow.id;
-
-      // ── Trip fees ──────────────────────────────────────────────────────
-      const loadFeeRes = await client.query<{ id: string }>(
-        `INSERT INTO trip_fees (trip_id, recipient_type, recipient_id, fee_type, amount)
-         VALUES ($1, 'state', $2, 'loading', $3) RETURNING id`,
-        [tripId, loadStateId, DEMO_LOADING_FEE],
-      );
-      const loadFeeId = loadFeeRes.rows[0].id;
-
-      const unloadFeeRes = await client.query<{ id: string }>(
-        `INSERT INTO trip_fees (trip_id, recipient_type, recipient_id, fee_type, amount)
-         VALUES ($1, 'state', $2, 'unloading', $3) RETURNING id`,
-        [tripId, unloadStateId, DEMO_UNLOADING_FEE],
-      );
-      const unloadFeeId = unloadFeeRes.rows[0].id;
-
-      const shFees: { feeId: string; shId: string; amount: number }[] = [];
-      for (const sr of shRates) {
-        const sfRes = await client.query<{ id: string }>(
-          `INSERT INTO trip_fees (trip_id, recipient_type, recipient_id, fee_type, amount)
-           VALUES ($1, 'stakeholder', $2, 'stakeholder_fee', $3) RETURNING id`,
-          [tripId, sr.stakeholderId, sr.amount],
+      let tripId: string;
+      let isNew: boolean;
+      if (insertTripRes.rows[0]) {
+        tripId = insertTripRes.rows[0].id;
+        isNew = true;
+      } else {
+        const existRes = await client.query<{ id: string }>(
+          `SELECT id FROM trips WHERE trip_code = $1`,
+          [spec.code],
         );
-        shFees.push({ feeId: sfRes.rows[0].id, shId: sr.stakeholderId, amount: sr.amount });
+        tripId = existRes.rows[0]!.id;
+        isNew = false;
       }
 
-      // ── Wallet credits ─────────────────────────────────────────────────
-      const loadWalletId   = await getWalletId('state', loadStateId);
-      const unloadWalletId = await getWalletId('state', unloadStateId);
+      // ── Per-trip transaction: delete old fees, re-insert with correct amounts ──
+      await client.query('BEGIN');
+      try {
+        // 1. Get existing fees so we can undo their wallet effects
+        const existingFees = await client.query<{
+          id: string; recipient_type: string; recipient_id: string;
+        }>(
+          `SELECT id, recipient_type, recipient_id FROM trip_fees WHERE trip_id = $1`,
+          [tripId],
+        );
 
-      await client.query(
-        `INSERT INTO wallet_ledger (wallet_id, trip_id, trip_fee_id, amount, entry_type)
-         VALUES ($1, $2, $3, $4, 'credit')`,
-        [loadWalletId, tripId, loadFeeId, DEMO_LOADING_FEE],
-      );
-      await client.query(
-        `UPDATE wallets SET total_collected = total_collected + $1 WHERE id = $2`,
-        [DEMO_LOADING_FEE, loadWalletId],
-      );
+        for (const fee of existingFees.rows) {
+          const wRes = await client.query<{ id: string; net: string }>(
+            `SELECT w.id,
+                    COALESCE(SUM(wl.amount), 0)::bigint AS net
+             FROM wallets w
+             LEFT JOIN wallet_ledger wl ON wl.wallet_id = w.id AND wl.trip_fee_id = $1
+             WHERE w.owner_type = $2 AND w.owner_id = $3
+             GROUP BY w.id`,
+            [fee.id, fee.recipient_type, fee.recipient_id],
+          );
+          if (wRes.rows[0]) {
+            const net = Number(wRes.rows[0].net);
+            if (net !== 0) {
+              await client.query(
+                `UPDATE wallets SET total_collected = total_collected - $1 WHERE id = $2`,
+                [net, wRes.rows[0].id],
+              );
+            }
+            touchedWalletIds.add(wRes.rows[0].id);
+          }
+        }
 
-      await client.query(
-        `INSERT INTO wallet_ledger (wallet_id, trip_id, trip_fee_id, amount, entry_type)
-         VALUES ($1, $2, $3, $4, 'credit')`,
-        [unloadWalletId, tripId, unloadFeeId, DEMO_UNLOADING_FEE],
-      );
-      await client.query(
-        `UPDATE wallets SET total_collected = total_collected + $1 WHERE id = $2`,
-        [DEMO_UNLOADING_FEE, unloadWalletId],
-      );
+        // 2. Delete ledger entries and fees for this trip
+        await client.query(`DELETE FROM wallet_ledger WHERE trip_id = $1`, [tripId]);
+        await client.query(`DELETE FROM trip_fees   WHERE trip_id = $1`, [tripId]);
 
-      for (const sf of shFees) {
-        const shWalletId = await getWalletId('stakeholder', sf.shId);
+        // 3. Re-insert fees using per-state rates
+        const loadFeeRes = await client.query<{ id: string }>(
+          `INSERT INTO trip_fees (trip_id, recipient_type, recipient_id, fee_type, amount)
+           VALUES ($1, 'state', $2, 'loading', $3) RETURNING id`,
+          [tripId, loadStateId, loadingFee],
+        );
+        const loadFeeId = loadFeeRes.rows[0]!.id;
+
+        const unloadFeeRes = await client.query<{ id: string }>(
+          `INSERT INTO trip_fees (trip_id, recipient_type, recipient_id, fee_type, amount)
+           VALUES ($1, 'state', $2, 'unloading', $3) RETURNING id`,
+          [tripId, unloadStateId, unloadingFee],
+        );
+        const unloadFeeId = unloadFeeRes.rows[0]!.id;
+
+        const shFees: { feeId: string; shId: string; amount: number }[] = [];
+        for (const sr of shRates) {
+          const sfRes = await client.query<{ id: string }>(
+            `INSERT INTO trip_fees (trip_id, recipient_type, recipient_id, fee_type, amount)
+             VALUES ($1, 'stakeholder', $2, 'stakeholder_fee', $3) RETURNING id`,
+            [tripId, sr.stakeholderId, sr.amount],
+          );
+          shFees.push({ feeId: sfRes.rows[0]!.id, shId: sr.stakeholderId, amount: sr.amount });
+        }
+
+        // 4. Wallet credits
+        const loadWalletId   = await getWalletId('state', loadStateId);
+        const unloadWalletId = await getWalletId('state', unloadStateId);
+        touchedWalletIds.add(loadWalletId);
+        touchedWalletIds.add(unloadWalletId);
+
         await client.query(
           `INSERT INTO wallet_ledger (wallet_id, trip_id, trip_fee_id, amount, entry_type)
            VALUES ($1, $2, $3, $4, 'credit')`,
-          [shWalletId, tripId, sf.feeId, sf.amount],
+          [loadWalletId, tripId, loadFeeId, loadingFee],
         );
         await client.query(
           `UPDATE wallets SET total_collected = total_collected + $1 WHERE id = $2`,
-          [sf.amount, shWalletId],
-        );
-      }
-
-      // ── Wallet reversals (cancelled trips only) ────────────────────────
-      if (spec.isCancelled) {
-        await client.query(
-          `INSERT INTO wallet_ledger (wallet_id, trip_id, trip_fee_id, amount, entry_type)
-           VALUES ($1, $2, $3, $4, 'reversal')`,
-          [loadWalletId, tripId, loadFeeId, -DEMO_LOADING_FEE],
-        );
-        await client.query(
-          `UPDATE wallets SET total_collected = total_collected - $1 WHERE id = $2`,
-          [DEMO_LOADING_FEE, loadWalletId],
+          [loadingFee, loadWalletId],
         );
 
         await client.query(
           `INSERT INTO wallet_ledger (wallet_id, trip_id, trip_fee_id, amount, entry_type)
-           VALUES ($1, $2, $3, $4, 'reversal')`,
-          [unloadWalletId, tripId, unloadFeeId, -DEMO_UNLOADING_FEE],
+           VALUES ($1, $2, $3, $4, 'credit')`,
+          [unloadWalletId, tripId, unloadFeeId, unloadingFee],
         );
         await client.query(
-          `UPDATE wallets SET total_collected = total_collected - $1 WHERE id = $2`,
-          [DEMO_UNLOADING_FEE, unloadWalletId],
+          `UPDATE wallets SET total_collected = total_collected + $1 WHERE id = $2`,
+          [unloadingFee, unloadWalletId],
         );
 
         for (const sf of shFees) {
           const shWalletId = await getWalletId('stakeholder', sf.shId);
+          touchedWalletIds.add(shWalletId);
+          await client.query(
+            `INSERT INTO wallet_ledger (wallet_id, trip_id, trip_fee_id, amount, entry_type)
+             VALUES ($1, $2, $3, $4, 'credit')`,
+            [shWalletId, tripId, sf.feeId, sf.amount],
+          );
+          await client.query(
+            `UPDATE wallets SET total_collected = total_collected + $1 WHERE id = $2`,
+            [sf.amount, shWalletId],
+          );
+        }
+
+        // 5. Reversals for cancelled trips (net to zero for this trip)
+        if (spec.isCancelled) {
           await client.query(
             `INSERT INTO wallet_ledger (wallet_id, trip_id, trip_fee_id, amount, entry_type)
              VALUES ($1, $2, $3, $4, 'reversal')`,
-            [shWalletId, tripId, sf.feeId, -sf.amount],
+            [loadWalletId, tripId, loadFeeId, -loadingFee],
           );
           await client.query(
             `UPDATE wallets SET total_collected = total_collected - $1 WHERE id = $2`,
-            [sf.amount, shWalletId],
+            [loadingFee, loadWalletId],
+          );
+
+          await client.query(
+            `INSERT INTO wallet_ledger (wallet_id, trip_id, trip_fee_id, amount, entry_type)
+             VALUES ($1, $2, $3, $4, 'reversal')`,
+            [unloadWalletId, tripId, unloadFeeId, -unloadingFee],
+          );
+          await client.query(
+            `UPDATE wallets SET total_collected = total_collected - $1 WHERE id = $2`,
+            [unloadingFee, unloadWalletId],
+          );
+
+          for (const sf of shFees) {
+            const shWalletId = await getWalletId('stakeholder', sf.shId);
+            await client.query(
+              `INSERT INTO wallet_ledger (wallet_id, trip_id, trip_fee_id, amount, entry_type)
+               VALUES ($1, $2, $3, $4, 'reversal')`,
+              [shWalletId, tripId, sf.feeId, -sf.amount],
+            );
+            await client.query(
+              `UPDATE wallets SET total_collected = total_collected - $1 WHERE id = $2`,
+              [sf.amount, shWalletId],
+            );
+          }
+        }
+
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      }
+
+      // 6. Trip events — only insert for newly created trips (idempotent)
+      if (isNew) {
+        await client.query(
+          `INSERT INTO trip_events (trip_id, event_type, performed_by) VALUES ($1, 'created', $2)`,
+          [tripId, creatorId],
+        );
+        if (spec.status === 'in_transit' || spec.status === 'completed') {
+          await client.query(
+            `INSERT INTO trip_events (trip_id, event_type, performed_by) VALUES ($1, 'started', $2)`,
+            [tripId, creatorId],
+          );
+        }
+        if (spec.status === 'completed') {
+          await client.query(
+            `INSERT INTO trip_events (trip_id, event_type, performed_by) VALUES ($1, 'completed', $2)`,
+            [tripId, creatorId],
+          );
+        }
+        if (spec.isCancelled) {
+          await client.query(
+            `INSERT INTO trip_events (trip_id, event_type, performed_by) VALUES ($1, 'cancelled', $2)`,
+            [tripId, creatorId],
+          );
+        }
+        if (spec.isCancellationPending) {
+          await client.query(
+            `INSERT INTO trip_events (trip_id, event_type, performed_by) VALUES ($1, 'cancellation_requested', $2)`,
+            [tripId, creatorId],
+          );
+          await client.query(
+            `INSERT INTO cancellation_requests
+               (trip_id, requested_by, reason, status, previous_trip_status)
+             VALUES ($1, $2, $3, 'pending', 'in_transit')`,
+            [tripId, creatorId, 'Cargo owner requested cancellation due to route change.'],
           );
         }
       }
 
-      // ── Trip events ────────────────────────────────────────────────────
-      await client.query(
-        `INSERT INTO trip_events (trip_id, event_type, performed_by) VALUES ($1, 'created', $2)`,
-        [tripId, creatorId],
-      );
-      if (spec.status === 'in_transit' || spec.status === 'completed') {
-        await client.query(
-          `INSERT INTO trip_events (trip_id, event_type, performed_by) VALUES ($1, 'started', $2)`,
-          [tripId, creatorId],
-        );
-      }
-      if (spec.status === 'completed') {
-        await client.query(
-          `INSERT INTO trip_events (trip_id, event_type, performed_by) VALUES ($1, 'completed', $2)`,
-          [tripId, creatorId],
-        );
-      }
-      if (spec.isCancelled) {
-        await client.query(
-          `INSERT INTO trip_events (trip_id, event_type, performed_by) VALUES ($1, 'cancelled', $2)`,
-          [tripId, creatorId],
-        );
-      }
-      if (spec.isCancellationPending) {
-        await client.query(
-          `INSERT INTO trip_events (trip_id, event_type, performed_by) VALUES ($1, 'cancellation_requested', $2)`,
-          [tripId, creatorId],
-        );
-        await client.query(
-          `INSERT INTO cancellation_requests
-             (trip_id, requested_by, reason, status, previous_trip_status)
-           VALUES ($1, $2, $3, 'pending', 'in_transit')`,
-          [tripId, creatorId, 'Cargo owner requested cancellation due to route change.'],
-        );
-      }
-
-      console.log(`  ✓ Trip ${spec.code} (${spec.status})`);
+      console.log(`  ✓ Trip ${spec.code} (${spec.status})${isNew ? '' : ' — fees re-seeded'}`);
     };
 
     const DEMO_TRIPS: TripSpec[] = [
@@ -649,6 +717,37 @@ async function seed(): Promise<void> {
       await insertDemoTrip(spec);
     }
     console.log(`✓ Demo trips processed: ${DEMO_TRIPS.length}`);
+
+    // ── Wallet reconciliation ──────────────────────────────────────────────
+    console.log('\n── Wallet reconciliation ──');
+    const failedWallets: string[] = [];
+    for (const walletId of touchedWalletIds) {
+      const rec = await client.query<{
+        stored: string; ledger_sum: string; owner_type: string; owner_id: string;
+      }>(
+        `SELECT w.total_collected::bigint AS stored,
+                COALESCE(SUM(wl.amount), 0)::bigint AS ledger_sum,
+                w.owner_type,
+                w.owner_id
+         FROM wallets w
+         LEFT JOIN wallet_ledger wl ON wl.wallet_id = w.id
+         WHERE w.id = $1
+         GROUP BY w.id, w.total_collected, w.owner_type, w.owner_id`,
+        [walletId],
+      );
+      const row = rec.rows[0]!;
+      const stored     = Number(row.stored);
+      const ledgerSum  = Number(row.ledger_sum);
+      if (stored !== ledgerSum) {
+        failedWallets.push(
+          `wallet ${walletId} (${row.owner_type}/${row.owner_id}): stored=${stored}, ledger_sum=${ledgerSum}`,
+        );
+      }
+    }
+    if (failedWallets.length > 0) {
+      throw new Error(`Reconciliation failed:\n${failedWallets.join('\n')}`);
+    }
+    console.log(`✓ Reconciliation passed: ${touchedWalletIds.size} wallets verified`);
 
     console.log('\n✅ Seed complete.');
   } finally {

@@ -1,6 +1,7 @@
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -16,6 +17,7 @@ import {
   getActivePricingChart,
   createPricingChart,
   activatePricingChart,
+  addStakeholderRate,
   getStakeholders,
   getStates,
   updateStateRates,
@@ -39,6 +41,7 @@ interface PricingChart {
   is_active: boolean;
   created_at: string;
   stakeholder_rates: StakeholderRate[];
+  unassignedStakeholders?: Array<{ id: string; name: string }>;
 }
 
 interface StateRateItem {
@@ -150,6 +153,12 @@ export default function ConfigScreen() {
   const [editUnloadingRate, setEditUnloadingRate] = useState('');
   const [savingStateId, setSavingStateId] = useState<string | null>(null);
   const [stateRateError, setStateRateError] = useState<string | null>(null);
+
+  const [pendingRateModalVisible, setPendingRateModalVisible] = useState(false);
+  const [selectedUnassignedSh, setSelectedUnassignedSh] = useState<{ id: string; name: string } | null>(null);
+  const [pendingRateInput, setPendingRateInput] = useState('');
+  const [pendingRateError, setPendingRateError] = useState<string | null>(null);
+  const [pendingRateSaving, setPendingRateSaving] = useState(false);
   const [stateSearch, setStateSearch] = useState('');
 
   const loadData = useCallback(async () => {
@@ -188,6 +197,37 @@ export default function ConfigScreen() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const openPendingRateModal = (sh: { id: string; name: string }) => {
+    setSelectedUnassignedSh(sh);
+    setPendingRateInput('');
+    setPendingRateError(null);
+    setPendingRateSaving(false);
+    setPendingRateModalVisible(true);
+  };
+
+  const handleSetStakeholderRate = async () => {
+    if (!activeChart || !selectedUnassignedSh) return;
+    if (!isValidNaira(pendingRateInput)) {
+      setPendingRateError('Enter a valid amount greater than zero.');
+      return;
+    }
+    setPendingRateSaving(true);
+    setPendingRateError(null);
+    try {
+      await addStakeholderRate(activeChart.id, {
+        stakeholderId: selectedUnassignedSh.id,
+        amount: nairaToKobo(pendingRateInput),
+      });
+      setPendingRateModalVisible(false);
+      const refreshed = await getActivePricingChart();
+      setActiveChart(refreshed?.chart ?? null);
+    } catch (e: any) {
+      setPendingRateError(e?.message ?? 'Failed to set rate.');
+    } finally {
+      setPendingRateSaving(false);
+    }
+  };
 
   const handleSubmit = async () => {
     setSubmitError(null);
@@ -419,6 +459,29 @@ export default function ConfigScreen() {
           </View>
         )}
 
+        {/* ── Stakeholders pending a rate on the active chart ── */}
+        {activeChart && (activeChart.unassignedStakeholders ?? []).length > 0 && (
+          <>
+            <Text style={[styles.sectionLabel, styles.sectionLabelSpaced]}>
+              Stakeholders Pending Rate
+            </Text>
+            <View style={styles.card}>
+              {(activeChart.unassignedStakeholders ?? []).map((sh) => (
+                <View key={sh.id} style={styles.pendingRateRow}>
+                  <Text style={styles.pendingRateName} numberOfLines={1}>{sh.name}</Text>
+                  <TouchableOpacity
+                    style={styles.setRateBtn}
+                    onPress={() => openPendingRateModal(sh)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.setRateBtnText}>Set Rate</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
         {/* ── Pending newly created chart ── */}
         {newChart && (
           <>
@@ -488,6 +551,59 @@ export default function ConfigScreen() {
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      {/* ── Set Stakeholder Rate Modal ── */}
+      <Modal
+        visible={pendingRateModalVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setPendingRateModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.pendingRateOverlay}>
+            <View style={styles.pendingRateCard}>
+              <Text style={styles.pendingRateTitle}>Set Stakeholder Rate</Text>
+              <Text style={styles.pendingRateSubtitle} numberOfLines={1}>
+                {selectedUnassignedSh?.name ?? ''}
+              </Text>
+              <Text style={styles.fieldLabel}>Rate (₦)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. 50000"
+                placeholderTextColor={theme.colors.placeholder}
+                keyboardType="decimal-pad"
+                value={pendingRateInput}
+                onChangeText={setPendingRateInput}
+              />
+              {pendingRateError ? (
+                <Text style={styles.errorText}>{pendingRateError}</Text>
+              ) : null}
+              <TouchableOpacity
+                style={[styles.submitButton, pendingRateSaving && styles.buttonDisabled]}
+                onPress={handleSetStakeholderRate}
+                disabled={pendingRateSaving}
+                activeOpacity={0.85}
+              >
+                {pendingRateSaving ? (
+                  <ActivityIndicator color={theme.colors.white} />
+                ) : (
+                  <Text style={styles.submitButtonText}>Confirm Rate</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setPendingRateModalVisible(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </KeyboardAvoidingView>
     </View>
   );
@@ -786,5 +902,65 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: theme.colors.white,
+  },
+  pendingRateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.separator,
+  },
+  pendingRateName: {
+    flex: 1,
+    fontSize: 14,
+    color: theme.colors.black,
+    marginRight: 12,
+  },
+  setRateBtn: {
+    backgroundColor: theme.colors.primary,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  setRateBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.colors.white,
+  },
+  pendingRateOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  pendingRateCard: {
+    backgroundColor: theme.colors.white,
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+  },
+  pendingRateTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.colors.black,
+    marginBottom: 4,
+  },
+  pendingRateSubtitle: {
+    fontSize: 13,
+    color: theme.colors.grey2,
+    marginBottom: 16,
+  },
+  cancelBtn: {
+    backgroundColor: theme.colors.grey4,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center' as const,
+    marginTop: 10,
+  },
+  cancelBtnText: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: theme.colors.grey2,
   },
 });
