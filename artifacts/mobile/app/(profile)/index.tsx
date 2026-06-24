@@ -137,6 +137,9 @@ export default function ProfileScreen() {
             autoCapitalize="none"
             autoCorrect={false}
           />
+          {newPwTooShort && (
+            <Text style={styles.fieldError}>New password must be at least 8 characters</Text>
+          )}
 
           <TextInput
             style={[styles.input, styles.inputSpaced]}
@@ -148,6 +151,9 @@ export default function ProfileScreen() {
             autoCapitalize="none"
             autoCorrect={false}
           />
+          {pwMismatch && (
+            <Text style={styles.fieldError}>Passwords do not match</Text>
+          )}
 
           <TouchableOpacity
             style={[styles.saveBtn, (!canSave || saving) && styles.btnDisabled]}
@@ -161,20 +167,13 @@ export default function ProfileScreen() {
               <Text style={styles.saveBtnText}>Save Password</Text>
             )}
           </TouchableOpacity>
+          {saveError ? (
+            <Text style={styles.fieldError}>{saveError}</Text>
+          ) : null}
+          {saveSuccess ? (
+            <Text style={styles.successText}>Password changed successfully</Text>
+          ) : null}
         </View>
-
-        {newPwTooShort && (
-          <Text style={styles.fieldError}>New password must be at least 8 characters</Text>
-        )}
-        {pwMismatch && (
-          <Text style={styles.fieldError}>Passwords do not match</Text>
-        )}
-        {saveError ? (
-          <Text style={styles.fieldError}>{saveError}</Text>
-        ) : null}
-        {saveSuccess ? (
-          <Text style={styles.successText}>Password changed successfully</Text>
-        ) : null}
 
         <View style={styles.divider} />
 
