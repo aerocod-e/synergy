@@ -72,7 +72,8 @@ function RootLayoutNav() {
       };
       const roleGroup = roleGroupMap[role] ?? "(stakeholder)";
 
-      if (currentGroup !== roleGroup && !inPublicGroup) {
+      const inProfileGroup = currentGroup === "(profile)";
+      if (currentGroup !== roleGroup && !inPublicGroup && !inProfileGroup) {
         if (role === "super_admin")      router.replace("/(superadmin)");
         else if (role === "state_admin") router.replace("/(stateadmin)");
         else if (role === "trip_admin")  router.replace("/(tripadmin)");

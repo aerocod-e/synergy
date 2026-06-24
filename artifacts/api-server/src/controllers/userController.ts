@@ -424,8 +424,10 @@ export async function resetUserPassword(req: Request, res: Response): Promise<vo
       return;
     }
     res.status(200).json({
-      message:
-        "Password has been reset to Temp@1234. Please inform the user to log in and change their password immediately.",
+      data: {
+        message:
+          "Password has been reset to Temp@1234. Please inform the user to log in and change their password immediately.",
+      },
     });
   } catch (err) {
     console.error(err);

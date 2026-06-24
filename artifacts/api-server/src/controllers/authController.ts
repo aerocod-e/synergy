@@ -244,7 +244,7 @@ export async function changePassword(req: Request, res: Response): Promise<void>
     const hash = await bcrypt.hash(newPassword, 10);
     await pool.query("UPDATE users SET password_hash = $1 WHERE id = $2", [hash, userId]);
 
-    res.status(200).json({ message: "Password changed successfully" });
+    res.status(200).json({ data: { message: "Password changed successfully" } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to change password" });
