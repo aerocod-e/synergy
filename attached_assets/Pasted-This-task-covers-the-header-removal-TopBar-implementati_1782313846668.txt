@@ -1,0 +1,71 @@
+This task covers the header removal, TopBar implementation, profile screen, and Super Admin password reset. Follow all steps in order.Critical testing setup:
+
+App URL: https://2f2a3156-e178-45fc-95e3-f3726442355f-00-2f9hl4ag0p8j2.expo.kirk.replit.dev
+Viewport: 390x844px for all browser tests
+Step 1 -- Fix the TopBar componentThe current LogoutButton component was incorrectly repurposed to show the avatar. Revert it completely -- delete LogoutButton.tsx or restore it to its original logout-only purpose if anything still uses it. Then properly build TopBar.tsx as follows:Create artifacts/mobile/components/TopBar.tsx with this exact layout:[ Avatar Circle ]                    [ Logout Icon ]
+Left side: A circular avatar (40px diameter, background theme.colors.primary, white bold text, font size 16) showing the first letter of the user's firstName from the auth context. Tapping it calls router.push('/(profile)').
+Right side: A TouchableOpacity with padding: 8 containing Ionicons log-out-outline size 24 in theme.colors.primary. Tapping it calls signOut from the auth context and navigates to /(auth)/login.
+The row: flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8, transparent background.
+Both the avatar and logout button must be TouchableOpacity components -- no platform-specific button wrappers.
+Step 2 -- Remove native header from all role layoutsIn all four role layout files set headerShown: false in screenOptions:
+
+(superadmin)/_layout.tsx
+(stateadmin)/_layout.tsx
+(tripadmin)/_layout.tsx
+(stakeholder)/_layout.tsx
+Also remove the LogoutButton import and headerRight from all four layout files since logout now lives in the TopBar.Also set headerShown: false for each role group's Stack screen in the root app/_layout.tsx.Step 3 -- Add TopBar to every role screenAdd <TopBar /> as the very first element inside the main content of every screen listed below. It must appear above everything else -- above filter pills, above lists, above cards, above everything:
+(superadmin)/index.tsx
+(superadmin)/trips.tsx
+(superadmin)/config.tsx
+(superadmin)/users.tsx
+(stateadmin)/index.tsx
+(stateadmin)/trip-admins.tsx
+(tripadmin)/index.tsx
+(tripadmin)/vehicles.tsx
+(tripadmin)/drivers.tsx
+(stakeholder)/index.tsx
+Import TopBar from @/components/TopBar in each file.Step 4 -- Backend: change password endpointIn artifacts/api-server/src/controllers/authController.ts, add a changePassword function:
+
+PATCH handler for /auth/change-password
+Requires authentication (any role)
+Accepts: currentPassword, newPassword
+Validates current password against the stored hash using bcrypt
+Returns 400 if current password is wrong with message "Current password is incorrect"
+Validates new password is at least 8 characters, returns 400 if too short
+Hashes the new password and updates users.password_hash
+Returns 200 with message "Password changed successfully"
+Register in artifacts/api-server/src/routes/auth.ts:
+PATCH /auth/change-password   authenticateToken → changePasswordStep 5 -- Backend: Super Admin reset user passwordIn artifacts/api-server/src/controllers/userController.ts, add a resetUserPassword function:
+
+POST handler for /users/:id/reset-password
+Super Admin only
+Sets the target user's password_hash to bcrypt hash of Temp@1234
+Returns 200 with message "Password has been reset to Temp@1234. Please inform the user to log in and change their password immediately."
+Register in artifacts/api-server/src/routes/users.ts:
+POST /users/:id/reset-password   authenticateToken + requireRole("super_admin") → resetUserPasswordStep 6 -- Create the profile screenCreate artifacts/mobile/app/(profile)/_layout.tsx -- a simple Stack with headerShown: false.Create artifacts/mobile/app/(profile)/index.tsx with:
+At the top: the user's full name (firstName + ' ' + lastName) in large bold text, their email below it in smaller gray text, and their role as a styled badge (same badge style used elsewhere)
+A divider
+"Change Password" section with three TextInput fields (all masked with secureTextEntry): Current Password, New Password, Confirm New Password
+Inline validation below the form:
+
+New password must be at least 8 characters
+New password and confirm must match
+Both shown as red error text if invalid
+
+
+A primary "Save Password" button that calls PATCH /api/auth/change-password
+Success message "Password changed successfully" shown inline after success, clearing the form fields
+A divider
+A red "Sign Out" button at the bottom that calls signOut and navigates to /(auth)/login
+App version v1.0.0 in small gray text at the very bottom, centered
+Register (profile) in the root app/_layout.tsx as an authenticated Stack screen:
+tsx<Stack.Screen name="(profile)" options={{ headerShown: false }} />Add changePassword(body) helper to services/api.ts calling PATCH /api/auth/change-password.Step 7 -- Super Admin: reset another user's password from Users tabIn (superadmin)/users.tsx, make each user card tappable. Tapping opens a modal showing:
+
+The user's full name and role (read-only)
+Their email (read-only)
+A "Reset Password" button (styled as a warning/amber action)
+A Cancel button
+Tapping Reset Password calls POST /api/users/:id/reset-password. On success, show the response message clearly inside the modal: "Password has been reset to Temp@1234. Please inform the user to log in and change their password immediately."Add resetUserPassword(userId) helper to services/api.ts.Step 8 -- TypeScript check
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.

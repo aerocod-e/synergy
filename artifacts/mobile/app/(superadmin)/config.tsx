@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { getActivePricingChart, createPricingChart, activatePricingChart, getStakeholders } from '@/services/api';
 import type { Stakeholder } from '@/types/index';
 import { theme } from '@/constants/theme';
+import TopBar from '@/components/TopBar';
 import { formatNaira } from '@/utils/formatCurrency';
 
 interface StakeholderRate {
@@ -257,11 +258,13 @@ export default function ConfigScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={96}
-    >
+    <View style={{ flex: 1 }}>
+      <TopBar />
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={96}
+      >
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
 
         {/* ── Active chart ── */}
@@ -363,6 +366,7 @@ export default function ConfigScreen() {
         <View style={styles.bottomSpacer} />
       </ScrollView>
     </KeyboardAvoidingView>
+    </View>
   );
 }
 

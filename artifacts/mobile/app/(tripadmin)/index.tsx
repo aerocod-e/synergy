@@ -19,6 +19,7 @@ import {
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
+import TopBar from '@/components/TopBar';
 import VehicleSearchInput, { type Vehicle } from '@/components/VehicleSearchInput';
 import DriverSearchInput, { type Driver } from '@/components/DriverSearchInput';
 import { getTrips, createTrip, getActivePricingChart, getStates, requestCancellation, createVehicle } from '@/services/api';
@@ -426,6 +427,7 @@ export default function TripAdminTrips() {
 
   return (
     <View style={styles.container}>
+      <TopBar />
       <FlatList
         data={trips}
         keyExtractor={(t) => t.id}

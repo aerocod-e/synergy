@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
+import TopBar from '@/components/TopBar';
 import { getMyWallet, getMyLedger } from '@/services/api';
 import { formatNaira, formatNairaWithSign } from '@/utils/formatCurrency';
 
@@ -229,6 +230,7 @@ export default function StakeholderHome() {
 
   return (
     <View style={styles.container}>
+      <TopBar />
       {/* Balance card */}
       <View style={styles.balanceCard}>
         <Text style={styles.balanceLabel}>TOTAL COLLECTED</Text>

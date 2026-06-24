@@ -410,3 +410,25 @@ export async function createUser(req: Request, res: Response): Promise<void> {
     res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to create user" });
   }
 }
+
+export async function resetUserPassword(req: Request, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const hash = await bcrypt.hash("Temp@1234", 10);
+    const result = await pool.query(
+      "UPDATE users SET password_hash = $1 WHERE id = $2 AND deleted_at IS NULL",
+      [hash, id],
+    );
+    if ((result.rowCount ?? 0) === 0) {
+      res.status(404).json({ error: "NOT_FOUND", message: "User not found" });
+      return;
+    }
+    res.status(200).json({
+      message:
+        "Password has been reset to Temp@1234. Please inform the user to log in and change their password immediately.",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to reset password" });
+  }
+}

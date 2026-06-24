@@ -15,6 +15,7 @@ import {
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
+import TopBar from '@/components/TopBar';
 import {
   listCancellationRequests,
   approveCancellationRequest,
@@ -241,6 +242,7 @@ export default function StateAdminHome() {
 
   return (
     <View style={styles.container}>
+      <TopBar />
       <FlatList
         data={requests}
         keyExtractor={(r) => r.id}

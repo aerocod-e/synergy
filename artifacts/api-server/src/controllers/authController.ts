@@ -203,3 +203,50 @@ export async function me(req: Request, res: Response): Promise<void> {
     res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to fetch user" });
   }
 }
+
+export async function changePassword(req: Request, res: Response): Promise<void> {
+  try {
+    const { currentPassword, newPassword } = req.body as {
+      currentPassword?: unknown;
+      newPassword?: unknown;
+    };
+
+    if (
+      !currentPassword || typeof currentPassword !== "string" ||
+      !newPassword     || typeof newPassword !== "string"
+    ) {
+      res.status(400).json({ error: "BAD_REQUEST", message: "currentPassword and newPassword are required" });
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      res.status(400).json({ error: "BAD_REQUEST", message: "New password must be at least 8 characters" });
+      return;
+    }
+
+    const userId = req.user!.userId;
+    const { rows } = await pool.query<{ password_hash: string }>(
+      "SELECT password_hash FROM users WHERE id = $1 AND deleted_at IS NULL LIMIT 1",
+      [userId],
+    );
+
+    if (!rows[0]) {
+      res.status(401).json({ error: "UNAUTHORIZED", message: "User not found" });
+      return;
+    }
+
+    const valid = await bcrypt.compare(currentPassword, rows[0].password_hash);
+    if (!valid) {
+      res.status(400).json({ error: "BAD_REQUEST", message: "Current password is incorrect" });
+      return;
+    }
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    await pool.query("UPDATE users SET password_hash = $1 WHERE id = $2", [hash, userId]);
+
+    res.status(200).json({ message: "Password changed successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to change password" });
+  }
+}

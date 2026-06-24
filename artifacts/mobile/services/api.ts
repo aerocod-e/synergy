@@ -194,3 +194,10 @@ export const updateDriver = (id: string, body: { full_name?: string; phone_numbe
 
 export const updateVehicle = (id: string, body: { registrationNumber: string }) =>
   apiRequest(`/api/vehicles/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+
+// ── Auth / Profile ────────────────────────────────────────────────────────────
+export const changePassword = (body: { currentPassword: string; newPassword: string }) =>
+  apiRequest('/api/auth/change-password', { method: 'PATCH', body: JSON.stringify(body) });
+
+export const resetUserPassword = (userId: string) =>
+  apiRequest(`/api/users/${userId}/reset-password`, { method: 'POST' });

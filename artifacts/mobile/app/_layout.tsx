@@ -96,7 +96,8 @@ function RootLayoutNav() {
       <Stack.Screen name="(stateadmin)"  options={{ headerShown: false }} />
       <Stack.Screen name="(tripadmin)"   options={{ headerShown: false }} />
       <Stack.Screen name="(stakeholder)" options={{ headerShown: false }} />
-      <Stack.Screen name="(public)"      options={{ headerShown: false }} />
+      <Stack.Screen name="(profile)"    options={{ headerShown: false }} />
+      <Stack.Screen name="(public)"     options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)"        options={{ headerShown: false }} />
       <Stack.Screen name="+not-found" />
     </Stack>

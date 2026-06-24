@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { theme } from '@/constants/theme';
+import TopBar from '@/components/TopBar';
 import { getTrips } from '@/services/api';
 
 type TripStatus = 'created' | 'in_transit' | 'completed' | 'cancelled';
@@ -223,6 +224,7 @@ export default function SuperAdminTripsList() {
 
   return (
     <View style={styles.container}>
+      <TopBar />
       <View style={styles.summaryCard}>
         <View style={styles.summaryHalf}>
           <Text style={styles.summaryValue}>{activeCount}</Text>

@@ -1,53 +1,16 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Tabs, useRouter } from 'expo-router';
-import { TouchableOpacity } from 'react-native';
-import { useLogout } from '@/hooks/useLogout';
-import { theme } from '@/constants/theme';
+import { Tabs } from 'expo-router';
 import PillTabBar from '@/components/PillTabBar';
-import LogoutButton from '@/components/LogoutButton';
 
 export default function TripAdminLayout() {
-  const { handleLogout } = useLogout();
-  const router = useRouter();
-
   return (
     <Tabs
       tabBar={(props) => <PillTabBar {...props} />}
-      screenOptions={{
-        headerTitle: 'Synergy Cargo Tax',
-        headerRight: () => <LogoutButton onPress={handleLogout} />,
-        headerStyle: {
-          backgroundColor: theme.colors.white,
-          ...theme.shadows.header,
-        },
-        headerTitleStyle: { ...theme.typography.headerTitle },
-        headerShadowVisible: false,
-      }}
+      screenOptions={{ headerShown: false }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{ title: 'Trips', tabBarLabel: 'Trips' }}
-      />
-      <Tabs.Screen
-        name="vehicles"
-        options={{ title: 'Vehicles', tabBarLabel: 'Vehicles' }}
-      />
-      <Tabs.Screen
-        name="drivers"
-        options={{ title: 'Drivers', tabBarLabel: 'Drivers' }}
-      />
-      <Tabs.Screen
-        name="trip-detail"
-        options={{
-          title: 'Trip Detail',
-          href: null,
-          headerLeft: () => (
-            <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 16 }}>
-              <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
-            </TouchableOpacity>
-          ),
-        }}
-      />
+      <Tabs.Screen name="index"       options={{ title: 'Trips',    tabBarLabel: 'Trips' }} />
+      <Tabs.Screen name="vehicles"    options={{ title: 'Vehicles', tabBarLabel: 'Vehicles' }} />
+      <Tabs.Screen name="drivers"     options={{ title: 'Drivers',  tabBarLabel: 'Drivers' }} />
+      <Tabs.Screen name="trip-detail" options={{ title: 'Trip Detail', href: null }} />
     </Tabs>
   );
 }

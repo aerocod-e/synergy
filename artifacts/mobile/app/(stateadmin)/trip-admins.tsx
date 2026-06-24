@@ -17,6 +17,7 @@ import {
 import { useFocusEffect, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
+import TopBar from '@/components/TopBar';
 import { listTripAdmins, createUser, updateCancellationRights, toggleUserActive, getTripAdminActiveTripsCount } from '@/services/api';
 import { useAuthContext } from '@/app/_layout';
 
@@ -372,6 +373,7 @@ export default function StateAdminTripAdmins() {
 
   return (
     <View style={styles.container}>
+      <TopBar />
       <FlatList
         data={admins}
         keyExtractor={(a) => a.id}

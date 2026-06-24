@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
+import TopBar from '@/components/TopBar';
 import { formatNaira } from '@/utils/formatCurrency';
 import { getUsers, getStates, getStakeholders, getActivePricingChart, getAllWallets } from '@/services/api';
 
@@ -175,10 +176,12 @@ export default function SuperAdminDashboard() {
   }
 
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.scrollContent}
-      refreshControl={
+    <View style={{ flex: 1 }}>
+      <TopBar />
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
         <RefreshControl
           refreshing={refreshing}
           onRefresh={() => fetchDashboard(true)}
@@ -262,6 +265,7 @@ export default function SuperAdminDashboard() {
         </>
       )}
     </ScrollView>
+    </View>
   );
 }
 

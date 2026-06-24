@@ -14,6 +14,7 @@ import {
 import { useFocusEffect, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
+import TopBar from '@/components/TopBar';
 import { listDrivers, createDriver, updateDriver } from '@/services/api';
 import { useLogout } from '@/hooks/useLogout';
 
@@ -245,6 +246,7 @@ export default function TripAdminDrivers() {
 
   return (
     <View style={styles.container}>
+      <TopBar />
       <FlatList
         data={drivers}
         keyExtractor={(d) => d.id}
