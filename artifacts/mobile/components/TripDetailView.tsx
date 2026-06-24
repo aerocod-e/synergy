@@ -114,12 +114,19 @@ export default function TripDetailView({ trip, footer }: TripDetailViewProps) {
       {/* ── Header ── */}
       <View style={styles.headerCard}>
         <View style={styles.headerRow}>
-          <Text style={styles.tripCode}>{trip.tripCode ?? '—'}</Text>
+          <View style={styles.headerLeft}>
+            <Text style={styles.headerMeta}>TRIP ID</Text>
+            <Text style={styles.tripCode}>{trip.tripCode ?? '—'}</Text>
+          </View>
           <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
             <Text style={[styles.statusBadgeText, { color: badge.text }]}>{badge.label}</Text>
           </View>
         </View>
-        <Text style={styles.vehicleNumber}>{trip.vehicleNumber}</Text>
+        <View style={styles.rowDivider} />
+        <View style={styles.vehicleRow}>
+          <Text style={styles.headerMeta}>VEHICLE NO.</Text>
+          <Text style={styles.vehicleNumber}>{trip.vehicleNumber}</Text>
+        </View>
       </View>
 
       {/* ── Trip Info ── */}
@@ -236,7 +243,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 8,
+  },
+  headerLeft: {
+    flex: 1,
+    marginRight: 8,
+  },
+  headerMeta: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    color: theme.colors.grey1,
+    marginBottom: 2,
+    textTransform: 'uppercase',
+  },
+  vehicleRow: {
+    marginTop: 10,
   },
   tripCode: {
     fontSize: 15,

@@ -402,7 +402,7 @@ const styles = StyleSheet.create({
   // FAB
   fab: {
     position: 'absolute',
-    bottom: 96,
+    bottom: 120,
     right: 24,
     width: 52,
     height: 52,

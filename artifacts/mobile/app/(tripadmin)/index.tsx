@@ -333,10 +333,10 @@ export default function TripAdminTrips() {
         activeOpacity={0.9}
       >
         <View style={styles.cardTop}>
-          <View style={styles.plateBadge}>
-            <Text style={styles.plateText}>{item.vehicleNumber}</Text>
+          <View style={[styles.plateBadge, { flex: 1, marginRight: 8 }]}>
+            <Text style={styles.plateText} numberOfLines={1} ellipsizeMode="tail">{item.vehicleNumber}</Text>
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
+          <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg, flexShrink: 0 }]}>
             <Text style={[styles.statusText, { color: statusStyle.text }]}>
               {STATUS_LABELS[item.status] ?? item.status}
             </Text>

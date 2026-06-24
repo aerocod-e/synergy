@@ -85,7 +85,7 @@ function TripCard({ trip, onPress }: { trip: Trip; onPress: () => void }) {
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}>
       <View style={styles.cardRow}>
-        <Text style={styles.vehicleNumber}>{trip.vehicleNumber}</Text>
+        <Text style={styles.vehicleNumber} numberOfLines={1} ellipsizeMode="tail">{trip.vehicleNumber}</Text>
         <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
           <Text style={[styles.statusBadgeText, { color: badge.text }]}>{badge.label}</Text>
         </View>
@@ -594,11 +594,14 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     color: theme.colors.black,
+    flex: 1,
+    marginRight: 8,
   },
   statusBadge: {
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 4,
+    flexShrink: 0,
   },
   statusBadgeText: {
     fontSize: 12,

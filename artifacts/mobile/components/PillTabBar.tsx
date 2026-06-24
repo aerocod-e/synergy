@@ -72,7 +72,7 @@ export default function PillTabBar(props: any) {
       >
         {Platform.OS === 'ios' && (
           <BlurView
-            intensity={40}
+            intensity={60}
             tint="light"
             style={StyleSheet.absoluteFill}
           />
@@ -159,8 +159,8 @@ const styles = StyleSheet.create({
     elevation: 14,
   },
   pillAndroid: {
-    backgroundColor: 'rgba(255,255,255,0.72)',
-    borderColor: 'rgba(200,200,200,0.4)',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderColor: 'rgba(200,200,200,0.5)',
   },
   slider: {
     position: 'absolute',
