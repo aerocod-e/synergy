@@ -1,0 +1,44 @@
+Good decisions. This is a fairly large batch so let me organize it into two separate prompts -- one for the UI fixes (quick, frontend-only) and one for the bigger feature work (driver/vehicle editing + pagination across all lists, which needs backend work too). That way the UI fixes land fast and you can verify them on device while the bigger work runs.
+Paste this first prompt into the Replit Agent:
+
+Fix seven UI issues found during physical iPhone testing. Frontend only -- no backend changes in this prompt. Follow all steps in order.
+Critical testing setup:
+
+App URL: https://2f2a3156-e178-45fc-95e3-f3726442355f-00-2f9hl4ag0p8j2.expo.kirk.replit.dev
+Viewport: 390x844px for all browser tests
+
+Fix 1 -- Super Admin Users tab FAB still obstructed by pill nav
+In artifacts/mobile/app/(superadmin)/users.tsx, find the FAB (Add User button). It is positioned with position: 'absolute' and a bottom value that is too low. Update its bottom value to 120 to match the Trip Admin FABs and clear the pill nav comfortably.
+Fix 2 -- Missing bottom padding on Super Admin Home and Users tabs
+The Super Admin Home screen ((superadmin)/index.tsx) is a ScrollView. Confirm it has paddingBottom: theme.PILL_NAV_BOTTOM_PADDING in its contentContainerStyle. If missing, add it.
+The Super Admin Users tab ((superadmin)/users.tsx) is a FlatList. Confirm it has a ListFooterComponent with a 100px spacer (same as all other lists fixed in the previous polish pass). If missing, add it.
+Fix 3 -- Platform grand total card inconsistent padding
+In (superadmin)/index.tsx, find the grand total card (the full-width card at the bottom of the dashboard). Its internal padding is inconsistent with the other cards. Set padding: 16 on this card to match all other dashboard cards.
+Fix 4 -- Stakeholder logout button still showing iOS 26 liquid glass
+The stakeholder layout (stakeholder)/_layout.tsx is still using a platform-native button instead of the shared LogoutButton component created in the previous polish pass. Open this file and replace whatever is in headerRight with:
+tsximport LogoutButton from '@/components/LogoutButton';
+// ...
+headerRight: () => <LogoutButton onPress={handleLogout} />
+Make sure handleLogout is correctly defined in this layout (calling signOut and navigating to login). Match the exact pattern used in the other three layout files that were already fixed.
+Fix 5 -- Long vehicle number breaking trip card layout
+In the trip card component inside (tripadmin)/index.tsx, the vehicle registration number is displayed as a plain Text component with no truncation. When the registration number is long, it pushes the status badge pill outside the card boundary.
+Fix: Add numberOfLines={1} and ellipsizeMode="tail" to the vehicle number Text component on the trip card. Also ensure the vehicle number text and the status badge are in a flexDirection: 'row' container where the text has flex: 1 and the badge has a fixed width or flexShrink: 0, so the badge never gets pushed out regardless of text length.
+Apply the same fix to the Super Admin trips list in (superadmin)/trips.tsx if it has the same layout pattern.
+Fix 6 -- Trip detail screen -- vehicle number not clearly labeled
+In artifacts/mobile/components/TripDetailView.tsx, the vehicle registration number is displayed but without a clear label. A user might confuse it with the Trip ID. Add an explicit "Vehicle No." label to the vehicle row, formatted the same way as the other labeled rows (Driver, Origin, Destination, Loading State, Unloading State). The Trip ID row should be labeled "Trip ID" if it is not already.
+Audit all rows in TripDetailView.tsx and confirm every piece of information has a clear, consistent label. Report which ones were missing labels and what you added.
+
+TypeScript check:
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Must return zero errors.
+
+PART 2 -- Testing (live browser, 390x844px, tap only)
+Test 1 -- Login as Super Admin. Go to Users tab. Confirm the Add User FAB sits clearly above the pill nav with no clipping.
+Test 2 -- On Super Admin Home, scroll to the bottom. Confirm the last card is fully visible. On Users tab, scroll to the bottom. Confirm the last user card is fully visible.
+Test 3 -- On Super Admin Home, confirm the grand total card has consistent internal padding matching the other cards.
+Test 4 -- Login as Stakeholder (alpha.admin@synergy.com / Admin@1234). Confirm the logout button in the header is the same icon style as all other roles -- no liquid glass button.
+Test 5 -- Login as Trip Admin. On the Trips tab, find a trip with a long vehicle registration number. Confirm the status badge is still visible and inside the card boundary.
+Test 6 -- Tap any trip card to open the trip detail screen. Confirm "Vehicle No." is clearly labeled. Confirm "Trip ID" is clearly labeled. Confirm every row has a visible label.
+Test 7 -- Console is clean throughout.
+
+Report every file changed with exact details and every test result. Flag all fixes for physical iPhone re-verification since these are layout issues originally found on native.

@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
 
@@ -64,68 +65,74 @@ export default function PillTabBar(props: any) {
   const pillBottom = Math.max(insets.bottom, 8);
 
   return (
-    // Bottom-anchored absolute container — only as tall as the pill itself,
-    // so it never sits over screen content above it.
     <View style={[styles.wrapper, { bottom: pillBottom, pointerEvents: 'box-none' }]}>
       <View
-        style={styles.pill}
+        style={[styles.pill, Platform.OS !== 'ios' && styles.pillAndroid]}
         onLayout={(e) => setPillWidth(e.nativeEvent.layout.width)}
       >
-          {pillWidth > 0 && (
-            <Animated.View
-              style={[
-                styles.slider,
-                {
-                  pointerEvents: 'none',
-                  width: slotWidth,
-                  transform: [{ translateX: sliderTranslateX }],
-                },
-              ]}
-            />
-          )}
+        {Platform.OS === 'ios' && (
+          <BlurView
+            intensity={60}
+            tint="light"
+            style={StyleSheet.absoluteFill}
+          />
+        )}
 
-          {visibleRoutes.map((route) => {
-            const { options } = descriptors[route.key];
-            const label =
-              typeof options.tabBarLabel === 'string'
-                ? options.tabBarLabel
-                : options.title ?? route.name;
-            const isFocused = state.routes[state.index]?.key === route.key;
+        {pillWidth > 0 && (
+          <Animated.View
+            style={[
+              styles.slider,
+              {
+                pointerEvents: 'none',
+                width: slotWidth,
+                transform: [{ translateX: sliderTranslateX }],
+              },
+            ]}
+          />
+        )}
 
-            const iconSet = TAB_ICONS[route.name] ?? {
-              active: 'ellipse' as IoniconsName,
-              inactive: 'ellipse-outline' as IoniconsName,
-            };
-            const iconName: IoniconsName = isFocused ? iconSet.active : iconSet.inactive;
+        {visibleRoutes.map((route) => {
+          const { options } = descriptors[route.key];
+          const label =
+            typeof options.tabBarLabel === 'string'
+              ? options.tabBarLabel
+              : options.title ?? route.name;
+          const isFocused = state.routes[state.index]?.key === route.key;
 
-            const onPress = () => {
-              const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-              if (!isFocused && !event.defaultPrevented) {
-                navigation.navigate(route.name);
-              }
-            };
+          const iconSet = TAB_ICONS[route.name] ?? {
+            active: 'ellipse' as IoniconsName,
+            inactive: 'ellipse-outline' as IoniconsName,
+          };
+          const iconName: IoniconsName = isFocused ? iconSet.active : iconSet.inactive;
 
-            return (
-              <Pressable
-                key={route.key}
-                onPress={onPress}
-                style={[styles.tabItem, isFocused && styles.tabItemActive]}
-                accessibilityRole="button"
-                accessibilityState={isFocused ? { selected: true } : {}}
-                accessibilityLabel={options.tabBarAccessibilityLabel}
-              >
-                <Ionicons
-                  name={iconName}
-                  size={20}
-                  color={isFocused ? theme.colors.white : theme.colors.grey1}
-                />
-                {isFocused && (
-                  <Text style={styles.tabLabelActive}>{label}</Text>
-                )}
-              </Pressable>
-            );
-          })}
-        </View>
+          const onPress = () => {
+            const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+            if (!isFocused && !event.defaultPrevented) {
+              navigation.navigate(route.name);
+            }
+          };
+
+          return (
+            <Pressable
+              key={route.key}
+              onPress={onPress}
+              style={[styles.tabItem, isFocused && styles.tabItemActive]}
+              accessibilityRole="button"
+              accessibilityState={isFocused ? { selected: true } : {}}
+              accessibilityLabel={options.tabBarAccessibilityLabel}
+            >
+              <Ionicons
+                name={iconName}
+                size={20}
+                color={isFocused ? theme.colors.white : theme.colors.grey1}
+              />
+              {isFocused && (
+                <Text style={styles.tabLabelActive}>{label}</Text>
+              )}
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -138,20 +145,25 @@ const styles = StyleSheet.create({
   },
   pill: {
     flexDirection: 'row',
-    backgroundColor: theme.colors.white,
     borderRadius: 32,
     height: 64,
     alignItems: 'center',
     paddingHorizontal: PILL_PADDING,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
     ...theme.shadows.card,
+  },
+  pillAndroid: {
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderColor: 'rgba(200,200,200,0.5)',
   },
   slider: {
     position: 'absolute',
     top: SLIDER_VERTICAL_INSET,
     bottom: SLIDER_VERTICAL_INSET,
     borderRadius: 26,
-    backgroundColor: theme.colors.primary,
+    backgroundColor: 'rgba(26, 110, 200, 0.85)',
   },
   tabItem: {
     flex: 1,

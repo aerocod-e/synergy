@@ -1,0 +1,46 @@
+I need to update the PillTabBar to use a frosted glass appearance, similar to iOS 26's liquid glass tab bar style. This is a contained change to artifacts/mobile/components/PillTabBar.tsx only.
+Step 1 -- Install expo-blur if not already installed
+Check whether expo-blur is already in artifacts/mobile/package.json. If not, install it:
+cd artifacts/mobile && npx expo install expo-blur
+Confirm the installation completes without errors.
+Step 2 -- Update PillTabBar to use frosted glass
+Open artifacts/mobile/components/PillTabBar.tsx. Replace the current solid white pill background with a platform-aware frosted glass effect:
+
+Import BlurView from expo-blur and Platform from react-native
+The outer pill container currently has a solid white background with a shadow. Replace it with the following pattern:
+
+For iOS: Wrap the pill contents in a BlurView with:
+
+intensity={60}
+tint="light"
+Same borderRadius as the current pill (likely 32 or similar -- keep whatever is there)
+A subtle border: borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)'
+Remove the solid backgroundColor from the pill -- the BlurView provides the background
+Keep the existing pointerEvents: 'box-none' on the wrapper
+
+For Android: Use a regular View with:
+
+backgroundColor: 'rgba(255,255,255,0.92)'
+Same border radius as iOS
+borderWidth: 1, borderColor: 'rgba(200,200,200,0.5)'
+Keep the existing shadow/elevation
+
+Use Platform.OS === 'ios' to switch between the two implementations.
+The selected tab indicator (the sliding animated pill inside the main pill) should become slightly more opaque to stand out against the glass background:
+
+Change its background from solid primary blue to rgba(26, 110, 200, 0.85) (slightly transparent version of #1a6ec8)
+
+The tab labels and icons should remain unchanged in size and color -- they should still be visible against the glass background.
+Step 3 -- Ensure the wrapper background is transparent
+The pill sits above the screen content. The wrapper View (position absolute, left/right/bottom) must have backgroundColor: 'transparent' so the blur effect shows the content behind it rather than a white box. Confirm this is already the case or add it.
+Step 4 -- TypeScript check
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Must return zero errors.
+
+PART 2 -- Testing
+Test 1 -- Web visual check: Login as any role at https://2f2a3156-e178-45fc-95e3-f3726442355f-00-2f9hl4ag0p8j2.expo.kirk.replit.dev at 390x844px viewport. Confirm the pill tab bar has a frosted/translucent appearance rather than solid white. Confirm tab labels and icons are still clearly readable. Confirm the selected tab indicator is still clearly visible.
+Test 2 -- Confirm tab navigation still works correctly -- tapping each tab switches screens as before.
+Test 3 -- Confirm the pointerEvents: 'box-none' fix from Stage 1 is still in place on the wrapper (header buttons must still be tappable).
+Test 4 -- Console is clean. No errors related to BlurView or expo-blur.
+
+Report the exact changes made to PillTabBar.tsx, confirm expo-blur installation, every test result, and flag that the final visual result on native iOS and Android must be verified on physical devices since the blur effect renders differently on each platform than on web.
