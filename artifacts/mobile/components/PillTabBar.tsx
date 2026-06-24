@@ -152,7 +152,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.4)',
-    ...theme.shadows.card,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 14,
   },
   pillAndroid: {
     backgroundColor: 'rgba(255,255,255,0.72)',
