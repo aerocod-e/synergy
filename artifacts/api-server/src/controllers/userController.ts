@@ -78,6 +78,65 @@ export async function listUsers(req: Request, res: Response): Promise<void> {
   }
 }
 
+export async function getUserById(req: Request, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { rows } = await pool.query<{
+      id: string;
+      email: string;
+      first_name: string;
+      last_name: string;
+      role: string;
+      entity_type: string | null;
+      entity_id: string | null;
+      is_active: boolean;
+      created_at: Date;
+      entity_name: string | null;
+    }>(
+      `SELECT
+         u.id, u.email, u.first_name, u.last_name, u.role,
+         u.entity_type, u.entity_id, u.is_active, u.created_at,
+         CASE
+           WHEN u.entity_type = 'state'       THEN s.name
+           WHEN u.entity_type = 'stakeholder' THEN sh.name
+           ELSE NULL
+         END AS entity_name
+       FROM users u
+       LEFT JOIN states       s  ON u.entity_type = 'state'       AND u.entity_id = s.id
+       LEFT JOIN stakeholders sh ON u.entity_type = 'stakeholder' AND u.entity_id = sh.id
+       WHERE u.id = $1 AND u.deleted_at IS NULL`,
+      [id]
+    );
+
+    if (rows.length === 0) {
+      res.status(404).json({ error: "NOT_FOUND", message: "User not found" });
+      return;
+    }
+
+    const r = rows[0]!;
+    res.json({
+      data: {
+        user: {
+          id:         r.id,
+          email:      r.email,
+          firstName:  r.first_name,
+          lastName:   r.last_name,
+          role:       r.role,
+          entityType: r.entity_type,
+          entityId:   r.entity_id,
+          entityName: r.entity_name,
+          isActive:   r.is_active,
+          createdAt:  r.created_at,
+        },
+      },
+      message: "User retrieved",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to retrieve user" });
+  }
+}
+
 export async function listTripAdmins(req: Request, res: Response): Promise<void> {
   const callerEntityId = req.user!.entityId;
 
@@ -178,14 +237,24 @@ export async function toggleUserActive(req: Request, res: Response): Promise<voi
 
     const target = rows[0]!;
 
-    if (target.role !== "trip_admin") {
-      res.status(403).json({ error: "FORBIDDEN", message: "Can only toggle active status for trip_admin accounts" });
-      return;
-    }
-
-    if (target.entity_id !== caller.entityId) {
-      res.status(403).json({ error: "FORBIDDEN", message: "Cannot modify a trip admin from a different state" });
-      return;
+    if (caller.role === "state_admin") {
+      if (target.role !== "trip_admin") {
+        res.status(403).json({ error: "FORBIDDEN", message: "Can only toggle active status for trip_admin accounts" });
+        return;
+      }
+      if (target.entity_id !== caller.entityId) {
+        res.status(403).json({ error: "FORBIDDEN", message: "Cannot modify a trip admin from a different state" });
+        return;
+      }
+    } else if (caller.role === "super_admin") {
+      if (id === caller.userId) {
+        res.status(400).json({ error: "BAD_REQUEST", message: "You cannot modify your own account status" });
+        return;
+      }
+      if (target.role === "super_admin") {
+        res.status(403).json({ error: "FORBIDDEN", message: "Cannot modify Super Admin accounts" });
+        return;
+      }
     }
 
     const { rows: updated } = await pool.query<{
@@ -212,7 +281,7 @@ export async function toggleUserActive(req: Request, res: Response): Promise<voi
           createdAt: u.created_at,
         },
       },
-      message: isActive ? "Trip admin reactivated" : "Trip admin deactivated",
+      message: isActive ? "User reactivated" : "User deactivated",
     });
   } catch (err) {
     console.error(err);
@@ -271,6 +340,25 @@ export async function getTripAdminActiveTripsCount(req: Request, res: Response):
 const VALID_ROLES = ["super_admin", "state_admin", "trip_admin", "stakeholder"] as const;
 type ValidRole = (typeof VALID_ROLES)[number];
 
+// ── Helper: map a DB user row to the API response shape ─────────────────────
+function mapUser(r: {
+  id: string; email: string; first_name: string; last_name: string;
+  role: string; entity_type: string | null; entity_id: string | null;
+  is_active: boolean; created_at: Date;
+}) {
+  return {
+    id:         r.id,
+    email:      r.email,
+    firstName:  r.first_name,
+    lastName:   r.last_name,
+    role:       r.role,
+    entityType: r.entity_type,
+    entityId:   r.entity_id,
+    isActive:   r.is_active,
+    createdAt:  r.created_at,
+  };
+}
+
 export async function createUser(req: Request, res: Response): Promise<void> {
   try {
     const { email, password, role, entity_type, entity_id, firstName, lastName, stakeholderName } = req.body as {
@@ -308,6 +396,9 @@ export async function createUser(req: Request, res: Response): Promise<void> {
 
     const typedRole = role as ValidRole;
     const caller = req.user!;
+    const emailNorm = (email as string).toLowerCase().trim();
+    const firstNameTrimmed = (firstName as string).trim();
+    const lastNameTrimmed  = (lastName  as string).trim();
 
     // ── Caller-role restrictions ───────────────────────────────────────────
     if (caller.role === "super_admin") {
@@ -353,11 +444,11 @@ export async function createUser(req: Request, res: Response): Promise<void> {
     }
 
     // ── Hash password before entering any transaction ──────────────────────
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password as string, 10);
 
     // ── Stakeholder path: fully atomic (resolve/create entity + user) ───────
     if (typedRole === "stakeholder") {
-      const name = (stakeholderName as string).trim();
+      const shName = (stakeholderName as string).trim();
       const client = await pool.connect();
       try {
         await client.query("BEGIN");
@@ -365,7 +456,7 @@ export async function createUser(req: Request, res: Response): Promise<void> {
         // Case-insensitive lookup inside the transaction to avoid races
         const existingSh = await client.query<{ id: string }>(
           `SELECT id FROM stakeholders WHERE LOWER(name) = LOWER($1)`,
-          [name],
+          [shName],
         );
         let resolvedShId: string;
         if (existingSh.rows.length > 0) {
@@ -373,7 +464,7 @@ export async function createUser(req: Request, res: Response): Promise<void> {
         } else {
           const newSh = await client.query<{ id: string }>(
             `INSERT INTO stakeholders (name) VALUES ($1) RETURNING id`,
-            [name],
+            [shName],
           );
           resolvedShId = newSh.rows[0]!.id;
           await client.query(
@@ -383,6 +474,42 @@ export async function createUser(req: Request, res: Response): Promise<void> {
           );
         }
 
+        // ── Check for existing user (active or soft-deleted) ───────────────
+        const existingUser = await client.query<{ id: string; deleted_at: Date | null }>(
+          `SELECT id, deleted_at FROM users WHERE email = $1`,
+          [emailNorm],
+        );
+
+        if (existingUser.rows.length > 0) {
+          const eu = existingUser.rows[0]!;
+          if (eu.deleted_at === null) {
+            // Active user → conflict
+            await client.query("ROLLBACK");
+            res.status(409).json({ error: "CONFLICT", message: "A user with this email already exists" });
+            return;
+          }
+          // Soft-deleted → reactivate
+          const { rows: reactivated } = await client.query<{
+            id: string; email: string; first_name: string; last_name: string;
+            role: string; entity_type: string | null; entity_id: string | null;
+            is_active: boolean; created_at: Date;
+          }>(
+            `UPDATE users
+             SET first_name=$1, last_name=$2, role=$3, entity_type='stakeholder', entity_id=$4,
+                 password_hash=$5, is_active=true, deleted_at=NULL, updated_at=NOW()
+             WHERE id=$6
+             RETURNING id, email, first_name, last_name, role, entity_type, entity_id, is_active, created_at`,
+            [firstNameTrimmed, lastNameTrimmed, typedRole, resolvedShId, passwordHash, eu.id],
+          );
+          await client.query("COMMIT");
+          res.status(200).json({
+            data: { user: mapUser(reactivated[0]!) },
+            message: "A previously deactivated account with this email has been reactivated with the new details.",
+          });
+          return;
+        }
+
+        // ── Fresh INSERT ───────────────────────────────────────────────────
         const { rows } = await client.query<{
           id: string; email: string; first_name: string; last_name: string;
           role: string; entity_type: string | null; entity_id: string | null;
@@ -391,34 +518,11 @@ export async function createUser(req: Request, res: Response): Promise<void> {
           `INSERT INTO users (email, password_hash, role, entity_type, entity_id, is_active, first_name, last_name)
            VALUES ($1, $2, $3, 'stakeholder', $4, true, $5, $6)
            RETURNING id, email, first_name, last_name, role, entity_type, entity_id, is_active, created_at`,
-          [
-            (email as string).toLowerCase().trim(),
-            passwordHash,
-            typedRole,
-            resolvedShId,
-            (firstName as string).trim(),
-            (lastName as string).trim(),
-          ],
+          [emailNorm, passwordHash, typedRole, resolvedShId, firstNameTrimmed, lastNameTrimmed],
         );
 
         await client.query("COMMIT");
-        const user = rows[0]!;
-        res.status(201).json({
-          data: {
-            user: {
-              id: user.id,
-              email: user.email,
-              firstName: user.first_name,
-              lastName: user.last_name,
-              role: user.role,
-              entityType: user.entity_type,
-              entityId: user.entity_id,
-              isActive: user.is_active,
-              createdAt: user.created_at,
-            },
-          },
-          message: "User created",
-        });
+        res.status(201).json({ data: { user: mapUser(rows[0]!) }, message: "User created" });
       } catch (err: any) {
         await client.query("ROLLBACK");
         if (err?.code === "23505") {
@@ -434,50 +538,53 @@ export async function createUser(req: Request, res: Response): Promise<void> {
 
     // ── Non-stakeholder path ───────────────────────────────────────────────
     const resolvedEntityType: string | null = (entity_type as string | undefined) ?? null;
-    const resolvedEntityId: string | null = (entity_id as string | undefined) ?? null;
+    const resolvedEntityId: string | null   = (entity_id   as string | undefined) ?? null;
 
+    // Check for existing user (active or soft-deleted)
+    const existingUser = await pool.query<{ id: string; deleted_at: Date | null }>(
+      `SELECT id, deleted_at FROM users WHERE email = $1`,
+      [emailNorm],
+    );
+
+    if (existingUser.rows.length > 0) {
+      const eu = existingUser.rows[0]!;
+      if (eu.deleted_at === null) {
+        res.status(409).json({ error: "CONFLICT", message: "A user with this email already exists" });
+        return;
+      }
+      // Soft-deleted → reactivate
+      const { rows: reactivated } = await pool.query<{
+        id: string; email: string; first_name: string; last_name: string;
+        role: string; entity_type: string | null; entity_id: string | null;
+        is_active: boolean; created_at: Date;
+      }>(
+        `UPDATE users
+         SET first_name=$1, last_name=$2, role=$3, entity_type=$4, entity_id=$5,
+             password_hash=$6, is_active=true, deleted_at=NULL, updated_at=NOW()
+         WHERE id=$7
+         RETURNING id, email, first_name, last_name, role, entity_type, entity_id, is_active, created_at`,
+        [firstNameTrimmed, lastNameTrimmed, typedRole, resolvedEntityType, resolvedEntityId, passwordHash, eu.id],
+      );
+      res.status(200).json({
+        data: { user: mapUser(reactivated[0]!) },
+        message: "A previously deactivated account with this email has been reactivated with the new details.",
+      });
+      return;
+    }
+
+    // Fresh INSERT
     const { rows } = await pool.query<{
-      id: string;
-      email: string;
-      first_name: string;
-      last_name: string;
-      role: string;
-      entity_type: string | null;
-      entity_id: string | null;
-      is_active: boolean;
-      created_at: Date;
+      id: string; email: string; first_name: string; last_name: string;
+      role: string; entity_type: string | null; entity_id: string | null;
+      is_active: boolean; created_at: Date;
     }>(
       `INSERT INTO users (email, password_hash, role, entity_type, entity_id, is_active, first_name, last_name)
        VALUES ($1, $2, $3, $4, $5, true, $6, $7)
        RETURNING id, email, first_name, last_name, role, entity_type, entity_id, is_active, created_at`,
-      [
-        (email as string).toLowerCase().trim(),
-        passwordHash,
-        typedRole,
-        resolvedEntityType,
-        resolvedEntityId,
-        (firstName as string).trim(),
-        (lastName as string).trim(),
-      ],
+      [emailNorm, passwordHash, typedRole, resolvedEntityType, resolvedEntityId, firstNameTrimmed, lastNameTrimmed],
     );
 
-    const user = rows[0]!;
-    res.status(201).json({
-      data: {
-        user: {
-          id: user.id,
-          email: user.email,
-          firstName: user.first_name,
-          lastName: user.last_name,
-          role: user.role,
-          entityType: user.entity_type,
-          entityId: user.entity_id,
-          isActive: user.is_active,
-          createdAt: user.created_at,
-        },
-      },
-      message: "User created",
-    });
+    res.status(201).json({ data: { user: mapUser(rows[0]!) }, message: "User created" });
   } catch (err: any) {
     if (err?.code === "23505") {
       res.status(409).json({ error: "CONFLICT", message: "A user with this email already exists" });
@@ -488,18 +595,125 @@ export async function createUser(req: Request, res: Response): Promise<void> {
   }
 }
 
-export async function resetUserPassword(req: Request, res: Response): Promise<void> {
+export async function updateUser(req: Request, res: Response): Promise<void> {
   try {
     const { id } = req.params;
-    const hash = await bcrypt.hash("Temp@1234", 10);
-    const result = await pool.query(
-      "UPDATE users SET password_hash = $1 WHERE id = $2 AND deleted_at IS NULL",
-      [hash, id],
+    const { firstName, lastName } = req.body as { firstName?: unknown; lastName?: unknown };
+
+    const hasFirst = firstName && typeof firstName === "string" && (firstName as string).trim();
+    const hasLast  = lastName  && typeof lastName  === "string" && (lastName  as string).trim();
+
+    if (!hasFirst && !hasLast) {
+      res.status(400).json({ error: "BAD_REQUEST", message: "At least one of firstName or lastName is required" });
+      return;
+    }
+
+    const { rows: current } = await pool.query<{ first_name: string; last_name: string }>(
+      `SELECT first_name, last_name FROM users WHERE id = $1 AND deleted_at IS NULL`,
+      [id],
     );
-    if ((result.rowCount ?? 0) === 0) {
+    if (current.length === 0) {
       res.status(404).json({ error: "NOT_FOUND", message: "User not found" });
       return;
     }
+
+    const newFirst = hasFirst ? (firstName as string).trim() : current[0]!.first_name;
+    const newLast  = hasLast  ? (lastName  as string).trim() : current[0]!.last_name;
+
+    const { rows: updated } = await pool.query<{
+      id: string; email: string; first_name: string; last_name: string;
+      role: string; entity_type: string | null; entity_id: string | null;
+      is_active: boolean; created_at: Date;
+    }>(
+      `UPDATE users SET first_name=$1, last_name=$2, updated_at=NOW()
+       WHERE id=$3 AND deleted_at IS NULL
+       RETURNING id, email, first_name, last_name, role, entity_type, entity_id, is_active, created_at`,
+      [newFirst, newLast, id],
+    );
+
+    res.json({ data: { user: mapUser(updated[0]!) }, message: "User updated" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to update user" });
+  }
+}
+
+export async function deleteUser(req: Request, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const caller = req.user!;
+
+    if (id === caller.userId) {
+      res.status(400).json({ error: "BAD_REQUEST", message: "You cannot delete your own account" });
+      return;
+    }
+
+    const { rows } = await pool.query<{ id: string; role: string; deleted_at: Date | null }>(
+      `SELECT id, role, deleted_at FROM users WHERE id = $1`,
+      [id],
+    );
+
+    if (rows.length === 0 || rows[0]!.deleted_at !== null) {
+      res.status(404).json({ error: "NOT_FOUND", message: "User not found" });
+      return;
+    }
+
+    if (rows[0]!.role === "super_admin") {
+      res.status(400).json({
+        error: "BAD_REQUEST",
+        message: "Super Admin accounts cannot be deleted from this screen. Contact your system administrator.",
+      });
+      return;
+    }
+
+    await pool.query(
+      `UPDATE users SET deleted_at = NOW(), is_active = false, updated_at = NOW() WHERE id = $1`,
+      [id],
+    );
+
+    res.status(200).json({ data: {}, message: "Account has been deactivated successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to delete user" });
+  }
+}
+
+export async function resetUserPassword(req: Request, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const caller = req.user!;
+
+    // ── Guard: cannot reset own password ──────────────────────────────────
+    if (id === caller.userId) {
+      res.status(400).json({
+        error: "BAD_REQUEST",
+        message: "You cannot reset your own password. Use the Profile screen to change your password.",
+      });
+      return;
+    }
+
+    // ── Guard: fetch target to check role ─────────────────────────────────
+    const { rows } = await pool.query<{ role: string }>(
+      `SELECT role FROM users WHERE id = $1 AND deleted_at IS NULL`,
+      [id],
+    );
+    if (rows.length === 0) {
+      res.status(404).json({ error: "NOT_FOUND", message: "User not found" });
+      return;
+    }
+    if (rows[0]!.role === "super_admin") {
+      res.status(400).json({
+        error: "BAD_REQUEST",
+        message: "Super Admin passwords cannot be reset from here. The account holder should use the Profile screen.",
+      });
+      return;
+    }
+
+    const hash = await bcrypt.hash("Temp@1234", 10);
+    await pool.query(
+      `UPDATE users SET password_hash = $1 WHERE id = $2 AND deleted_at IS NULL`,
+      [hash, id],
+    );
     res.status(200).json({
       data: {
         message:

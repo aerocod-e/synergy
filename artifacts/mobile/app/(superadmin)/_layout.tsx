@@ -11,7 +11,8 @@ export default function SuperAdminLayout() {
       <Tabs.Screen name="trips"       options={{ title: 'Trips' }} />
       <Tabs.Screen name="config"      options={{ title: 'Config' }} />
       <Tabs.Screen name="users"       options={{ title: 'Users' }} />
-      <Tabs.Screen name="trip-detail" options={{ title: 'Trip Detail', href: null }} />
+      <Tabs.Screen name="trip-detail" options={{ title: 'Trip Detail',  href: null }} />
+      <Tabs.Screen name="user-detail" options={{ title: 'User Detail',  href: null }} />
     </Tabs>
   );
 }

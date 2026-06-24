@@ -207,3 +207,12 @@ export const changePassword = (body: { currentPassword: string; newPassword: str
 
 export const resetUserPassword = (userId: string) =>
   apiRequest(`/api/users/${userId}/reset-password`, { method: 'POST' });
+
+export const getUser = (userId: string) =>
+  apiRequest(`/api/users/${userId}`);
+
+export const updateUser = (userId: string, body: { firstName?: string; lastName?: string }) =>
+  apiRequest(`/api/users/${userId}`, { method: 'PATCH', body: JSON.stringify(body) });
+
+export const deleteUser = (userId: string) =>
+  apiRequest(`/api/users/${userId}`, { method: 'DELETE' });

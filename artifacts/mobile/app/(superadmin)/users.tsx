@@ -15,7 +15,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useState } from 'react';
-import { getUsers, createUser, getStates, resetUserPassword } from '@/services/api';
+import { useRouter } from 'expo-router';
+import { getUsers, createUser, getStates } from '@/services/api';
 import type { User, State } from '@/types/index';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
@@ -53,7 +54,10 @@ function UserRow({ user, onPress }: { user: User; onPress: () => void }) {
             {user.email}
           </Text>
         </View>
-        <View style={[styles.statusDot, user.isActive ? styles.dotActive : styles.dotInactive]} />
+        <View style={styles.itemRight}>
+          <View style={[styles.statusDot, user.isActive ? styles.dotActive : styles.dotInactive]} />
+          <Ionicons name="chevron-forward" size={16} color={theme.colors.inactive} style={styles.chevron} />
+        </View>
       </View>
       <View style={[styles.roleBadge, { backgroundColor: badgeColors.bg }]}>
         <Text style={[styles.roleBadgeText, { color: badgeColors.text }]}>{roleLabel(user)}</Text>
@@ -68,6 +72,7 @@ const ROLE_OPTIONS: { value: CreatableRole; label: string }[] = [
 ];
 
 export default function UsersScreen() {
+  const router = useRouter();
   const PAGE_LIMIT = 20;
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -89,11 +94,6 @@ export default function UsersScreen() {
   const [formStakeholderName, setFormStakeholderName] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  const [resetModalVisible, setResetModalVisible] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [resetting, setResetting] = useState(false);
-  const [resetMessage, setResetMessage] = useState<string | null>(null);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -147,28 +147,9 @@ export default function UsersScreen() {
     setFormPassword('');
     setFormRole(null);
     setFormEntityId(null);
+    setFormStakeholderName('');
     setFormError(null);
     setModalVisible(true);
-  };
-
-  const openResetModal = (user: User) => {
-    setSelectedUser(user);
-    setResetMessage(null);
-    setResetting(false);
-    setResetModalVisible(true);
-  };
-
-  const handleResetPassword = async () => {
-    if (!selectedUser) return;
-    setResetting(true);
-    try {
-      const data = await resetUserPassword(selectedUser.id);
-      setResetMessage(data.message ?? 'Password has been reset.');
-    } catch (e: any) {
-      setResetMessage(e?.message ?? 'Failed to reset password.');
-    } finally {
-      setResetting(false);
-    }
   };
 
   const handleRoleSelect = (role: CreatableRole) => {
@@ -179,30 +160,12 @@ export default function UsersScreen() {
 
   const handleSubmit = async () => {
     setFormError(null);
-    if (!formFirstName.trim()) {
-      setFormError('First name is required.');
-      return;
-    }
-    if (!formLastName.trim()) {
-      setFormError('Last name is required.');
-      return;
-    }
-    if (!formEmail.trim() || !formEmail.includes('@')) {
-      setFormError('A valid email is required.');
-      return;
-    }
-    if (!formPassword || formPassword.length < 6) {
-      setFormError('Password must be at least 6 characters.');
-      return;
-    }
-    if (!formRole) {
-      setFormError('Please select a role.');
-      return;
-    }
-    if (formRole === 'state_admin' && !formEntityId) {
-      setFormError('Please select a state.');
-      return;
-    }
+    if (!formFirstName.trim()) { setFormError('First name is required.'); return; }
+    if (!formLastName.trim())  { setFormError('Last name is required.');  return; }
+    if (!formEmail.trim() || !formEmail.includes('@')) { setFormError('A valid email is required.'); return; }
+    if (!formPassword || formPassword.length < 6) { setFormError('Password must be at least 6 characters.'); return; }
+    if (!formRole) { setFormError('Please select a role.'); return; }
+    if (formRole === 'state_admin' && !formEntityId) { setFormError('Please select a state.'); return; }
     if (formRole === 'stakeholder' && !formStakeholderName.trim()) {
       setFormError('Stakeholder / Organization Name is required.');
       return;
@@ -275,7 +238,12 @@ export default function UsersScreen() {
         style={styles.list}
         data={users}
         keyExtractor={(u) => u.id}
-        renderItem={({ item }) => <UserRow user={item} onPress={() => openResetModal(item)} />}
+        renderItem={({ item }) => (
+          <UserRow
+            user={item}
+            onPress={() => router.push(`/(superadmin)/user-detail?id=${item.id}`)}
+          />
+        )}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />
         }
@@ -475,55 +443,6 @@ export default function UsersScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
-
-      {/* Reset Password Modal */}
-      <Modal
-        visible={resetModalVisible}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setResetModalVisible(false)}
-      >
-        <View style={styles.resetOverlay}>
-          <View style={styles.resetCard}>
-            <Text style={styles.resetTitle}>
-              {selectedUser
-                ? (`${selectedUser.firstName ?? ''} ${selectedUser.lastName ?? ''}`).trim() || selectedUser.email
-                : ''}
-            </Text>
-            <Text style={styles.resetRole}>
-              {selectedUser ? roleLabel(selectedUser) : ''}
-            </Text>
-            <Text style={styles.resetEmail}>{selectedUser?.email}</Text>
-
-            {resetMessage ? (
-              <View style={styles.resetMessageBox}>
-                <Text style={styles.resetMessageText}>{resetMessage}</Text>
-              </View>
-            ) : (
-              <TouchableOpacity
-                style={[styles.resetBtn, resetting && styles.buttonDisabled]}
-                onPress={handleResetPassword}
-                disabled={resetting}
-                activeOpacity={0.85}
-              >
-                {resetting ? (
-                  <ActivityIndicator color={theme.colors.white} />
-                ) : (
-                  <Text style={styles.resetBtnText}>Reset Password</Text>
-                )}
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              style={styles.cancelBtn}
-              onPress={() => setResetModalVisible(false)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.cancelBtnText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -562,6 +481,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 10,
   },
+  itemRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  chevron: { marginLeft: 2 },
   name: {
     fontWeight: '700',
     fontSize: 14,
@@ -745,75 +670,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: theme.colors.primary,
-  },
-
-  // Reset modal
-  resetOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  resetCard: {
-    backgroundColor: theme.colors.white,
-    borderRadius: 16,
-    padding: 24,
-    width: '100%',
-    maxWidth: 380,
-    ...theme.shadows.strong,
-  },
-  resetTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: theme.colors.black,
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  resetRole: {
-    fontSize: 13,
-    color: theme.colors.grey1,
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  resetEmail: {
-    fontSize: 13,
-    color: theme.colors.grey2,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  resetMessageBox: {
-    backgroundColor: '#fef3c7',
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 16,
-  },
-  resetMessageText: {
-    fontSize: 13,
-    color: '#92400e',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  resetBtn: {
-    backgroundColor: '#d97706',
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginBottom: 12,
-    ...theme.shadows.strong,
-  },
-  resetBtnText: {
-    color: theme.colors.white,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  cancelBtn: {
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  cancelBtnText: {
-    fontSize: 15,
-    color: theme.colors.grey2,
-    fontWeight: '600',
   },
 });

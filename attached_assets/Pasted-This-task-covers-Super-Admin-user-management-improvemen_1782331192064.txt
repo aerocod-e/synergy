@@ -1,0 +1,50 @@
+This task covers Super Admin user management improvements. Follow all steps in order.Step 1 -- Backend: update createUser to handle soft-deleted email reactivationIn artifacts/api-server/src/controllers/userController.ts, find the createUser function. Currently it uses ON CONFLICT (email) DO NOTHING which silently ignores attempts to create a user with a soft-deleted email.Change the logic so:
+
+Before inserting, query for ANY existing user with that email regardless of deleted_at status
+If an active user exists (deleted_at IS NULL): return 409 "A user with this email already exists"
+If a soft-deleted user exists (deleted_at IS NOT NULL): reactivate the account by updating ALL fields with the new values provided (first_name, last_name, role, entity_type, entity_id, password_hash, is_active = true, deleted_at = NULL). Return 200 with a message "A previously deactivated account with this email has been reactivated with the new details." and the updated user object.
+If no user exists: proceed with normal INSERT, return 201.
+This applies to all user roles consistently.Step 2 -- Backend: Super Admin soft-delete any userIn userController.ts, add a deleteUser function:
+
+DELETE handler for /users/:id
+Super Admin only
+Validates the target user exists and is not already soft-deleted
+Blocks deletion of the calling Super Admin's own account -- return 400 "You cannot delete your own account"
+Blocks deletion of other super_admin accounts -- return 400 "Super Admin accounts cannot be deleted from this screen. Contact your system administrator."
+Soft-deletes by setting deleted_at = NOW() and is_active = false
+Returns 200 with message "Account has been deactivated successfully"
+Register in users.ts:
+DELETE /users/:id   authenticateToken + requireRole("super_admin") → deleteUserStep 3 -- Backend: block password reset for own account and other super adminsIn userController.ts, find the resetUserPassword function. Add these guards:
+
+If req.params.id === req.user.userId: return 400 "You cannot reset your own password. Use the Profile screen to change your password."
+If the target user has role = 'super_admin': return 400 "Super Admin passwords cannot be reset from here. The account holder should use the Profile screen."
+Step 4 -- Frontend: Super Admin user detail screenCreate artifacts/mobile/app/(superadmin)/user-detail.tsx. This is a new screen navigated to by tapping a user card in the Users tab.The screen should show:
+
+User's full name (editable)
+Email (read-only -- email cannot be changed)
+Role badge (read-only -- role cannot be changed after creation)
+Entity name (the state or stakeholder they belong to -- read-only)
+Active/inactive status badge
+A "Reset Password" button (calls POST /api/users/:id/reset-password) -- hidden if the viewed user is the logged-in Super Admin or if the target is another Super Admin
+A "Deactivate Account" button (calls PATCH /api/users/:id/active with { isActive: false }) -- shown only if the user is currently active. Hidden if viewing own account.
+A "Reactivate Account" button (calls PATCH /api/users/:id/active with { isActive: true }) -- shown only if the user is currently inactive
+A "Delete Account" button in red at the bottom (calls DELETE /api/users/:id) -- hidden if viewing own account or another Super Admin account. Requires a confirmation alert before proceeding: "Are you sure you want to permanently deactivate this account? This cannot be undone."
+A Save button for the name edit (calls PATCH /api/users/:id -- see Step 5)
+Register as a hidden screen in (superadmin)/_layout.tsx (same pattern as trip-detail).Step 5 -- Backend: update user details endpointIn userController.ts, add an updateUser function:
+
+PATCH handler for /users/:id
+Super Admin only
+Accepts firstName and lastName (both optional, but at least one required)
+Updates the user's name fields
+Returns the updated user
+Register in users.ts:
+PATCH /users/:id   authenticateToken + requireRole("super_admin") → updateUserStep 6 -- Frontend: update Users tab to navigate to detail screenIn (superadmin)/users.tsx:
+
+Remove the existing tap-to-show-modal behavior on user cards
+Make each user card navigate to /(superadmin)/user-detail?id=${user.id} on tap
+Remove the reset password modal entirely from this screen -- that functionality now lives on the detail screen
+Add a subtle chevron icon on the right of each user card to indicate it's tappable
+Add updateUser(id, body) and deleteUser(id) helpers to services/api.ts.Step 7 -- TypeScript check
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.
