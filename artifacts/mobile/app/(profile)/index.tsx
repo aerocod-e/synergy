@@ -115,65 +115,66 @@ export default function ProfileScreen() {
         {/* Change Password */}
         <Text style={styles.sectionTitle}>Change Password</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Current Password"
-          placeholderTextColor={theme.colors.placeholder}
-          secureTextEntry
-          value={currentPw}
-          onChangeText={setCurrentPw}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
+        <View style={styles.passwordCard}>
+          <TextInput
+            style={styles.input}
+            placeholder="Current Password"
+            placeholderTextColor={theme.colors.placeholder}
+            secureTextEntry
+            value={currentPw}
+            onChangeText={setCurrentPw}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
 
-        <TextInput
-          style={[styles.input, styles.inputSpaced]}
-          placeholder="New Password"
-          placeholderTextColor={theme.colors.placeholder}
-          secureTextEntry
-          value={newPw}
-          onChangeText={(t) => { setNewPw(t); setSaveSuccess(false); setSaveError(null); }}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
+          <TextInput
+            style={[styles.input, styles.inputSpaced]}
+            placeholder="New Password"
+            placeholderTextColor={theme.colors.placeholder}
+            secureTextEntry
+            value={newPw}
+            onChangeText={(t) => { setNewPw(t); setSaveSuccess(false); setSaveError(null); }}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+
+          <TextInput
+            style={[styles.input, styles.inputSpaced]}
+            placeholder="Confirm New Password"
+            placeholderTextColor={theme.colors.placeholder}
+            secureTextEntry
+            value={confirmPw}
+            onChangeText={(t) => { setConfirmPw(t); setSaveSuccess(false); setSaveError(null); }}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+
+          <TouchableOpacity
+            style={[styles.saveBtn, (!canSave || saving) && styles.btnDisabled]}
+            onPress={handleSavePassword}
+            disabled={!canSave || saving}
+            activeOpacity={0.85}
+          >
+            {saving ? (
+              <ActivityIndicator color={theme.colors.white} />
+            ) : (
+              <Text style={styles.saveBtnText}>Save Password</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
         {newPwTooShort && (
           <Text style={styles.fieldError}>New password must be at least 8 characters</Text>
         )}
-
-        <TextInput
-          style={[styles.input, styles.inputSpaced]}
-          placeholder="Confirm New Password"
-          placeholderTextColor={theme.colors.placeholder}
-          secureTextEntry
-          value={confirmPw}
-          onChangeText={(t) => { setConfirmPw(t); setSaveSuccess(false); setSaveError(null); }}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
         {pwMismatch && (
           <Text style={styles.fieldError}>Passwords do not match</Text>
         )}
-
         {saveError ? (
           <Text style={styles.fieldError}>{saveError}</Text>
         ) : null}
-
         {saveSuccess ? (
           <Text style={styles.successText}>Password changed successfully</Text>
         ) : null}
-
-        <TouchableOpacity
-          style={[styles.saveBtn, (!canSave || saving) && styles.btnDisabled]}
-          onPress={handleSavePassword}
-          disabled={!canSave || saving}
-          activeOpacity={0.85}
-        >
-          {saving ? (
-            <ActivityIndicator color={theme.colors.white} />
-          ) : (
-            <Text style={styles.saveBtnText}>Save Password</Text>
-          )}
-        </TouchableOpacity>
 
         <View style={styles.divider} />
 
@@ -234,11 +235,17 @@ const styles = StyleSheet.create({
     color: theme.colors.black,
     marginBottom: 16,
   },
+  passwordCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    ...theme.shadows.card,
+  },
   input: {
     backgroundColor: theme.colors.grey4,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
+    borderRadius: 8,
+    padding: 14,
     fontSize: 15,
     color: theme.colors.black,
   },

@@ -496,7 +496,7 @@ export default function ConfigScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: theme.colors.background },
   scroll: { flex: 1 },
-  scrollContent: { paddingBottom: 40 },
+  scrollContent: { paddingBottom: theme.PILL_NAV_BOTTOM_PADDING },
   centered: {
     flex: 1,
     justifyContent: 'center',
