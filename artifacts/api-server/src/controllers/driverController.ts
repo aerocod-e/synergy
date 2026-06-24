@@ -151,6 +151,94 @@ export async function listDrivers(req: Request, res: Response): Promise<void> {
   }
 }
 
+export async function updateDriver(req: Request, res: Response): Promise<void> {
+  const { id } = req.params as { id: string };
+  const callerId = req.user!.userId;
+
+  const { full_name, phone_number } = req.body as {
+    full_name?: unknown;
+    phone_number?: unknown;
+  };
+
+  const hasName  = full_name  !== undefined && full_name  !== null;
+  const hasPhone = phone_number !== undefined && phone_number !== null;
+
+  if (!hasName && !hasPhone) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "At least one of full_name or phone_number is required" });
+    return;
+  }
+  if (hasName && (typeof full_name !== "string" || full_name.trim() === "")) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "full_name must be a non-empty string" });
+    return;
+  }
+  if (hasPhone && (typeof phone_number !== "string" || phone_number.trim() === "")) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "phone_number must be a non-empty string" });
+    return;
+  }
+
+  try {
+    const existing = await pool.query<{
+      id: string;
+      created_by: string;
+      is_active: boolean;
+      deleted_at: Date | null;
+      full_name: string;
+      license_number: string;
+      phone_number: string;
+      created_at: Date;
+    }>(
+      `SELECT id, created_by, is_active, deleted_at, full_name, license_number, phone_number, created_at
+       FROM drivers WHERE id = $1 LIMIT 1`,
+      [id]
+    );
+
+    const row = existing.rows[0];
+    if (!row || !row.is_active || row.deleted_at !== null) {
+      res.status(404).json({ error: "NOT_FOUND", message: "Driver not found" });
+      return;
+    }
+    if (row.created_by !== callerId) {
+      res.status(403).json({ error: "FORBIDDEN", message: "You do not own this driver" });
+      return;
+    }
+
+    const newFullName    = hasName  ? (full_name  as string).trim() : row.full_name;
+    const newPhoneNumber = hasPhone ? (phone_number as string).trim() : row.phone_number;
+
+    const { rows: [updated] } = await pool.query<{
+      id: string;
+      full_name: string;
+      license_number: string;
+      phone_number: string;
+      created_by: string;
+      is_active: boolean;
+      created_at: Date;
+    }>(
+      `UPDATE drivers
+       SET full_name = $2, phone_number = $3, updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, full_name, license_number, phone_number, created_by, is_active, created_at`,
+      [id, newFullName, newPhoneNumber]
+    );
+
+    res.json({
+      data: {
+        id:            updated!.id,
+        fullName:      updated!.full_name,
+        licenseNumber: updated!.license_number,
+        phoneNumber:   updated!.phone_number,
+        createdBy:     updated!.created_by,
+        isActive:      updated!.is_active,
+        createdAt:     updated!.created_at,
+      },
+      message: "Driver updated",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to update driver" });
+  }
+}
+
 export async function searchDrivers(req: Request, res: Response): Promise<void> {
   const q = typeof req.query["q"] === "string" ? req.query["q"].trim() : "";
 

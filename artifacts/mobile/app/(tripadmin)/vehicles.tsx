@@ -9,12 +9,13 @@ import {
   ActivityIndicator,
   RefreshControl,
   Platform,
+  TextInput,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
 import VehicleSearchInput, { type Vehicle } from '@/components/VehicleSearchInput';
-import { listVehicles, createVehicle } from '@/services/api';
+import { listVehicles, createVehicle, updateVehicle } from '@/services/api';
 import { useLogout } from '@/hooks/useLogout';
 
 interface VehicleWithCount extends Vehicle {
@@ -30,8 +31,52 @@ export default function TripAdminVehicles() {
   const [registerError, setRegisterError] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
 
+  const [editingVehicle, setEditingVehicle] = useState<VehicleWithCount | null>(null);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editRegNumber, setEditRegNumber] = useState('');
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
   const navigation = useNavigation();
   const { handleLogout } = useLogout();
+
+  const openEditVehicle = useCallback((vehicle: VehicleWithCount) => {
+    setEditingVehicle(vehicle);
+    setEditRegNumber(vehicle.registrationNumber);
+    setEditError(null);
+    setEditModalVisible(true);
+  }, []);
+
+  const handleEditVehicle = async () => {
+    if (!editingVehicle) return;
+    const trimmed = editRegNumber.trim().toUpperCase();
+    if (!trimmed) {
+      setEditError('Registration number cannot be empty.');
+      return;
+    }
+    if (trimmed === editingVehicle.registrationNumber.toUpperCase()) {
+      setEditingVehicle(null);
+      return;
+    }
+    setEditSubmitting(true);
+    setEditError(null);
+    try {
+      await updateVehicle(editingVehicle.id, { registrationNumber: trimmed });
+      setEditModalVisible(false);
+      setEditingVehicle(null);
+      fetchVehicles(true);
+    } catch (err: any) {
+      if (err?.error === 'ACTIVE_TRIP') {
+        setEditError('This vehicle has active trips and cannot be edited.');
+      } else if (err?.error === 'CONFLICT') {
+        setEditError('A vehicle with this registration number already exists.');
+      } else {
+        setEditError(err?.message ?? 'Failed to update vehicle.');
+      }
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
 
   const openModal = useCallback(() => {
     setRegisterError(null);
@@ -115,7 +160,13 @@ export default function TripAdminVehicles() {
           {item.tripCount} {item.tripCount === 1 ? 'trip' : 'trips'}
         </Text>
       </View>
-      <Ionicons name="chevron-forward" size={18} color={theme.colors.grey1} />
+      <TouchableOpacity
+        onPress={() => openEditVehicle(item)}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        accessibilityLabel="Edit vehicle"
+      >
+        <Ionicons name="create-outline" size={22} color={theme.colors.primary} />
+      </TouchableOpacity>
     </View>
   );
 
@@ -179,6 +230,60 @@ export default function TripAdminVehicles() {
         </TouchableOpacity>
       )}
 
+      {/* ── Edit vehicle modal ──────────────────────────────────────────── */}
+      <Modal
+        visible={editModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Edit Vehicle</Text>
+            <TouchableOpacity
+              onPress={() => setEditModalVisible(false)}
+              accessibilityLabel="Close modal"
+            >
+              <Ionicons name="close" size={24} color={theme.colors.grey2} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.modalBody}>
+            <Text style={styles.fieldLabel}>REGISTRATION NUMBER</Text>
+            <TextInput
+              style={styles.textField}
+              value={editRegNumber}
+              onChangeText={setEditRegNumber}
+              placeholder="e.g. LAG-001-XY"
+              placeholderTextColor={theme.colors.grey1}
+              autoCapitalize="characters"
+              autoCorrect={false}
+            />
+
+            {editError && (
+              <View style={styles.errorBox}>
+                <Ionicons name="alert-circle-outline" size={16} color={theme.colors.error} />
+                <Text style={styles.errorText}>{editError}</Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={[styles.submitButton, editSubmitting && styles.submitButtonDisabled]}
+              onPress={handleEditVehicle}
+              activeOpacity={0.85}
+              disabled={editSubmitting}
+            >
+              {editSubmitting ? (
+                <ActivityIndicator size="small" color={theme.colors.white} />
+              ) : (
+                <Text style={styles.submitButtonText}>Save Changes</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Register vehicle modal ───────────────────────────────────────── */}
       <Modal
         visible={modalVisible}
         animationType="slide"
@@ -259,12 +364,14 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     paddingHorizontal: 10,
     paddingVertical: 4,
+    maxWidth: '100%',
   },
   plateText: {
     fontSize: 15,
     fontWeight: '700',
     color: theme.colors.blueText,
     letterSpacing: 1,
+    flexShrink: 1,
   },
   tripCount: {
     fontSize: 13,
@@ -368,5 +475,31 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.colors.error,
     flex: 1,
+  },
+  textField: {
+    backgroundColor: theme.colors.white,
+    borderWidth: 1.5,
+    borderColor: theme.colors.grey3,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    height: 52,
+    fontSize: 15,
+    color: theme.colors.black,
+  },
+  submitButton: {
+    backgroundColor: theme.colors.primary,
+    borderRadius: 14,
+    height: 52,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 24,
+  },
+  submitButtonDisabled: {
+    opacity: 0.5,
+  },
+  submitButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.colors.white,
   },
 });

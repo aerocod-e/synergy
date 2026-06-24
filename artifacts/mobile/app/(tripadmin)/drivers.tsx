@@ -14,7 +14,7 @@ import {
 import { useFocusEffect, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
-import { listDrivers, createDriver } from '@/services/api';
+import { listDrivers, createDriver, updateDriver } from '@/services/api';
 import { useLogout } from '@/hooks/useLogout';
 
 interface DriverItem {
@@ -40,6 +40,12 @@ export default function TripAdminDrivers() {
   const [fullName, setFullName] = useState('');
   const [licenseNumber, setLicenseNumber] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+
+  const [editingDriver, setEditingDriver] = useState<DriverItem | null>(null);
+  const [editFullName, setEditFullName] = useState('');
+  const [editPhoneNumber, setEditPhoneNumber] = useState('');
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const navigation = useNavigation();
   const { handleLogout } = useLogout();
@@ -130,6 +136,38 @@ export default function TripAdminDrivers() {
     }
   };
 
+  const openEditModal = useCallback((driver: DriverItem) => {
+    setEditingDriver(driver);
+    setEditFullName(driver.fullName);
+    setEditPhoneNumber(driver.phoneNumber);
+    setEditError(null);
+  }, []);
+
+  const handleEditSubmit = async () => {
+    if (!editingDriver) return;
+    const trimmedName  = editFullName.trim();
+    const trimmedPhone = editPhoneNumber.trim();
+    if (!trimmedName && !trimmedPhone) {
+      setEditError('Enter a new name or phone number.');
+      return;
+    }
+    setEditSubmitting(true);
+    setEditError(null);
+    try {
+      const body: { full_name?: string; phone_number?: string } = {};
+      if (trimmedName  !== editingDriver.fullName)   body.full_name    = trimmedName;
+      if (trimmedPhone !== editingDriver.phoneNumber) body.phone_number = trimmedPhone;
+      if (Object.keys(body).length === 0) { setEditingDriver(null); return; }
+      await updateDriver(editingDriver.id, body);
+      setEditingDriver(null);
+      fetchDrivers(true);
+    } catch (err: any) {
+      setEditError(err?.message ?? 'Failed to update driver.');
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
   const renderDriver = ({ item }: { item: DriverItem }) => (
     <View style={styles.card}>
       <View style={styles.cardLeft}>
@@ -146,7 +184,13 @@ export default function TripAdminDrivers() {
           {item.tripCount} {item.tripCount === 1 ? 'trip' : 'trips'}
         </Text>
       </View>
-      <Ionicons name="chevron-forward" size={18} color={theme.colors.grey1} />
+      <TouchableOpacity
+        onPress={() => openEditModal(item)}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        accessibilityLabel="Edit driver"
+      >
+        <Ionicons name="create-outline" size={22} color={theme.colors.primary} />
+      </TouchableOpacity>
     </View>
   );
 
@@ -221,6 +265,76 @@ export default function TripAdminDrivers() {
         </TouchableOpacity>
       )}
 
+      {/* ── Edit driver modal ───────────────────────────────────────────── */}
+      <Modal
+        visible={editingDriver !== null}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setEditingDriver(null)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Edit Driver</Text>
+            <TouchableOpacity
+              onPress={() => setEditingDriver(null)}
+              accessibilityLabel="Close modal"
+            >
+              <Ionicons name="close" size={24} color={theme.colors.grey2} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.modalBody}>
+            <Text style={styles.fieldLabel}>LICENSE NUMBER</Text>
+            <View style={styles.readOnlyField}>
+              <Text style={styles.readOnlyText}>{editingDriver?.licenseNumber}</Text>
+            </View>
+            <Text style={styles.readOnlyNote}>License number cannot be changed</Text>
+
+            <Text style={[styles.fieldLabel, { marginTop: 20 }]}>FULL NAME</Text>
+            <TextInput
+              style={styles.textField}
+              value={editFullName}
+              onChangeText={setEditFullName}
+              placeholder="e.g. John Doe"
+              placeholderTextColor={theme.colors.grey1}
+              autoCorrect={false}
+            />
+
+            <Text style={[styles.fieldLabel, { marginTop: 16 }]}>PHONE NUMBER</Text>
+            <TextInput
+              style={styles.textField}
+              value={editPhoneNumber}
+              onChangeText={setEditPhoneNumber}
+              placeholder="e.g. 08012345678"
+              placeholderTextColor={theme.colors.grey1}
+              keyboardType="phone-pad"
+              autoCorrect={false}
+            />
+
+            {editError && (
+              <View style={styles.errorBox}>
+                <Ionicons name="alert-circle-outline" size={16} color={theme.colors.error} />
+                <Text style={styles.errorText}>{editError}</Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={[styles.submitButton, editSubmitting && styles.submitButtonDisabled]}
+              onPress={handleEditSubmit}
+              activeOpacity={0.85}
+              disabled={editSubmitting}
+            >
+              {editSubmitting ? (
+                <ActivityIndicator size="small" color={theme.colors.white} />
+              ) : (
+                <Text style={styles.submitButtonText}>Save Changes</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Register driver modal ────────────────────────────────────────── */}
       <Modal
         visible={modalVisible}
         animationType="slide"
@@ -487,5 +601,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: theme.colors.white,
+  },
+  readOnlyField: {
+    backgroundColor: theme.colors.grey3,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    height: 52,
+    justifyContent: 'center',
+  },
+  readOnlyText: {
+    fontSize: 15,
+    color: theme.colors.grey2,
+    fontWeight: '600',
+  },
+  readOnlyNote: {
+    fontSize: 12,
+    color: theme.colors.grey1,
+    marginTop: 4,
+    marginBottom: 4,
   },
 });

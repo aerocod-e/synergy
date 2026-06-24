@@ -182,6 +182,102 @@ export async function listVehicles(req: Request, res: Response): Promise<void> {
   }
 }
 
+export async function updateVehicle(req: Request, res: Response): Promise<void> {
+  const { id } = req.params as { id: string };
+  const ownerId = req.user!.userId;
+
+  const { registrationNumber } = req.body as { registrationNumber?: unknown };
+
+  if (!registrationNumber || typeof registrationNumber !== "string" || registrationNumber.trim() === "") {
+    res.status(400).json({ error: "BAD_REQUEST", message: "registrationNumber is required" });
+    return;
+  }
+  const regNum = registrationNumber.trim().toUpperCase();
+  if (regNum.length > 50) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "registrationNumber must be 50 characters or fewer" });
+    return;
+  }
+
+  try {
+    const vehicleRes = await pool.query<{
+      id: string;
+      created_by: string;
+      is_active: boolean;
+      deleted_at: Date | null;
+    }>(
+      `SELECT id, created_by, is_active, deleted_at FROM vehicles WHERE id = $1 LIMIT 1`,
+      [id]
+    );
+
+    const row = vehicleRes.rows[0];
+    if (!row || !row.is_active || row.deleted_at !== null) {
+      res.status(404).json({ error: "NOT_FOUND", message: "Vehicle not found" });
+      return;
+    }
+    if (row.created_by !== ownerId) {
+      res.status(403).json({ error: "FORBIDDEN", message: "You do not own this vehicle" });
+      return;
+    }
+
+    const activeTrip = await pool.query<{ id: string }>(
+      `SELECT id FROM trips
+       WHERE vehicle_id = $1
+         AND status IN ('created', 'in_transit')
+         AND deleted_at IS NULL
+       LIMIT 1`,
+      [id]
+    );
+    if (activeTrip.rows.length > 0) {
+      res.status(400).json({ error: "ACTIVE_TRIP", message: "Cannot edit a vehicle with active trips" });
+      return;
+    }
+
+    const conflict = await pool.query<{ id: string }>(
+      `SELECT id FROM vehicles
+       WHERE registration_number = $1
+         AND is_active = true
+         AND deleted_at IS NULL
+         AND id != $2
+       LIMIT 1`,
+      [regNum, id]
+    );
+    if (conflict.rows.length > 0) {
+      res.status(409).json({ error: "CONFLICT", message: "A vehicle with this registration number already exists" });
+      return;
+    }
+
+    const { rows: [updated] } = await pool.query<{
+      id: string;
+      registration_number: string;
+      created_by: string;
+      is_active: boolean;
+      created_at: Date;
+      updated_at: Date;
+    }>(
+      `UPDATE vehicles
+       SET registration_number = $2, updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, registration_number, created_by, is_active, created_at, updated_at`,
+      [id, regNum]
+    );
+
+    res.json({
+      data: {
+        id:                 updated!.id,
+        registrationNumber: updated!.registration_number,
+        createdBy:          updated!.created_by,
+        isActive:           updated!.is_active,
+        createdAt:          updated!.created_at,
+        updatedAt:          updated!.updated_at,
+      },
+      message: "Vehicle updated",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to update vehicle" });
+  }
+}
+
 export async function deleteVehicle(req: Request, res: Response): Promise<void> {
   const { id } = req.params as { id: string };
   const ownerId = req.user!.userId;

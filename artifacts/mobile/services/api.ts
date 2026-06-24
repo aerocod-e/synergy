@@ -186,3 +186,9 @@ export const searchDrivers = (q: string) =>
 
 export const createDriver = (body: { full_name: string; license_number: string; phone_number: string }) =>
   apiRequest('/api/drivers', { method: 'POST', body: JSON.stringify(body) });
+
+export const updateDriver = (id: string, body: { full_name?: string; phone_number?: string }) =>
+  apiRequest(`/api/drivers/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+
+export const updateVehicle = (id: string, body: { registrationNumber: string }) =>
+  apiRequest(`/api/vehicles/${id}`, { method: 'PATCH', body: JSON.stringify(body) });

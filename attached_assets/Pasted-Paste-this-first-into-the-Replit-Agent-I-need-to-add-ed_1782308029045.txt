@@ -1,0 +1,64 @@
+Paste this first into the Replit Agent:
+
+I need to add edit functionality for drivers and vehicles. Follow all steps in order.
+Step 1 -- Backend: driver update endpoint
+In artifacts/api-server/src/controllers/driverController.ts, add an updateDriver function:
+
+PATCH handler for /drivers/:id
+Trip Admin only
+Validates the driver exists and was created by the calling Trip Admin (created_by = req.user.userId) -- return 403 if not
+Accepts: full_name, phone_number (both optional, at least one required)
+Does NOT allow editing license_number -- this is a legal document identifier and should be immutable once registered
+Returns the updated driver object
+
+Register in artifacts/api-server/src/routes/drivers.ts:
+PATCH /drivers/:id   authenticateToken + requireRole("trip_admin") → updateDriver
+Step 2 -- Backend: vehicle update endpoint
+In artifacts/api-server/src/controllers/vehicleController.ts, add an updateVehicle function:
+
+PATCH handler for /vehicles/:id
+Trip Admin only
+Validates the vehicle exists and was created by the calling Trip Admin
+Confirms the vehicle has no active trips (status IN ('created', 'in_transit')) -- if it does, return 400 "Cannot edit a vehicle with active trips"
+Accepts: registration_number (the only field worth editing)
+Checks the new registration number is not already taken by another active vehicle (409 if conflict)
+Returns the updated vehicle object
+
+Register in artifacts/api-server/src/routes/vehicles.ts:
+PATCH /vehicles/:id   authenticateToken + requireRole("trip_admin") → updateVehicle
+Step 3 -- Frontend: driver edit UI
+In artifacts/mobile/app/(tripadmin)/drivers.tsx, add an edit action to each driver card:
+
+Add a small edit icon button (pencil icon, create-outline from Ionicons) on each driver card
+Tapping it opens a modal pre-filled with the driver's current full_name and phone_number
+The license_number is displayed as read-only text in the modal with a note "License number cannot be changed"
+On submit, call PATCH /api/drivers/:id and refresh the list on success
+Show inline error if the API returns an error
+Add a updateDriver(id, body) helper to services/api.ts
+
+Step 4 -- Frontend: vehicle edit UI
+In artifacts/mobile/app/(tripadmin)/vehicles.tsx, add an edit action to each vehicle card:
+
+Add a small edit icon button (create-outline) on each vehicle card
+Tapping it opens a modal pre-filled with the vehicle's current registration_number
+On submit, call PATCH /api/vehicles/:id and refresh the list on success
+Show inline error if the vehicle has active trips (400 response) or duplicate plate (409)
+Add a updateVehicle(id, body) helper to services/api.ts
+
+Step 5 -- TypeScript check
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.
+
+PART 2 -- Testing
+Backend Tests:
+Test 1 -- Update driver name and phone: Login as lagos.ta1@synergy.com. Call PATCH /api/drivers/:id for a driver they own with new name and phone. Confirm 200 and updated fields returned.
+Test 2 -- Cannot edit license number: Confirm the endpoint does not accept or apply a license_number field in the request body.
+Test 3 -- Cannot edit another Trip Admin's driver: Using lagos.ta2@synergy.com token, try to update a driver owned by lagos.ta1. Confirm 403.
+Test 4 -- Update vehicle registration: Call PATCH /api/vehicles/:id for a vehicle with no active trips. Confirm 200 and updated registration returned.
+Test 5 -- Cannot edit vehicle with active trips: Try to update a vehicle that has a trip in created or in_transit status. Confirm 400 with clear message.
+Test 6 -- Duplicate plate rejected: Try to update a vehicle's registration to a plate that already exists on another vehicle. Confirm 409.
+Frontend App Tests (390x844px, tap only):
+Test 7 -- On the Drivers tab, confirm each driver card has a visible edit icon. Tap it. Confirm the modal opens pre-filled with the driver's name and phone. Confirm license number is shown as read-only. Edit the name and submit. Confirm the card updates.
+Test 8 -- On the Vehicles tab, confirm each vehicle card has a visible edit icon. Tap it. Confirm the modal opens pre-filled with the registration number. Edit it and submit. Confirm the card updates.
+Test 9 -- Console is clean.
