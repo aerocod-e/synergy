@@ -744,7 +744,9 @@ export default function TripAdminTrips() {
                 blurOnSubmit
                 returnKeyType="done"
                 onSubmitEditing={Keyboard.dismiss}
+                maxLength={500}
               />
+              <Text style={styles.charCounter}>{cancelReason.length} / 500</Text>
               {cancelError && (
                 <View style={[styles.errorBox, { marginTop: 8 }]}>
                   <Ionicons name="alert-circle-outline" size={16} color={theme.colors.error} />
@@ -1189,6 +1191,13 @@ const styles = StyleSheet.create({
     height: 88,
     textAlignVertical: 'top',
     paddingTop: 12,
+  },
+  charCounter: {
+    fontSize: 12,
+    color: theme.colors.grey1,
+    textAlign: 'right',
+    marginTop: 4,
+    marginBottom: 4,
   },
   cancelSheetActions: {
     flexDirection: 'row',

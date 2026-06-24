@@ -77,6 +77,11 @@ export async function requestCancellation(req: Request, res: Response): Promise<
     return;
   }
 
+  if (reason.trim().length > 500) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "reason must be 500 characters or fewer" });
+    return;
+  }
+
   const client = await pool.connect();
   try {
     const { rows: tripRows } = await client.query<{

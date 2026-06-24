@@ -91,6 +91,7 @@ export default function VehicleSearchInput({ value, onSelect, onRegisterNew, pla
           placeholderTextColor={theme.colors.grey2}
           autoCapitalize="characters"
           autoCorrect={false}
+          maxLength={50}
         />
         {loading && <ActivityIndicator size="small" color={theme.colors.primary} style={styles.spinner} />}
       </View>

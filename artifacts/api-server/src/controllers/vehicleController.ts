@@ -10,6 +10,12 @@ export async function createVehicle(req: Request, res: Response): Promise<void> 
   }
 
   const regNum = registrationNumber.trim().toUpperCase();
+
+  if (regNum.length > 50) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "registrationNumber must be 50 characters or fewer" });
+    return;
+  }
+
   const createdBy = req.user!.userId;
 
   try {

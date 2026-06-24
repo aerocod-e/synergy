@@ -1,0 +1,39 @@
+Now let's close out the remaining four bugs. Paste this into the Replit Agent:
+
+Fix four remaining Medium/Low bugs from the Stage 3B edge case QA pass. Follow all steps in order. Do not change any other code.
+BUG-07 -- Driver validation stuck after valid selection in trip creation form
+After a Trip Admin selects a valid driver from the DriverSearchInput dropdown in the trip creation form, the driver field appears stuck or shows a validation error even though a valid driver was selected. Investigate the exact state management in the trip creation form's driver field and fix the root cause so that selecting a driver from the dropdown correctly populates the field and clears any validation error.
+BUG-08 -- No max length on cancellation reason
+The cancellation reason text input has no character limit. A 500-character reason was accepted. Add a reasonable max length of 500 characters to:
+
+The reason TEXT NOT NULL field in cancellationController.ts -- validate that reason.trim().length <= 500 and return 400 if exceeded
+The cancellation reason TextInput in (tripadmin)/index.tsx -- add maxLength={500} prop and a live character counter below the input (e.g. "247 / 500") so the Trip Admin knows how much space they have
+
+BUG-09 -- No idempotency on rapid cancellation-rights toggle
+Rapidly toggling the pre-approved cancellation rights switch on a Trip Admin card fires multiple simultaneous PATCH /api/users/:id/cancellation-rights requests. The final database state may not match the UI state if responses arrive out of order.
+Fix in (stateadmin)/trip-admins.tsx: debounce the toggle handler so that only the last toggle within 300ms is sent to the API. Alternatively, disable the toggle while an in-flight request is pending and re-enable it when the response arrives (this is more reliable than debouncing). Use the disable-while-inflight approach since it gives clearer visual feedback.
+BUG-10 -- No max length on vehicle registration number
+The vehicle registration number field has no character limit, despite the database column being VARCHAR(50). Add:
+
+Backend: In vehicleController.ts createVehicle, validate registration_number.trim().length <= 50 and return 400 if exceeded
+Frontend: In the vehicle registration modal and VehicleSearchInput, add maxLength={50} to the TextInput component
+
+
+After all fixes, run both TypeScript checks:
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.
+
+PART 2 -- Testing
+Run these targeted tests after the fixes. Use direct API calls for backend tests and live App Testing (390x844px viewport, URL https://2f2a3156-e178-45fc-95e3-f3726442355f-00-2f9hl4ag0p8j2.expo.kirk.replit.dev) for frontend tests.
+Backend Tests
+Test 1 -- BUG-08 backend: Submit a cancellation request with a 501-character reason. Confirm 400 is returned with a clear validation message.
+Test 2 -- BUG-10 backend: Attempt to create a vehicle with a 51-character registration number via POST /api/vehicles. Confirm 400 is returned.
+Frontend Tests
+Test 3 -- BUG-07: Open the trip creation form. Use DriverSearchInput to search for and select an existing driver. Confirm the driver field populates correctly and any validation error clears after selection.
+Test 4 -- BUG-08 frontend: Open the cancellation modal on a trip. Confirm the reason input shows a character counter. Type more than 500 characters and confirm input is capped at 500.
+Test 5 -- BUG-09: On the State Admin Trip Admins tab, rapidly tap the pre-approved cancellation toggle on and off several times. Confirm the toggle is disabled while a request is in-flight and the final UI state matches the database value after all requests settle.
+Test 6 -- BUG-10 frontend: In the vehicle registration modal, attempt to type more than 50 characters. Confirm input is capped at 50.
+Test 7 -- Full trip creation smoke test: Complete a full trip creation flow (vehicle search, driver selection, states, submit). Confirm the trip appears in the list with the correct status and trip code.
+
+Report every fix with the exact root cause for BUG-07, every file and line changed, and every test with pass or fail.

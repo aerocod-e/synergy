@@ -44,6 +44,8 @@ export default function StateAdminTripAdmins() {
 
   // toggle error per-card (cancellation rights)
   const [toggleError, setToggleError] = useState<string | null>(null);
+  // BUG-09: track in-flight cancellation-rights requests per card to prevent race conditions
+  const [cancellationToggling, setCancellationToggling] = useState<Record<string, boolean>>({});
 
   // per-card active toggle state
   const [activeToggling, setActiveToggling] = useState<Record<string, boolean>>({});
@@ -167,6 +169,10 @@ export default function StateAdminTripAdmins() {
   // ── toggle pre-approval ──────────────────────────────────────────────────────
 
   const handleToggle = useCallback(async (admin: TripAdmin, value: boolean) => {
+    // BUG-09: disable the switch while a request is in-flight so rapid taps
+    // cannot fire multiple concurrent PATCH requests whose out-of-order responses
+    // may leave the DB state out of sync with the UI.
+    setCancellationToggling((prev) => ({ ...prev, [admin.id]: true }));
     setToggleError(null);
     setAdmins((prev) =>
       prev.map((a) => (a.id === admin.id ? { ...a, canCancelWithoutApproval: value } : a))
@@ -180,6 +186,8 @@ export default function StateAdminTripAdmins() {
         )
       );
       setToggleError(err?.message ?? 'Failed to update cancellation rights');
+    } finally {
+      setCancellationToggling((prev) => { const n = { ...prev }; delete n[admin.id]; return n; });
     }
   }, []);
 
@@ -232,14 +240,18 @@ export default function StateAdminTripAdmins() {
         </View>
       </View>
 
-      <View style={styles.toggleRow}>
+      <View style={[styles.toggleRow, cancellationToggling[item.id] && styles.toggleRowDisabled]}>
         <View style={styles.toggleLabelCol}>
           <Text style={styles.toggleLabel}>Pre-approved cancellations</Text>
           <Text style={styles.toggleSub}>Can cancel trips without State Admin approval</Text>
         </View>
         <Switch
           value={item.canCancelWithoutApproval}
-          onValueChange={(val) => handleToggle(item, val)}
+          onValueChange={(val) => {
+            if (cancellationToggling[item.id]) return;
+            handleToggle(item, val);
+          }}
+          disabled={!!cancellationToggling[item.id]}
           trackColor={{ false: theme.colors.inactive, true: theme.colors.primary }}
           thumbColor={theme.colors.white}
         />
@@ -594,6 +606,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
+  },
+  toggleRowDisabled: {
+    opacity: 0.45,
   },
   toggleLabelCol: {
     flex: 1,

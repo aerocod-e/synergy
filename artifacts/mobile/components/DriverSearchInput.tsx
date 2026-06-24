@@ -71,6 +71,7 @@ export default function DriverSearchInput({ value, onSelect, placeholder }: Prop
   };
 
   const handleSelect = (driver: Driver) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
     setQuery(driver.fullName);
     setShowDropdown(false);
     setResults([]);
