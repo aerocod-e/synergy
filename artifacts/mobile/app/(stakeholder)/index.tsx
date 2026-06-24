@@ -221,6 +221,7 @@ export default function StakeholderHome() {
         <Text style={styles.verifyLinkText}>Verify a payment publicly</Text>
         <Ionicons name="open-outline" size={14} color={theme.colors.primary} />
       </TouchableOpacity>
+      <View style={{ height: theme.PILL_NAV_BOTTOM_PADDING }} />
     </>
   );
 
@@ -410,15 +411,14 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 16,
     paddingTop: 4,
-    paddingBottom: 40,
   },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.colors.white,
-    borderRadius: 14,
+    borderRadius: 12,
     padding: 16,
-    marginBottom: 10,
+    marginBottom: 12,
     ...theme.shadows.card,
   },
   cardMain: {

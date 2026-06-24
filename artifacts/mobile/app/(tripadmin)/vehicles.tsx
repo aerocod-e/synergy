@@ -164,6 +164,7 @@ export default function TripAdminVehicles() {
             <Text style={styles.emptySubtitle}>Tap + to register your first vehicle</Text>
           </View>
         }
+        ListFooterComponent={() => <View style={{ height: theme.PILL_NAV_BOTTOM_PADDING }} />}
       />
 
       {/* FAB — native only; on web the header + button is used instead */}
@@ -238,15 +239,14 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
-    paddingBottom: 120,
   },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.colors.white,
-    borderRadius: 14,
+    borderRadius: 12,
     padding: 16,
-    marginBottom: 10,
+    marginBottom: 12,
     ...theme.shadows.card,
   },
   cardLeft: {

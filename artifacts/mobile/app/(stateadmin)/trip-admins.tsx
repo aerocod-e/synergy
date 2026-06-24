@@ -354,6 +354,7 @@ export default function StateAdminTripAdmins() {
             <Text style={styles.emptySubtitle}>Tap + to add the first Trip Admin</Text>
           </View>
         }
+        ListFooterComponent={() => <View style={{ height: theme.PILL_NAV_BOTTOM_PADDING }} />}
       />
 
       {Platform.OS !== 'web' && (
@@ -523,7 +524,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
-    paddingBottom: 120,
   },
   listHeaderTitle: {
     fontSize: 20,
@@ -549,8 +549,8 @@ const styles = StyleSheet.create({
   // card
   card: {
     backgroundColor: theme.colors.white,
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 12,
+    padding: 16,
     marginBottom: 12,
     gap: 12,
     ...theme.shadows.card,

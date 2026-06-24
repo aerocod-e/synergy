@@ -74,4 +74,5 @@ export const theme = {
       color: '#0d0d0d',
     },
   },
+  PILL_NAV_BOTTOM_PADDING: 100,
 };

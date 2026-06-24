@@ -421,6 +421,7 @@ export default function TripAdminTrips() {
             <Text style={styles.emptySubtitle}>Tap + to create your first trip</Text>
           </View>
         }
+        ListFooterComponent={() => <View style={{ height: theme.PILL_NAV_BOTTOM_PADDING }} />}
       />
 
       {Platform.OS !== 'web' && (
@@ -811,12 +812,11 @@ const styles = StyleSheet.create({
   // list
   listContent: {
     padding: 16,
-    paddingBottom: 120,
   },
   card: {
     backgroundColor: theme.colors.white,
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 12,
+    padding: 16,
     marginBottom: 10,
     gap: 8,
     ...theme.shadows.card,

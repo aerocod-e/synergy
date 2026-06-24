@@ -200,6 +200,7 @@ export default function UsersScreen() {
           </View>
         }
         contentContainerStyle={styles.listContent}
+        ListFooterComponent={() => <View style={{ height: theme.PILL_NAV_BOTTOM_PADDING }} />}
       />
 
       {/* FAB */}
@@ -338,7 +339,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   list: { flex: 1 },
-  listContent: { paddingBottom: 100 },
+  listContent: {},
   centered: {
     flex: 1,
     justifyContent: 'center',
@@ -355,8 +356,8 @@ const styles = StyleSheet.create({
   item: {
     backgroundColor: theme.colors.white,
     marginHorizontal: 20,
-    marginBottom: 10,
-    borderRadius: 16,
+    marginBottom: 12,
+    borderRadius: 12,
     padding: 16,
     ...theme.shadows.card,
   },

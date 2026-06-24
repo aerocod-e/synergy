@@ -4,20 +4,15 @@ import { TouchableOpacity } from 'react-native';
 import { useLogout } from '@/hooks/useLogout';
 import PillTabBar from '@/components/PillTabBar';
 import { theme } from '@/constants/theme';
+import LogoutButton from '@/components/LogoutButton';
 
 export default function SuperAdminLayout() {
   const { handleLogout } = useLogout();
   const router = useRouter();
 
-  const logoutButton = (
-    <TouchableOpacity onPress={handleLogout} style={{ marginRight: 16 }}>
-      <Ionicons name="log-out-outline" size={24} color={theme.colors.primary} />
-    </TouchableOpacity>
-  );
-
   const sharedHeaderOptions = {
     headerTitle: 'Synergy Cargo Tax',
-    headerRight: () => logoutButton,
+    headerRight: () => <LogoutButton onPress={handleLogout} />,
     headerStyle: {
       backgroundColor: theme.colors.white,
       ...theme.shadows.header,
@@ -36,7 +31,7 @@ export default function SuperAdminLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Dashboard',
+          title: 'Home',
         }}
       />
       <Tabs.Screen

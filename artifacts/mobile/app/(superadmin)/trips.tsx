@@ -351,6 +351,7 @@ export default function SuperAdminTripsList() {
                 )}
               </View>
             }
+            ListFooterComponent={() => <View style={{ height: theme.PILL_NAV_BOTTOM_PADDING }} />}
           />
         )}
       </View>
@@ -574,11 +575,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   listContent: {
-    paddingBottom: 140,
+    paddingBottom: 0,
   },
   card: {
     backgroundColor: theme.colors.white,
-    borderRadius: 16,
+    borderRadius: 12,
     marginHorizontal: 20,
     marginVertical: 6,
     padding: 16,

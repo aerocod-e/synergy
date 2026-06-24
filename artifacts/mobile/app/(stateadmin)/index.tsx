@@ -236,17 +236,20 @@ export default function StateAdminHome() {
             <Text style={styles.emptySubtitle}>No pending cancellation requests</Text>
           </View>
         }
-        ListFooterComponent={
-          <TouchableOpacity
-            style={styles.verifyRow}
-            onPress={() => router.push('/(public)/lookup')}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="search-outline" size={18} color={theme.colors.primary} />
-            <Text style={styles.verifyRowText}>Public Lookup</Text>
-            <Ionicons name="chevron-forward" size={16} color={theme.colors.grey1} />
-          </TouchableOpacity>
-        }
+        ListFooterComponent={() => (
+          <>
+            <TouchableOpacity
+              style={styles.verifyRow}
+              onPress={() => router.push('/(public)/lookup')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="search-outline" size={18} color={theme.colors.primary} />
+              <Text style={styles.verifyRowText}>Public Lookup</Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.grey1} />
+            </TouchableOpacity>
+            <View style={{ height: theme.PILL_NAV_BOTTOM_PADDING }} />
+          </>
+        )}
       />
 
       {/* ── Reject modal ── */}
@@ -326,7 +329,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
-    paddingBottom: 40,
   },
   listHeaderTitle: {
     fontSize: 20,
@@ -338,8 +340,8 @@ const styles = StyleSheet.create({
   // card
   card: {
     backgroundColor: theme.colors.white,
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 12,
+    padding: 16,
     marginBottom: 12,
     gap: 10,
     ...theme.shadows.card,

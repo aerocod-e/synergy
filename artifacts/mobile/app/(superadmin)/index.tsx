@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: theme.PILL_NAV_BOTTOM_PADDING,
   },
   sectionLabel: {
     fontSize: 11,
@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
   card: {
     flex: 1,
     backgroundColor: theme.colors.white,
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 16,
     alignItems: 'flex-start',
     ...theme.shadows.card,

@@ -4,6 +4,7 @@ import { TouchableOpacity } from 'react-native';
 import { useLogout } from '@/hooks/useLogout';
 import { theme } from '@/constants/theme';
 import PillTabBar from '@/components/PillTabBar';
+import LogoutButton from '@/components/LogoutButton';
 
 export default function TripAdminLayout() {
   const { handleLogout } = useLogout();
@@ -14,11 +15,7 @@ export default function TripAdminLayout() {
       tabBar={(props) => <PillTabBar {...props} />}
       screenOptions={{
         headerTitle: 'Synergy Cargo Tax',
-        headerRight: () => (
-          <TouchableOpacity onPress={handleLogout} style={{ marginRight: 16 }}>
-            <Ionicons name="log-out-outline" size={24} color={theme.colors.primary} />
-          </TouchableOpacity>
-        ),
+        headerRight: () => <LogoutButton onPress={handleLogout} />,
         headerStyle: {
           backgroundColor: theme.colors.white,
           ...theme.shadows.header,

@@ -1,0 +1,68 @@
+This is a targeted UI polish pass based on specific issues found during physical device testing on iPhone. Fix all issues below. Do not change any business logic or navigation structure.
+Critical setup for testing:
+
+App URL: https://2f2a3156-e178-45fc-95e3-f3726442355f-00-2f9hl4ag0p8j2.expo.kirk.replit.dev
+Set browser viewport to 390x844px before every test session
+Navigate only by tapping real UI elements
+
+
+Fix 1 -- PillTabBar bottom list content overlap
+Every scrollable list in the app that sits inside a screen with a PillTabBar is being covered by the floating pill at the bottom when the user scrolls to the last item. Fix this by adding a consistent bottom spacer to every FlatList and ScrollView that lives inside a PillTabBar screen.
+Find every FlatList and ScrollView inside these screens:
+
+(tripadmin)/index.tsx (trips list)
+(tripadmin)/vehicles.tsx (vehicles list)
+(tripadmin)/drivers.tsx (drivers list)
+(stateadmin)/index.tsx (cancellation requests list)
+(stateadmin)/trip-admins.tsx (trip admins list)
+(superadmin)/trips.tsx (trips list)
+(superadmin)/users.tsx (users list)
+(stakeholder)/index.tsx (ledger list)
+
+For each FlatList, add a ListFooterComponent that renders a View with height: 100 (enough to clear the pill nav plus some breathing room). For each ScrollView, add contentContainerStyle={{ paddingBottom: 100 }}. Use a shared constant for this value -- add PILL_NAV_BOTTOM_PADDING = 100 to constants/theme.ts so it can be adjusted in one place.
+Fix 2 -- FAB position still clipping on native
+The FAB on native screens (Trips tab, Vehicles tab, Drivers tab) is still being slightly sliced by the PillTabBar. Increase the bottom value on all FABs from their current value to 120 to give more clearance above the pill nav. Search for all position: 'absolute' FAB styles across the tripadmin screens and update them consistently.
+Fix 3 -- "Dashboard" label too long for PillTabBar pill
+The word "Dashboard" is too long to fit cleanly inside the selected pill in the Super Admin PillTabBar. Change the tab label from "Dashboard" to "Home" in (superadmin)/_layout.tsx. Update the tab title accordingly. No other change needed -- the screen content stays the same.
+Fix 4 -- Logout button inconsistency across all role screens
+The logout button looks different across role screens -- some show a native iOS 26 liquid glass style button, others show a plain SVG icon, and the icon version is off-center on some screens. Standardize to a single consistent logout button across all layouts.
+Find every _layout.tsx file that contains a logout/sign-out button in headerRight:
+
+(superadmin)/_layout.tsx
+(stateadmin)/_layout.tsx
+(tripadmin)/_layout.tsx
+(stakeholder)/_layout.tsx
+
+Replace every logout button implementation with a single consistent pattern using TouchableOpacity containing an Ionicons icon (log-out-outline, size 24, color theme.colors.primary). The touchable should have padding of 8 on all sides so the tap target is comfortable and the icon is visually centered within it. Do not use any platform-specific button components -- keep it pure React Native so it looks identical on iOS and Android.
+Create a shared LogoutButton component at artifacts/mobile/components/LogoutButton.tsx that accepts an onPress prop and renders this consistent style. Replace all four layout files to use this shared component instead of inline implementations.
+Fix 5 -- Super Admin dashboard layout and spacing
+The Super Admin dashboard ((superadmin)/index.tsx) has layout and spacing issues making it feel "wonky." Audit and fix:
+
+Summary cards should have consistent padding (16px inside each card), consistent margin between cards (12px), and consistent border radius (12px)
+The 2-column grid should have equal column widths and consistent gutter between columns (12px)
+Card labels should use a consistent small font size (12px, gray, uppercase or sentence case -- pick one and apply consistently)
+Card values (the large bold numbers) should use a consistent large font size (24px, bold, primary color or dark depending on the metric)
+The platform grand total card should span the full width (not sit in a column) since it is the most important figure
+Add consistent vertical spacing between the page header and the first card row (16px)
+Pull-to-refresh should have the correct tint color matching theme.colors.primary
+
+Fix 6 -- General card and spacing consistency pass
+Do a pass across these screens and apply consistent spacing rules:
+
+All cards across all screens: borderRadius: 12, padding: 16, marginBottom: 12, white background, consistent shadow (use the existing theme.shadows.card if it exists, otherwise elevation: 2 on Android and shadowColor/shadowOffset/shadowOpacity/shadowRadius on iOS via Platform.select)
+All screen containers: paddingHorizontal: 16, paddingTop: 16
+Section headers within screens: consistent font size (14px), font weight (600), color (gray), marginBottom (8)
+
+Only apply these to screens that are currently inconsistent -- do not touch screens that already follow this pattern correctly.
+
+PART 2 -- Testing
+After all fixes, perform live App Testing at 390x844px viewport, tapping only real UI elements.
+Test 1 -- Login as Trip Admin. Scroll the Trips list to the very bottom. Confirm the last item is fully visible and not covered by the PillTabBar.
+Test 2 -- On the Trips tab, confirm the FAB sits clearly above the PillTabBar with no clipping.
+Test 3 -- Login as Super Admin. Confirm the PillTabBar shows "Home" instead of "Dashboard" and the label fits cleanly inside the selected pill.
+Test 4 -- Check the logout button on all four role screens (Super Admin, State Admin, Trip Admin, Stakeholder). Confirm it looks identical on all four -- same icon, same size, same color, same position.
+Test 5 -- On the Super Admin Home screen, confirm the dashboard cards are evenly spaced, the grand total spans full width, and the layout feels clean and balanced.
+Test 6 -- Scroll to the bottom of the State Admin cancellation requests list, the users list, the stakeholder ledger, and the vehicles list. Confirm none are obscured by the PillTabBar.
+Test 7 -- Console is clean throughout. No layout warnings.
+
+Report every file changed with exact details, and every test with pass or fail and what was seen on screen. Flag anything that needs physical iPhone re-verification.

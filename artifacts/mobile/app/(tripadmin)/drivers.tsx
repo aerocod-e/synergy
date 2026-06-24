@@ -195,6 +195,7 @@ export default function TripAdminDrivers() {
             <Text style={styles.emptySubtitle}>Tap + to register your first driver</Text>
           </View>
         }
+        ListFooterComponent={() => <View style={{ height: theme.PILL_NAV_BOTTOM_PADDING }} />}
       />
 
       {Platform.OS !== 'web' && (
@@ -310,15 +311,14 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
-    paddingBottom: 120,
   },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.colors.white,
-    borderRadius: 14,
+    borderRadius: 12,
     padding: 16,
-    marginBottom: 10,
+    marginBottom: 12,
     ...theme.shadows.card,
   },
   cardLeft: {
