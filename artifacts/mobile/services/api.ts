@@ -216,3 +216,9 @@ export const updateUser = (userId: string, body: { firstName?: string; lastName?
 
 export const deleteUser = (userId: string) =>
   apiRequest(`/api/users/${userId}`, { method: 'DELETE' });
+
+export const deleteTripAdmin = (userId: string) =>
+  apiRequest(`/api/users/${userId}/trip-admin`, { method: 'DELETE' });
+
+export const deleteDriver = (id: string) =>
+  apiRequest(`/api/drivers/${id}`, { method: 'DELETE' });

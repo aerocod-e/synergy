@@ -678,6 +678,63 @@ export async function deleteUser(req: Request, res: Response): Promise<void> {
   }
 }
 
+export async function deleteTripAdmin(req: Request, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const caller = req.user!;
+
+    const { rows } = await pool.query<{
+      id: string;
+      role: string;
+      entity_id: string | null;
+      deleted_at: Date | null;
+    }>(
+      `SELECT id, role, entity_id, deleted_at FROM users WHERE id = $1`,
+      [id]
+    );
+
+    const target = rows[0];
+    if (!target || target.deleted_at !== null) {
+      res.status(404).json({ error: "NOT_FOUND", message: "Trip Admin not found" });
+      return;
+    }
+    if (target.role !== "trip_admin") {
+      res.status(403).json({ error: "FORBIDDEN", message: "Target user is not a Trip Admin" });
+      return;
+    }
+    if (target.entity_id !== caller.entityId) {
+      res.status(403).json({ error: "FORBIDDEN", message: "This Trip Admin does not belong to your state" });
+      return;
+    }
+
+    const activeTrip = await pool.query<{ id: string }>(
+      `SELECT id FROM trips
+       WHERE  created_by = $1
+         AND  status IN ('created', 'in_transit')
+         AND  deleted_at IS NULL
+       LIMIT  1`,
+      [id]
+    );
+    if (activeTrip.rows.length > 0) {
+      res.status(400).json({
+        error: "ACTIVE_TRIP",
+        message: "Cannot delete a Trip Admin who has active trips. Resolve all active trips first.",
+      });
+      return;
+    }
+
+    await pool.query(
+      `UPDATE users SET deleted_at = NOW(), is_active = false, updated_at = NOW() WHERE id = $1`,
+      [id]
+    );
+
+    res.status(200).json({ data: {}, message: "Trip Admin account has been deactivated successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to delete Trip Admin" });
+  }
+}
+
 export async function resetUserPassword(req: Request, res: Response): Promise<void> {
   try {
     const { id } = req.params;

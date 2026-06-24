@@ -10,12 +10,13 @@ import {
   RefreshControl,
   TextInput,
   Platform,
+  Alert,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
-import { listDrivers, createDriver, updateDriver } from '@/services/api';
+import { listDrivers, createDriver, updateDriver, deleteDriver as deleteDriverApi } from '@/services/api';
 import { useLogout } from '@/hooks/useLogout';
 
 interface DriverItem {
@@ -52,6 +53,9 @@ export default function TripAdminDrivers() {
   const [editPhoneNumber, setEditPhoneNumber] = useState('');
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+
+  const [deleting, setDeleting] = useState<Record<string, boolean>>({});
+  const [deleteError, setDeleteError] = useState<Record<string, string>>({});
 
   const navigation = useNavigation();
   const { handleLogout } = useLogout();
@@ -194,29 +198,79 @@ export default function TripAdminDrivers() {
     }
   };
 
+  const handleDeleteDriver = useCallback((item: DriverItem) => {
+    Alert.alert(
+      `Remove ${item.fullName}?`,
+      'This cannot be undone. Drivers with active trips cannot be removed.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            setDeleting((prev) => ({ ...prev, [item.id]: true }));
+            setDeleteError((prev) => { const n = { ...prev }; delete n[item.id]; return n; });
+            try {
+              await deleteDriverApi(item.id);
+              setDrivers((prev) => prev.filter((d) => d.id !== item.id));
+            } catch (err: any) {
+              setDeleteError((prev) => ({
+                ...prev,
+                [item.id]: err?.message ?? 'Failed to remove driver.',
+              }));
+            } finally {
+              setDeleting((prev) => { const n = { ...prev }; delete n[item.id]; return n; });
+            }
+          },
+        },
+      ]
+    );
+  }, []);
+
   const renderDriver = ({ item }: { item: DriverItem }) => (
     <View style={styles.card}>
-      <View style={styles.cardLeft}>
-        <Text style={styles.driverName}>{item.fullName}</Text>
-        <View style={styles.detailRow}>
-          <Ionicons name="card-outline" size={13} color={theme.colors.grey1} />
-          <Text style={styles.detailText}>{item.licenseNumber}</Text>
+      <View style={styles.cardMain}>
+        <View style={styles.cardLeft}>
+          <Text style={styles.driverName}>{item.fullName}</Text>
+          <View style={styles.detailRow}>
+            <Ionicons name="card-outline" size={13} color={theme.colors.grey1} />
+            <Text style={styles.detailText}>{item.licenseNumber}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Ionicons name="call-outline" size={13} color={theme.colors.grey1} />
+            <Text style={styles.detailText}>{item.phoneNumber}</Text>
+          </View>
+          <Text style={styles.tripCount}>
+            {item.tripCount} {item.tripCount === 1 ? 'trip' : 'trips'}
+          </Text>
         </View>
-        <View style={styles.detailRow}>
-          <Ionicons name="call-outline" size={13} color={theme.colors.grey1} />
-          <Text style={styles.detailText}>{item.phoneNumber}</Text>
+        <View style={styles.cardActions}>
+          <TouchableOpacity
+            onPress={() => openEditModal(item)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel="Edit driver"
+          >
+            <Ionicons name="create-outline" size={22} color={theme.colors.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => handleDeleteDriver(item)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            disabled={!!deleting[item.id]}
+            accessibilityLabel="Remove driver"
+          >
+            {deleting[item.id]
+              ? <ActivityIndicator size="small" color={theme.colors.error} />
+              : <Ionicons name="trash-outline" size={22} color={theme.colors.error} />
+            }
+          </TouchableOpacity>
         </View>
-        <Text style={styles.tripCount}>
-          {item.tripCount} {item.tripCount === 1 ? 'trip' : 'trips'}
-        </Text>
       </View>
-      <TouchableOpacity
-        onPress={() => openEditModal(item)}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        accessibilityLabel="Edit driver"
-      >
-        <Ionicons name="create-outline" size={22} color={theme.colors.primary} />
-      </TouchableOpacity>
+      {deleteError[item.id] ? (
+        <View style={styles.cardError}>
+          <Ionicons name="alert-circle-outline" size={13} color={theme.colors.error} />
+          <Text style={styles.cardErrorText}>{deleteError[item.id]}</Text>
+        </View>
+      ) : null}
     </View>
   );
 
@@ -471,17 +525,36 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   card: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: theme.colors.white,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
+    gap: 10,
     ...theme.shadows.card,
+  },
+  cardMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   cardLeft: {
     flex: 1,
     gap: 5,
+  },
+  cardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginLeft: 12,
+  },
+  cardError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  cardErrorText: {
+    fontSize: 12,
+    color: theme.colors.error,
+    flex: 1,
   },
   driverName: {
     fontSize: 16,

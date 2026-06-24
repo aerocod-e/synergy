@@ -1,0 +1,66 @@
+This task covers Trip Admin vehicle/driver deletion and State Admin Trip Admin deletion. Follow all steps in order.
+Step 1 -- Backend: driver soft-delete endpoint
+In artifacts/api-server/src/controllers/driverController.ts, add a deleteDriver function:
+
+DELETE handler for /drivers/:id
+Trip Admin only
+Validates the driver exists, is not already soft-deleted, and was created by the calling Trip Admin (created_by = req.user.userId) -- return 403 if not owned
+Checks whether the driver has any active trips (status IN ('created', 'in_transit')) -- if yes, return 400 "Cannot delete a driver who has active trips"
+Soft-deletes by setting deleted_at = NOW() and is_active = false
+Returns 200 with message "Driver has been removed successfully"
+
+Register in artifacts/api-server/src/routes/drivers.ts:
+DELETE /drivers/:id   authenticateToken + requireRole("trip_admin") → deleteDriver
+Step 2 -- Confirm vehicle soft-delete works correctly
+The vehicle soft-delete endpoint (DELETE /api/vehicles/:id) already exists from Feature 3. Confirm:
+
+It blocks deletion if the vehicle has active trips (already implemented)
+It is correctly called from (tripadmin)/vehicles.tsx when a delete action exists there
+If no delete UI exists on the vehicles screen, add a delete button/swipe action (see Step 4)
+
+Step 3 -- Backend: State Admin soft-delete Trip Admin
+In artifacts/api-server/src/controllers/userController.ts, add a deleteTripAdmin function:
+
+DELETE handler for /users/:id/trip-admin
+State Admin only
+Validates the target user has role = 'trip_admin' and entity_id matching the caller's entity_id -- return 403 if not in their state
+Checks whether the Trip Admin has any active trips (status IN ('created', 'in_transit')) created by them -- if yes, return 400 "Cannot delete a Trip Admin who has active trips. Resolve all active trips first."
+Soft-deletes by setting deleted_at = NOW() and is_active = false
+Returns 200 with message "Trip Admin account has been deactivated successfully"
+
+Register in users.ts:
+DELETE /users/:id/trip-admin   authenticateToken + requireRole("state_admin") → deleteTripAdmin
+Step 4 -- Frontend: add delete action to Trip Admin drivers screen
+In artifacts/mobile/app/(tripadmin)/drivers.tsx, add a delete action to each driver card:
+
+Add a red trash icon button (trash-outline from Ionicons) on each driver card alongside the existing edit pencil icon
+Tapping it shows a confirmation alert: "Remove [Driver Name]? This cannot be undone. Drivers with active trips cannot be removed."
+On confirm, call DELETE /api/drivers/:id
+On success, remove the driver from the list optimistically
+On 400 (active trips), show a clear inline error message
+Add deleteDriver(id) helper to services/api.ts
+
+Step 5 -- Frontend: add delete action to Trip Admin vehicles screen
+In artifacts/mobile/app/(tripadmin)/vehicles.tsx, confirm whether a delete action already exists. If not, add one:
+
+Add a red trash icon button on each vehicle card alongside the existing edit pencil icon
+Tapping it shows a confirmation alert: "Remove [Registration Number]? This cannot be undone. Vehicles with active trips cannot be removed."
+On confirm, call DELETE /api/vehicles/:id (endpoint already exists)
+On success, remove from the list optimistically
+On 400 (active trips), show a clear inline error message
+Add deleteVehicle(id) helper to services/api.ts if not already present
+
+Step 6 -- Frontend: add delete action to State Admin Trip Admins screen
+In artifacts/mobile/app/(stateadmin)/trip-admins.tsx, add a delete action to each Trip Admin card:
+
+Add a red "Delete Account" button below the existing Deactivate/Reactivate button on each card
+Tapping shows a confirmation alert: "Delete [Name]'s account? This cannot be undone. Trip Admins with active trips cannot be deleted."
+On confirm, call DELETE /api/users/:id/trip-admin
+On success, remove the card from the list optimistically
+On 400 (active trips), show a clear inline error message
+Add deleteTripAdmin(id) helper to services/api.ts
+
+Step 7 -- TypeScript check
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.

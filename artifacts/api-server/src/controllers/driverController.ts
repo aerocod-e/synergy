@@ -262,6 +262,59 @@ export async function updateDriver(req: Request, res: Response): Promise<void> {
   }
 }
 
+export async function deleteDriver(req: Request, res: Response): Promise<void> {
+  const { id } = req.params as { id: string };
+  const callerId = req.user!.userId;
+
+  try {
+    const { rows } = await pool.query<{
+      id: string;
+      created_by: string;
+      is_active: boolean;
+      deleted_at: Date | null;
+    }>(
+      `SELECT id, created_by, is_active, deleted_at FROM drivers WHERE id = $1 LIMIT 1`,
+      [id]
+    );
+
+    const row = rows[0];
+    if (!row || !row.is_active || row.deleted_at !== null) {
+      res.status(404).json({ error: "NOT_FOUND", message: "Driver not found" });
+      return;
+    }
+    if (row.created_by !== callerId) {
+      res.status(403).json({ error: "FORBIDDEN", message: "You do not own this driver" });
+      return;
+    }
+
+    const activeTrip = await pool.query<{ id: string }>(
+      `SELECT id FROM trips
+       WHERE  driver_id = $1
+         AND  status IN ('created', 'in_transit')
+         AND  deleted_at IS NULL
+       LIMIT  1`,
+      [id]
+    );
+    if (activeTrip.rows.length > 0) {
+      res.status(400).json({
+        error: "ACTIVE_TRIP",
+        message: "Cannot delete a driver who has active trips",
+      });
+      return;
+    }
+
+    await pool.query(
+      `UPDATE drivers SET is_active = false, deleted_at = NOW(), updated_at = NOW() WHERE id = $1`,
+      [id]
+    );
+
+    res.json({ data: { id }, message: "Driver has been removed successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to delete driver" });
+  }
+}
+
 export async function searchDrivers(req: Request, res: Response): Promise<void> {
   const q = typeof req.query["q"] === "string" ? req.query["q"].trim() : "";
 

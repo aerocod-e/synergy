@@ -13,12 +13,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
-import { listTripAdmins, createUser, updateCancellationRights, toggleUserActive, getTripAdminActiveTripsCount } from '@/services/api';
+import { listTripAdmins, createUser, updateCancellationRights, toggleUserActive, getTripAdminActiveTripsCount, deleteTripAdmin as deleteTripAdminApi } from '@/services/api';
 import { useAuthContext } from '@/app/_layout';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -57,6 +58,10 @@ export default function StateAdminTripAdmins() {
   // per-card active toggle state
   const [activeToggling, setActiveToggling] = useState<Record<string, boolean>>({});
   const [activeToggleError, setActiveToggleError] = useState<Record<string, string>>({});
+
+  // per-card delete state
+  const [deleting, setDeleting] = useState<Record<string, boolean>>({});
+  const [deleteError, setDeleteError] = useState<Record<string, string>>({});
 
   // deactivation confirmation modal
   const [confirmDeactivate, setConfirmDeactivate] = useState<{
@@ -167,6 +172,38 @@ export default function StateAdminTripAdmins() {
     } finally {
       setActiveToggling((prev) => { const n = { ...prev }; delete n[admin.id]; return n; });
     }
+  }, []);
+
+  const handleDeleteAdmin = useCallback((admin: TripAdmin) => {
+    const displayName = (admin.firstName || admin.lastName)
+      ? `${admin.firstName} ${admin.lastName}`.trim()
+      : admin.email;
+    Alert.alert(
+      `Delete ${displayName}'s account?`,
+      'This cannot be undone. Trip Admins with active trips cannot be deleted.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setDeleting((prev) => ({ ...prev, [admin.id]: true }));
+            setDeleteError((prev) => { const n = { ...prev }; delete n[admin.id]; return n; });
+            try {
+              await deleteTripAdminApi(admin.id);
+              setAdmins((prev) => prev.filter((a) => a.id !== admin.id));
+            } catch (err: any) {
+              setDeleteError((prev) => ({
+                ...prev,
+                [admin.id]: err?.message ?? 'Failed to delete account.',
+              }));
+            } finally {
+              setDeleting((prev) => { const n = { ...prev }; delete n[admin.id]; return n; });
+            }
+          },
+        },
+      ]
+    );
   }, []);
 
   const handleToggleActive = useCallback(async (admin: TripAdmin, isActive: boolean) => {
@@ -337,6 +374,29 @@ export default function StateAdminTripAdmins() {
         <View style={styles.cardError}>
           <Ionicons name="alert-circle-outline" size={13} color={theme.colors.error} />
           <Text style={styles.cardErrorText}>{activeToggleError[item.id]}</Text>
+        </View>
+      )}
+
+      <TouchableOpacity
+        style={[styles.deleteAdminBtn, deleting[item.id] && styles.activeToggleBtnDisabled]}
+        onPress={() => handleDeleteAdmin(item)}
+        disabled={!!deleting[item.id]}
+        activeOpacity={0.8}
+      >
+        {deleting[item.id] ? (
+          <ActivityIndicator size="small" color={theme.colors.white} />
+        ) : (
+          <>
+            <Ionicons name="trash-outline" size={15} color={theme.colors.white} />
+            <Text style={styles.deleteAdminBtnText}>Delete Account</Text>
+          </>
+        )}
+      </TouchableOpacity>
+
+      {deleteError[item.id] && (
+        <View style={styles.cardError}>
+          <Ionicons name="alert-circle-outline" size={13} color={theme.colors.error} />
+          <Text style={styles.cardErrorText}>{deleteError[item.id]}</Text>
         </View>
       )}
     </View>
@@ -750,6 +810,21 @@ const styles = StyleSheet.create({
   activeToggleBtnText: {
     fontSize: 13,
     fontWeight: '700',
+    color: theme.colors.white,
+  },
+  deleteAdminBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#6B7280',
+    alignSelf: 'flex-start',
+  },
+  deleteAdminBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
     color: theme.colors.white,
   },
   cardError: {

@@ -10,13 +10,14 @@ import {
   RefreshControl,
   Platform,
   TextInput,
+  Alert,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
 import VehicleSearchInput, { type Vehicle } from '@/components/VehicleSearchInput';
-import { listVehicles, createVehicle, updateVehicle } from '@/services/api';
+import { listVehicles, createVehicle, updateVehicle, deleteVehicle as deleteVehicleApi } from '@/services/api';
 import { useLogout } from '@/hooks/useLogout';
 
 interface VehicleWithCount extends Vehicle {
@@ -42,6 +43,9 @@ export default function TripAdminVehicles() {
   const [editRegNumber, setEditRegNumber] = useState('');
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+
+  const [deleting, setDeleting] = useState<Record<string, boolean>>({});
+  const [deleteError, setDeleteError] = useState<Record<string, string>>({});
 
   const navigation = useNavigation();
   const { handleLogout } = useLogout();
@@ -89,8 +93,6 @@ export default function TripAdminVehicles() {
     setModalVisible(true);
   }, []);
 
-  // On web the floating FAB is intercepted by the tab navigator container,
-  // so we surface the action via the header instead. On native the FAB renders normally.
   useEffect(() => {
     if (Platform.OS === 'web') {
       navigation.setOptions({
@@ -176,23 +178,73 @@ export default function TripAdminVehicles() {
     setModalVisible(false);
   };
 
+  const handleDeleteVehicle = useCallback((item: VehicleWithCount) => {
+    Alert.alert(
+      `Remove ${item.registrationNumber}?`,
+      'This cannot be undone. Vehicles with active trips cannot be removed.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            setDeleting((prev) => ({ ...prev, [item.id]: true }));
+            setDeleteError((prev) => { const n = { ...prev }; delete n[item.id]; return n; });
+            try {
+              await deleteVehicleApi(item.id);
+              setVehicles((prev) => prev.filter((v) => v.id !== item.id));
+            } catch (err: any) {
+              setDeleteError((prev) => ({
+                ...prev,
+                [item.id]: err?.message ?? 'Failed to remove vehicle.',
+              }));
+            } finally {
+              setDeleting((prev) => { const n = { ...prev }; delete n[item.id]; return n; });
+            }
+          },
+        },
+      ]
+    );
+  }, []);
+
   const renderVehicle = ({ item }: { item: VehicleWithCount }) => (
     <View style={styles.card}>
-      <View style={styles.cardLeft}>
-        <View style={styles.plateBadge}>
-          <Text style={styles.plateText}>{item.registrationNumber}</Text>
+      <View style={styles.cardMain}>
+        <View style={styles.cardLeft}>
+          <View style={styles.plateBadge}>
+            <Text style={styles.plateText}>{item.registrationNumber}</Text>
+          </View>
+          <Text style={styles.tripCount}>
+            {item.tripCount} {item.tripCount === 1 ? 'trip' : 'trips'}
+          </Text>
         </View>
-        <Text style={styles.tripCount}>
-          {item.tripCount} {item.tripCount === 1 ? 'trip' : 'trips'}
-        </Text>
+        <View style={styles.cardActions}>
+          <TouchableOpacity
+            onPress={() => openEditVehicle(item)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel="Edit vehicle"
+          >
+            <Ionicons name="create-outline" size={22} color={theme.colors.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => handleDeleteVehicle(item)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            disabled={!!deleting[item.id]}
+            accessibilityLabel="Remove vehicle"
+          >
+            {deleting[item.id]
+              ? <ActivityIndicator size="small" color={theme.colors.error} />
+              : <Ionicons name="trash-outline" size={22} color={theme.colors.error} />
+            }
+          </TouchableOpacity>
+        </View>
       </View>
-      <TouchableOpacity
-        onPress={() => openEditVehicle(item)}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        accessibilityLabel="Edit vehicle"
-      >
-        <Ionicons name="create-outline" size={22} color={theme.colors.primary} />
-      </TouchableOpacity>
+      {deleteError[item.id] ? (
+        <View style={styles.cardError}>
+          <Ionicons name="alert-circle-outline" size={13} color={theme.colors.error} />
+          <Text style={styles.cardErrorText}>{deleteError[item.id]}</Text>
+        </View>
+      ) : null}
     </View>
   );
 
@@ -390,17 +442,36 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   card: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: theme.colors.white,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
+    gap: 10,
     ...theme.shadows.card,
+  },
+  cardMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   cardLeft: {
     flex: 1,
     gap: 6,
+  },
+  cardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginLeft: 12,
+  },
+  cardError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  cardErrorText: {
+    fontSize: 12,
+    color: theme.colors.error,
+    flex: 1,
   },
   plateBadge: {
     alignSelf: 'flex-start',

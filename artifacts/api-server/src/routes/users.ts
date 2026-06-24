@@ -6,6 +6,7 @@ import {
   createUser,
   updateUser,
   deleteUser,
+  deleteTripAdmin,
   toggleUserActive,
   getTripAdminActiveTripsCount,
   resetUserPassword,
@@ -23,6 +24,7 @@ router.patch( "/:id/cancellation-rights", authenticateToken, requireRole("state_
 router.get(   "/:id/active-trips-count",  authenticateToken, requireRole("state_admin"),                        getTripAdminActiveTripsCount);
 router.patch( "/:id/active",              authenticateToken, requireRole("state_admin", "super_admin"),          toggleUserActive);
 router.post(  "/:id/reset-password",      authenticateToken, requireRole("super_admin"),                        resetUserPassword);
+router.delete("/:id/trip-admin",          authenticateToken, requireRole("state_admin"),                       deleteTripAdmin);
 router.get(   "/:id",                     authenticateToken, requireRole("super_admin"),                        getUserById);
 router.patch( "/:id",                     authenticateToken, requireRole("super_admin"),                        updateUser);
 router.delete("/:id",                     authenticateToken, requireRole("super_admin"),                        deleteUser);
