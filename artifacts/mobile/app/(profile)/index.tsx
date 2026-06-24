@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthContext } from '@/app/_layout';
 import { theme } from '@/constants/theme';
 import { changePassword } from '@/services/api';
@@ -37,6 +38,7 @@ function roleBadgeColors(role: string): { bg: string; text: string } {
 export default function ProfileScreen() {
   const { user, logout } = useAuthContext();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [currentPw, setCurrentPw] = useState('');
   const [newPw, setNewPw] = useState('');
@@ -84,7 +86,10 @@ export default function ProfileScreen() {
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 24 }]}
+      >
         {/* Back */}
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
@@ -190,7 +195,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: theme.colors.background },
   scroll: { flex: 1 },
-  scrollContent: { padding: 24, paddingBottom: 60 },
+  scrollContent: { paddingHorizontal: 24, paddingBottom: 60 },
   headerRow: { marginBottom: 24 },
   backBtn: { alignSelf: 'flex-start', paddingVertical: 4 },
   backText: { fontSize: 15, color: theme.colors.primary, fontWeight: '600' },

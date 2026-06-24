@@ -43,6 +43,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingBottom: 8,
+    backgroundColor: theme.colors.background,
   },
   avatar: {
     width: 40,
