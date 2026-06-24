@@ -1,12 +1,14 @@
 import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthContext } from '@/app/_layout';
 import { theme } from '@/constants/theme';
 
 export default function TopBar() {
   const { user, logout } = useAuthContext();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const initial = user?.firstName
     ? user.firstName[0].toUpperCase()
@@ -20,7 +22,7 @@ export default function TopBar() {
   };
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, { paddingTop: insets.top + 8 }]}>
       <TouchableOpacity onPress={() => router.push('/(profile)')} activeOpacity={0.8}>
         <View style={styles.avatar}>
           <Text style={styles.initial}>{initial}</Text>
@@ -40,7 +42,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 16,
     paddingBottom: 8,
   },
   avatar: {
