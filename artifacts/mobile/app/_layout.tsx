@@ -8,6 +8,7 @@ import {
 } from "@expo-google-fonts/inter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, useSegments } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import React, { createContext, useContext, useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
@@ -133,6 +134,7 @@ export default function RootLayout() {
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
               <AuthContext.Provider value={auth}>
+                <StatusBar style="dark" backgroundColor="#f5f7fa" />
                 <RootLayoutNav />
               </AuthContext.Provider>
             </KeyboardProvider>

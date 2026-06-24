@@ -14,9 +14,14 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "statusBarStyle": "dark"
     },
     "android": {},
+    "androidStatusBar": {
+      "barStyle": "dark-content",
+      "backgroundColor": "#f5f7fa"
+    },
     "web": {
       "favicon": "./assets/images/icon.png",
       "baseUrl": "/mobile/"
