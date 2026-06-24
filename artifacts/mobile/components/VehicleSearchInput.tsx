@@ -69,6 +69,13 @@ export default function VehicleSearchInput({ value, onSelect, onRegisterNew, pla
   };
 
   const handleRegisterNew = () => {
+    // BUG-06: Cancel any pending debounce search and clear results immediately.
+    // Without this, the 300 ms debounce fires after the registration attempt,
+    // finds the (now-existing) vehicle in search results, and re-opens the
+    // dropdown — which, when tapped, calls onSelect and silently closes the modal
+    // before the parent can show the error message.
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setResults([]);
     setShowDropdown(false);
     onRegisterNew(query.trim().toUpperCase());
   };

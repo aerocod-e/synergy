@@ -1,0 +1,41 @@
+Fix six bugs found during the Stage 3B edge case QA pass. Follow all steps in order. Do not change any other code.
+BUG-01 -- Deactivated user JWT accepted indefinitely
+Currently deactivation only blocks new logins but does not invalidate existing sessions. A deactivated user's JWT continues to grant full API access until it naturally expires.
+Fix: In artifacts/api-server/src/middleware/auth.ts, after the JWT is verified and req.user is populated, add a database check: query SELECT is_active FROM users WHERE id = $1 AND deleted_at IS NULL using req.user.userId. If is_active = false, return HTTP 401 with message "This account has been deactivated." This check runs on every authenticated request.
+Be mindful of performance -- this adds one DB query per request. Confirm whether the existing auth middleware already has a DB connection available, or whether one needs to be imported.
+BUG-02 -- Double-approve duplicates wallet reversals
+Two rapid approve calls on the same cancellation request both succeed, creating duplicate wallet reversal entries and double-debiting the wallets.
+Fix: In cancellationController.ts, inside the approveCancellation function, add a check at the very start of the database transaction: verify the cancellation request still has status = 'pending' inside the transaction (using SELECT ... FOR UPDATE to lock the row). If the status is already approved or rejected, return HTTP 409 "This cancellation request has already been reviewed." This must happen inside the transaction, not before it, to prevent the race condition.
+BUG-03 -- Double cancel-request creates orphaned rows
+Two rapid submissions of a cancellation request for the same trip create two cancellation_requests rows and set the trip status to cancellation_pending twice.
+Fix: In cancellationController.ts, inside the requestCancellation function, add a check before creating a new cancellation request: query whether a cancellation_requests row already exists for this trip with status = 'pending'. If one exists, return HTTP 409 "A cancellation request for this trip is already pending." This prevents duplicate rows regardless of timing.
+BUG-04 -- Same loading and unloading state causes 500
+Creating a trip with the same state for both loading and unloading throws a 500 Internal Server Error instead of handling it gracefully. Same-state trips are a valid business scenario and should be allowed.
+Investigate the exact cause of the 500 (likely a SQL constraint, a duplicate alias in a join, or a wallet lookup collision when loading and unloading state are identical). Fix the root cause so same-state trips are accepted and handled correctly. Confirm wallet credits still work correctly when loading and unloading fees go to the same state wallet (they should credit the same wallet twice, not error).
+BUG-05 -- No active pricing chart gives unhelpful error
+When no pricing chart is active, the trip creation form shows "fees object required" from the backend rather than a clear user-facing message.
+Fix in two places:
+
+Backend: In tripController.ts, if the active pricing chart fetch returns no results, return HTTP 422 with a clear message: "No active pricing chart found. Please ask your Super Admin to set up and activate a pricing chart before creating trips."
+Frontend: In the trip creation form in (tripadmin)/index.tsx, when GET /api/pricing/active returns a 404 or the active chart is null, show a clear inline message in the form itself (not just a toast): "No active pricing chart. Contact your administrator." and disable the submit button. This already partially exists but the error message from BUG-05 suggests it is not being handled correctly.
+
+BUG-06 -- Duplicate vehicle plate modal closes silently
+When a Trip Admin tries to register a vehicle with a plate that already exists, the modal closes with no error message shown.
+Fix: In the vehicle registration flow (both in the Vehicles tab modal and in VehicleSearchInput's inline registration), ensure the 409 response from POST /api/vehicles is caught and displayed as an inline error message inside the modal rather than closing it. The modal should stay open and show the error so the user can correct the plate number.
+
+After all fixes, run both TypeScript checks:
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.
+
+PART 2 -- Testing
+Run these targeted tests after the fixes, using direct API calls for backend tests and live App Testing (390x844px viewport, correct app URL https://2f2a3156-e178-45fc-95e3-f3726442355f-00-2f9hl4ag0p8j2.expo.kirk.replit.dev) for frontend tests.
+Backend Tests
+Test 1 -- BUG-01: Deactivate lagos.ta2@synergy.com via State Admin. Issue a JWT for that account (or use a previously issued one). Call GET /api/trips with that JWT. Confirm 401 is returned. Reactivate after.
+Test 2 -- BUG-02: Submit two simultaneous approve requests for the same cancellation request. Confirm only one succeeds (200) and the second returns 409. Confirm wallet ledger has exactly the correct number of reversal entries (no duplicates).
+Test 3 -- BUG-03: Submit two rapid cancellation requests for the same trip. Confirm only one succeeds (201) and the second returns 409. Confirm only one cancellation_requests row exists for that trip.
+Test 4 -- BUG-04: Create a trip with the same state for both loading and unloading (e.g. Lagos → Lagos). Confirm 201 is returned and the trip is created. Confirm both loading and unloading fees credited to the Lagos state wallet correctly.
+Test 5 -- BUG-05: Deactivate all pricing charts. Call POST /api/trips with otherwise valid data. Confirm a clear 422 response with the correct message. Reactivate the pricing chart after.
+Frontend Tests
+Test 6 -- BUG-06: As a Trip Admin, open the vehicle registration modal and try to register a plate that already exists (e.g. "LAG-001-AA"). Confirm the modal stays open and shows a clear inline error message. Confirm the modal does not close silently.
+Test 7 -- BUG-05 frontend: Confirm that when no active pricing chart exists, the trip creation form shows a clear "No active pricing chart" message and the submit button is disabled.

@@ -27,6 +27,9 @@ function isPositiveInt(v: unknown): v is number {
   return typeof v === "number" && Number.isInteger(v) && v > 0;
 }
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function createTrip(req: Request, res: Response): Promise<void> {
   const body = req.body as CreateTripBody;
 
@@ -43,16 +46,34 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
     res.status(400).json({ error: "BAD_REQUEST", message: "vehicleId is required" });
     return;
   }
+  // BUG-04: Validate UUID format early so PostgreSQL never receives a malformed
+  // UUID string (which would throw a DB-level error and surface as a confusing 500).
+  if (!UUID_RE.test(vehicleId)) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "vehicleId must be a valid UUID" });
+    return;
+  }
   if (!driverId || typeof driverId !== "string") {
     res.status(400).json({ error: "BAD_REQUEST", message: "driverId is required" });
+    return;
+  }
+  if (!UUID_RE.test(driverId)) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "driverId must be a valid UUID" });
     return;
   }
   if (!loadingStateId || typeof loadingStateId !== "string") {
     res.status(400).json({ error: "BAD_REQUEST", message: "loadingStateId is required" });
     return;
   }
+  if (!UUID_RE.test(loadingStateId)) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "loadingStateId must be a valid UUID" });
+    return;
+  }
   if (!unloadingStateId || typeof unloadingStateId !== "string") {
     res.status(400).json({ error: "BAD_REQUEST", message: "unloadingStateId is required" });
+    return;
+  }
+  if (!UUID_RE.test(unloadingStateId)) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "unloadingStateId must be a valid UUID" });
     return;
   }
   if (!fees || typeof fees !== "object") {
@@ -87,6 +108,20 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
   // ── 2. DB existence checks (run in parallel before opening transaction) ────
   const client = await pool.connect();
   try {
+    // BUG-05: Fail fast with a clear 422 if no active pricing chart exists.
+    // The mobile app sends fees from the chart it loaded when opening the form,
+    // but the chart may have been deactivated between form-open and submission.
+    const { rows: chartRows } = await client.query<{ id: string }>(
+      `SELECT id FROM pricing_charts WHERE is_active = true LIMIT 1`
+    );
+    if (chartRows.length === 0) {
+      res.status(422).json({
+        error: "UNPROCESSABLE",
+        message: "No active pricing chart. Contact your administrator before creating a trip.",
+      });
+      return;
+    }
+
     const [vehicleRes, driverRes, loadingRes, unloadingRes, ...stakeholderResults] =
       await Promise.all([
         client.query<{ id: string; registration_number: string }>(

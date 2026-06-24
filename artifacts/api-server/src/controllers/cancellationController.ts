@@ -145,8 +145,42 @@ export async function requestCancellation(req: Request, res: Response): Promise<
         message: "Trip cancelled immediately",
       });
     } else {
-      // Pending approval path
+      // Pending approval path — lock the trip row first to prevent races
       await client.query("BEGIN");
+
+      // BUG-03: Re-check trip status inside the transaction with a row lock.
+      // Two concurrent requests may both pass the status check above; the FOR UPDATE
+      // lock serialises them so only the first proceeds.
+      const { rows: lockedTrip } = await client.query<{ status: string }>(
+        `SELECT status FROM trips WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
+        [tripId]
+      );
+      if (
+        lockedTrip[0]?.status === "completed" ||
+        lockedTrip[0]?.status === "cancelled" ||
+        lockedTrip[0]?.status === "cancellation_pending"
+      ) {
+        await client.query("ROLLBACK");
+        res.status(409).json({
+          error: "CONFLICT",
+          message: "Trip cannot be cancelled from its current status",
+        });
+        return;
+      }
+
+      // Also guard against a pending CR that was inserted by a concurrent request
+      const { rows: existingCR } = await client.query<{ id: string }>(
+        `SELECT id FROM cancellation_requests WHERE trip_id = $1 AND status = 'pending' LIMIT 1`,
+        [tripId]
+      );
+      if (existingCR.length > 0) {
+        await client.query("ROLLBACK");
+        res.status(409).json({
+          error: "CONFLICT",
+          message: "A cancellation request for this trip is already pending.",
+        });
+        return;
+      }
 
       const { rows: reqRows } = await client.query<{ id: string; created_at: Date }>(
         `INSERT INTO cancellation_requests
@@ -267,6 +301,11 @@ export async function approveCancellation(req: Request, res: Response): Promise<
 
   const client = await pool.connect();
   try {
+    // BUG-02: Open the transaction first, then lock the CR row with FOR UPDATE.
+    // This prevents two concurrent approvals from both passing the status check
+    // and both executing the wallet reversal.
+    await client.query("BEGIN");
+
     const { rows } = await client.query<{
       id: string;
       trip_id: string;
@@ -282,11 +321,14 @@ export async function approveCancellation(req: Request, res: Response): Promise<
          u.entity_id AS requested_by_entity_id
        FROM cancellation_requests cr
        JOIN users u ON u.id = cr.requested_by
-       WHERE cr.id = $1 LIMIT 1`,
+       WHERE cr.id = $1
+       LIMIT 1
+       FOR UPDATE`,
       [id]
     );
 
     if (rows.length === 0) {
+      await client.query("ROLLBACK");
       res.status(404).json({ error: "NOT_FOUND", message: "Cancellation request not found" });
       return;
     }
@@ -294,16 +336,16 @@ export async function approveCancellation(req: Request, res: Response): Promise<
     const request = rows[0]!;
 
     if (request.status !== "pending") {
+      await client.query("ROLLBACK");
       res.status(409).json({ error: "CONFLICT", message: "This request has already been reviewed" });
       return;
     }
 
     if (request.requested_by_entity_id !== callerEntityId) {
+      await client.query("ROLLBACK");
       res.status(403).json({ error: "FORBIDDEN", message: "This request does not belong to your state" });
       return;
     }
-
-    await client.query("BEGIN");
 
     const { reversedEntries, walletsRestored } = await applyWalletReversal(
       client,
