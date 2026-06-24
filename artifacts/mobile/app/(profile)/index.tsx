@@ -4,12 +4,10 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  ScrollView,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthContext } from '@/app/_layout';
@@ -82,14 +80,12 @@ export default function ProfileScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    <KeyboardAwareScrollView
+      style={styles.scroll}
+      contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 24 }]}
+      keyboardShouldPersistTaps="handled"
+      bottomOffset={16}
     >
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 24 }]}
-      >
         {/* Back */}
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
@@ -187,14 +183,12 @@ export default function ProfileScreen() {
         </TouchableOpacity>
 
         <Text style={styles.version}>v1.0.0</Text>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAwareScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: theme.colors.background },
-  scroll: { flex: 1 },
+  scroll: { flex: 1, backgroundColor: theme.colors.background },
   scrollContent: { paddingHorizontal: 24, paddingBottom: 60 },
   headerRow: { marginBottom: 24 },
   backBtn: { alignSelf: 'flex-start', paddingVertical: 4 },
