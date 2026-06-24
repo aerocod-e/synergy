@@ -586,6 +586,7 @@ const styles = StyleSheet.create({
     ...theme.shadows.card,
   },
   cardRow: {
+    flex: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -594,7 +595,8 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     color: theme.colors.black,
-    flex: 1,
+    flexShrink: 1,
+    alignSelf: 'flex-start',
     marginRight: 8,
   },
   statusBadge: {

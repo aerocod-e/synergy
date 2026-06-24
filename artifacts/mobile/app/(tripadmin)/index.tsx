@@ -333,7 +333,7 @@ export default function TripAdminTrips() {
         activeOpacity={0.9}
       >
         <View style={styles.cardTop}>
-          <View style={[styles.plateBadge, { flex: 1, marginRight: 8 }]}>
+          <View style={[styles.plateBadge, { flexShrink: 1, alignSelf: 'flex-start', marginRight: 8 }]}>
             <Text style={styles.plateText} numberOfLines={1} ellipsizeMode="tail">{item.vehicleNumber}</Text>
           </View>
           <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg, flexShrink: 0 }]}>
@@ -822,6 +822,7 @@ const styles = StyleSheet.create({
     ...theme.shadows.card,
   },
   cardTop: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

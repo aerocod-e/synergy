@@ -46,8 +46,19 @@ interface SummaryCardProps {
 }
 
 function SummaryCard({ icon, iconColor, value, label, wide = false, valueColor }: SummaryCardProps) {
+  if (wide) {
+    return (
+      <View style={[styles.card, styles.cardWide]}>
+        <Ionicons name={icon as any} size={32} color={iconColor ?? theme.colors.primary} />
+        <View style={styles.cardWideContent}>
+          <Text style={[styles.cardValue, valueColor ? { color: valueColor } : {}]}>{value}</Text>
+          <Text style={styles.cardLabel}>{label}</Text>
+        </View>
+      </View>
+    );
+  }
   return (
-    <View style={[styles.card, wide && styles.cardWide]}>
+    <View style={styles.card}>
       <Ionicons name={icon as any} size={26} color={iconColor ?? theme.colors.primary} style={styles.cardIcon} />
       <Text style={[styles.cardValue, valueColor ? { color: valueColor } : {}]}>{value}</Text>
       <Text style={styles.cardLabel}>{label}</Text>
@@ -295,6 +306,10 @@ const styles = StyleSheet.create({
     gap: 14,
     marginBottom: 12,
   },
+  cardWideContent: {
+    flex: 1,
+    gap: 2,
+  },
   cardIcon: {
     marginBottom: 8,
   },
@@ -339,7 +354,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingVertical: 18,
   },
   noPricingText: {
     fontSize: 14,

@@ -1,0 +1,65 @@
+Fix four remaining UI issues found during physical iPhone testing. Frontend only. Follow all steps in order.
+
+Critical testing setup:
+
+
+
+
+
+App URL: https://2f2a3156-e178-45fc-95e3-f3726442355f-00-2f9hl4ag0p8j2.expo.kirk.replit.dev
+
+
+
+Viewport: 390x844px for all browser tests
+
+Fix 1 -- Vehicle plate badge stretching on short plates
+
+In (tripadmin)/index.tsx, the plate badge container currently has flex: 1 which causes it to stretch across the full available width even for short plate numbers like "RIV-001-AA". This makes every plate badge the same width regardless of text length.
+
+Fix: Remove flex: 1 from the plate badge container (plateBadge style). Instead give the outer row container flex: 1 with flexDirection: 'row' and alignItems: 'center'. The plate badge should have flexShrink: 1 and alignSelf: 'flex-start' so it hugs its text content. Keep numberOfLines={1} and ellipsizeMode="tail" on the text so long plates still truncate. The status badge should remain flexShrink: 0 with marginLeft: 8.
+
+Apply the same fix to (superadmin)/trips.tsx if it uses the same plate badge pattern.
+
+Fix 2 -- Grand total card layout on Super Admin dashboard
+
+In (superadmin)/index.tsx, the full-width grand total card currently shows the icon, amount, and label all in a horizontal row, which looks cramped and inconsistent with a good card layout.
+
+Restructure the card content to:
+
+
+
+
+
+A row with the wallet icon on the left (size 32, green color -- keep as-is)
+
+
+
+A column to the right of the icon containing:
+
+
+
+
+
+The amount (large, bold, green -- keep as-is) on top
+
+
+
+The label "Platform Grand Total Collected" below it in small gray text (12px, gray)
+
+
+
+Remove the label from the horizontal row entirely and place it below the amount
+
+This makes the card feel balanced and consistent with standard dashboard card design. The card should still span full width.
+
+Fix 3 -- Stakeholder header iOS 26 system button style
+
+Root cause confirmed: the stakeholder layout uses a Stack navigator while all other roles use Tabs. On iOS 26, React Navigation's Stack navigator renders the header using UINavigationBar under the hood, which iOS 26 automatically applies its liquid glass system chrome to. The Tabs navigator on the other three roles renders its own plain View header, bypassing iOS 26's system styling entirely -- this is why only the stakeholder is affected despite the screenOptions being identical.
+
+Fix: In (stakeholder)/_layout.tsx, replace the Stack navigator with a Tabs navigator matching the exact pattern used in (tripadmin)/_layout.tsx. The stakeholder only has one screen (index) so there will be only one Tabs.Screen. Suppress the tab bar entirely since there is nothing to tab between -- do this by passing tabBar={() => null} to the Tabs component. Keep all screenOptions (headerStyle, headerTitleStyle, headerShadowVisible, headerRight with LogoutButton) exactly as they are -- do not change them.
+
+The result should be a Tabs navigator with one screen, no visible tab bar, and a header that renders identically to the other three role screens.
+
+Fix 4 -- Remaining dashboard card padding consistency
+
+In (superadmin)/index.tsx, do a full audit of every summary card's padding. Every card (both the 2-column grid cards and the full-width grand total card) should have exactly padding: 16. Check whether any card has overriding paddingVertical, paddingHorizontal, or paddingTop/paddingBottom values that differ. Remove any overrides and let them all inherit from the base card style's padding: 16.
