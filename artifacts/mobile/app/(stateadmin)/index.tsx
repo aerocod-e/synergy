@@ -35,6 +35,7 @@ interface CancellationRequest {
   loadingState: string;
   unloadingState: string;
   requestedByEmail: string;
+  requestedByName: string;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -173,8 +174,10 @@ export default function StateAdminHome() {
         )}
 
         <View style={styles.cardRow}>
-          <Ionicons name="mail-outline" size={14} color={theme.colors.grey1} />
-          <Text style={styles.cardRowText} numberOfLines={1}>{item.requestedByEmail}</Text>
+          <Ionicons name="person-outline" size={14} color={theme.colors.grey1} />
+          <Text style={styles.cardRowText} numberOfLines={1}>
+            {item.requestedByName && item.requestedByName.trim() ? item.requestedByName : item.requestedByEmail}
+          </Text>
         </View>
 
         <View style={styles.reasonBox}>

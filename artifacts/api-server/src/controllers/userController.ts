@@ -17,6 +17,8 @@ export async function listUsers(req: Request, res: Response): Promise<void> {
       pool.query<{
         id: string;
         email: string;
+        first_name: string;
+        last_name: string;
         role: string;
         entity_type: string | null;
         entity_id: string | null;
@@ -27,6 +29,8 @@ export async function listUsers(req: Request, res: Response): Promise<void> {
         `SELECT
            u.id,
            u.email,
+           u.first_name,
+           u.last_name,
            u.role,
            u.entity_type,
            u.entity_id,
@@ -55,6 +59,8 @@ export async function listUsers(req: Request, res: Response): Promise<void> {
         users: rowsRes.rows.map((r) => ({
           id:         r.id,
           email:      r.email,
+          firstName:  r.first_name,
+          lastName:   r.last_name,
           role:       r.role,
           entityType: r.entity_type,
           entityId:   r.entity_id,
@@ -94,19 +100,21 @@ export async function listTripAdmins(req: Request, res: Response): Promise<void>
       pool.query<{
         id: string;
         email: string;
+        first_name: string;
+        last_name: string;
         is_active: boolean;
         can_cancel_without_approval: boolean;
         created_at: Date;
         trip_count: string;
       }>(
-        `SELECT u.id, u.email, u.is_active, u.can_cancel_without_approval, u.created_at,
+        `SELECT u.id, u.email, u.first_name, u.last_name, u.is_active, u.can_cancel_without_approval, u.created_at,
                 COUNT(t.id) AS trip_count
          FROM users u
          LEFT JOIN trips t ON t.created_by = u.id AND t.deleted_at IS NULL
          WHERE u.role = 'trip_admin'
            AND u.entity_id = $1
            AND u.deleted_at IS NULL
-         GROUP BY u.id, u.email, u.is_active, u.can_cancel_without_approval, u.created_at
+         GROUP BY u.id, u.email, u.first_name, u.last_name, u.is_active, u.can_cancel_without_approval, u.created_at
          ORDER BY u.created_at DESC
          LIMIT $2 OFFSET $3`,
         [callerEntityId, limit, offset],
@@ -121,6 +129,8 @@ export async function listTripAdmins(req: Request, res: Response): Promise<void>
         tripAdmins: rowsRes.rows.map((r) => ({
           id:                       r.id,
           email:                    r.email,
+          firstName:                r.first_name,
+          lastName:                 r.last_name,
           isActive:                 r.is_active,
           canCancelWithoutApproval: r.can_cancel_without_approval,
           createdAt:                r.created_at,
@@ -263,15 +273,25 @@ type ValidRole = (typeof VALID_ROLES)[number];
 
 export async function createUser(req: Request, res: Response): Promise<void> {
   try {
-    const { email, password, role, entity_type, entity_id } = req.body as {
+    const { email, password, role, entity_type, entity_id, firstName, lastName } = req.body as {
       email?: unknown;
       password?: unknown;
       role?: unknown;
       entity_type?: unknown;
       entity_id?: unknown;
+      firstName?: unknown;
+      lastName?: unknown;
     };
 
     // ── Basic field validation ─────────────────────────────────────────────
+    if (!firstName || typeof firstName !== "string" || !firstName.trim()) {
+      res.status(400).json({ error: "BAD_REQUEST", message: "firstName is required" });
+      return;
+    }
+    if (!lastName || typeof lastName !== "string" || !lastName.trim()) {
+      res.status(400).json({ error: "BAD_REQUEST", message: "lastName is required" });
+      return;
+    }
     if (!email || typeof email !== "string" || !email.includes("@")) {
       res.status(400).json({ error: "BAD_REQUEST", message: "Valid email is required" });
       return;
@@ -342,21 +362,25 @@ export async function createUser(req: Request, res: Response): Promise<void> {
     const { rows } = await pool.query<{
       id: string;
       email: string;
+      first_name: string;
+      last_name: string;
       role: string;
       entity_type: string | null;
       entity_id: string | null;
       is_active: boolean;
       created_at: Date;
     }>(
-      `INSERT INTO users (email, password_hash, role, entity_type, entity_id, is_active)
-       VALUES ($1, $2, $3, $4, $5, true)
-       RETURNING id, email, role, entity_type, entity_id, is_active, created_at`,
+      `INSERT INTO users (email, password_hash, role, entity_type, entity_id, is_active, first_name, last_name)
+       VALUES ($1, $2, $3, $4, $5, true, $6, $7)
+       RETURNING id, email, first_name, last_name, role, entity_type, entity_id, is_active, created_at`,
       [
         email.toLowerCase().trim(),
         passwordHash,
         typedRole,
         (entity_type as string | undefined) ?? null,
         (entity_id as string | undefined) ?? null,
+        (firstName as string).trim(),
+        (lastName as string).trim(),
       ],
     );
 
@@ -366,6 +390,8 @@ export async function createUser(req: Request, res: Response): Promise<void> {
         user: {
           id: user.id,
           email: user.email,
+          firstName: user.first_name,
+          lastName: user.last_name,
           role: user.role,
           entityType: user.entity_type,
           entityId: user.entity_id,

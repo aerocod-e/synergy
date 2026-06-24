@@ -5,6 +5,8 @@ export interface TokenPayload {
   role: string;
   entityType: string | null;
   entityId: string | null;
+  firstName?: string;
+  lastName?: string;
 }
 
 function getSecret(name: string): string {
@@ -17,9 +19,11 @@ export function generateTokens(
   userId: string,
   role: string,
   entityType: string | null,
-  entityId: string | null
+  entityId: string | null,
+  firstName = '',
+  lastName = ''
 ): { accessToken: string; refreshToken: string } {
-  const payload: TokenPayload = { userId, role, entityType, entityId };
+  const payload: TokenPayload = { userId, role, entityType, entityId, firstName, lastName };
 
   const accessToken = jwt.sign(payload, getSecret("JWT_SECRET"), {
     expiresIn: "15m",

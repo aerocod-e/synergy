@@ -25,6 +25,8 @@ import { useAuthContext } from '@/app/_layout';
 interface TripAdmin {
   id: string;
   email: string;
+  firstName: string;
+  lastName: string;
   isActive: boolean;
   canCancelWithoutApproval: boolean;
   createdAt: string;
@@ -64,6 +66,8 @@ export default function StateAdminTripAdmins() {
 
   // create modal
   const [modalVisible, setModalVisible] = useState(false);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -116,6 +120,8 @@ export default function StateAdminTripAdmins() {
   // ── header button (web) ─────────────────────────────────────────────────────
 
   const openModal = useCallback(() => {
+    setFirstName('');
+    setLastName('');
     setEmail('');
     setPassword('');
     setShowPassword(false);
@@ -218,6 +224,14 @@ export default function StateAdminTripAdmins() {
   // ── create Trip Admin ────────────────────────────────────────────────────────
 
   const handleCreate = useCallback(async () => {
+    if (!firstName.trim()) {
+      setSubmitError('First name is required.');
+      return;
+    }
+    if (!lastName.trim()) {
+      setSubmitError('Last name is required.');
+      return;
+    }
     if (!email.trim() || !email.includes('@')) {
       setSubmitError('Please enter a valid email address.');
       return;
@@ -230,6 +244,8 @@ export default function StateAdminTripAdmins() {
     setSubmitError(null);
     try {
       await createUser({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
         email: email.trim().toLowerCase(),
         password,
         role: 'trip_admin',
@@ -243,17 +259,24 @@ export default function StateAdminTripAdmins() {
     } finally {
       setSubmitting(false);
     }
-  }, [email, password, user?.entityId, fetchAdmins]);
+  }, [firstName, lastName, email, password, user?.entityId, fetchAdmins]);
 
   // ── render item ───────────────────────────────────────────────────────────
 
-  const renderAdmin = ({ item }: { item: TripAdmin }) => (
+  const renderAdmin = ({ item }: { item: TripAdmin }) => {
+    const displayName = (item.firstName || item.lastName)
+      ? `${item.firstName} ${item.lastName}`.trim()
+      : null;
+    return (
     <View style={[styles.card, !item.isActive && styles.cardInactive]}>
       <View style={styles.cardTop}>
         <View style={styles.emailRow}>
           <Ionicons name="person-circle-outline" size={20} color={theme.colors.grey1} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.emailText} numberOfLines={1}>{item.email}</Text>
+            {displayName ? (
+              <Text style={styles.nameText} numberOfLines={1}>{displayName}</Text>
+            ) : null}
+            <Text style={displayName ? styles.emailTextSecondary : styles.emailText} numberOfLines={1}>{item.email}</Text>
             <Text style={styles.tripCountText}>{item.tripCount} {item.tripCount === 1 ? 'trip' : 'trips'}</Text>
           </View>
         </View>
@@ -317,6 +340,7 @@ export default function StateAdminTripAdmins() {
       )}
     </View>
   );
+  };
 
   // ── loading / error ───────────────────────────────────────────────────────
 
@@ -486,7 +510,29 @@ export default function StateAdminTripAdmins() {
             contentContainerStyle={styles.formContent}
             keyboardShouldPersistTaps="handled"
           >
-            <Text style={styles.sectionLabel}>EMAIL</Text>
+            <Text style={styles.sectionLabel}>FIRST NAME</Text>
+            <TextInput
+              style={styles.textField}
+              value={firstName}
+              onChangeText={setFirstName}
+              placeholder="First name"
+              placeholderTextColor={theme.colors.grey1}
+              autoCapitalize="words"
+              autoCorrect={false}
+            />
+
+            <Text style={[styles.sectionLabel, { marginTop: 20 }]}>LAST NAME</Text>
+            <TextInput
+              style={styles.textField}
+              value={lastName}
+              onChangeText={setLastName}
+              placeholder="Last name"
+              placeholderTextColor={theme.colors.grey1}
+              autoCapitalize="words"
+              autoCorrect={false}
+            />
+
+            <Text style={[styles.sectionLabel, { marginTop: 20 }]}>EMAIL</Text>
             <TextInput
               style={styles.textField}
               value={email}
@@ -608,10 +654,20 @@ const styles = StyleSheet.create({
     gap: 6,
     flex: 1,
   },
+  nameText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.colors.black,
+    marginBottom: 2,
+  },
   emailText: {
     fontSize: 14,
     fontWeight: '600',
     color: theme.colors.black,
+  },
+  emailTextSecondary: {
+    fontSize: 12,
+    color: theme.colors.grey1,
   },
   tripCountText: {
     fontSize: 12,

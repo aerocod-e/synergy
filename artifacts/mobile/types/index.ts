@@ -8,6 +8,8 @@ export interface AuthUser {
   role: UserRole;
   entityType: EntityType;
   entityId: string | null;
+  firstName: string;
+  lastName: string;
 }
 
 export interface AuthTokens {
@@ -51,6 +53,8 @@ export interface WalletLedgerEntry {
 export interface User {
   id: string;
   email: string;
+  firstName: string;
+  lastName: string;
   role: string;
   entityType: string | null;
   entityId: string | null;

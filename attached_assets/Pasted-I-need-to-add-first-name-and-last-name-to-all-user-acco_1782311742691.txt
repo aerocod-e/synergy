@@ -1,0 +1,87 @@
+I need to add first name and last name to all user accounts throughout the system. This touches the database, backend, frontend, and seed script. Follow all steps in order.
+Step 1 -- Database migration
+Open artifacts/api-server/src/db/migrate.ts. Add two new columns to the users table:
+sqlALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(100) NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name VARCHAR(100) NOT NULL DEFAULT '';
+Run the migration and confirm it completes successfully.
+Step 2 -- Backfill names for all existing accounts
+Run these SQL updates directly:
+sqlUPDATE users SET first_name = 'Super', last_name = 'Admin' WHERE email = 'superadmin@synergy.com';
+UPDATE users SET first_name = 'Lagos', last_name = 'State Admin' WHERE email = 'lagos.admin@synergy.com';
+UPDATE users SET first_name = 'Kano', last_name = 'State Admin' WHERE email = 'kano.admin@synergy.com';
+UPDATE users SET first_name = 'Rivers', last_name = 'State Admin' WHERE email = 'rivers.admin@synergy.com';
+UPDATE users SET first_name = 'FCT', last_name = 'State Admin' WHERE email = 'fct.admin@synergy.com';
+UPDATE users SET first_name = 'Ogun', last_name = 'State Admin' WHERE email = 'ogun.admin@synergy.com';
+UPDATE users SET first_name = 'Alpha', last_name = 'Stakeholder' WHERE email = 'alpha.admin@synergy.com';
+UPDATE users SET first_name = 'Beta', last_name = 'Stakeholder' WHERE email = 'beta.admin@synergy.com';
+UPDATE users SET first_name = 'Gamma', last_name = 'Stakeholder' WHERE email = 'gamma.admin@synergy.com';
+UPDATE users SET first_name = 'Lagos', last_name = 'Trip Admin 1' WHERE email = 'lagos.ta1@synergy.com';
+UPDATE users SET first_name = 'Lagos', last_name = 'Trip Admin 2' WHERE email = 'lagos.ta2@synergy.com';
+UPDATE users SET first_name = 'Rivers', last_name = 'Trip Admin 1' WHERE email = 'rivers.ta1@synergy.com';
+UPDATE users SET first_name = 'Kano', last_name = 'Trip Admin 1' WHERE email = 'kano.ta1@synergy.com';
+UPDATE users SET first_name = 'FCT', last_name = 'Trip Admin 1' WHERE email = 'fct.ta1@synergy.com';
+UPDATE users SET first_name = 'Ogun', last_name = 'Trip Admin 1' WHERE email = 'ogun.ta1@synergy.com';
+For any remaining active users not covered above, apply a generic fallback:
+sqlUPDATE users SET first_name = split_part(email, '@', 1), last_name = 'User'
+WHERE (first_name = '' OR last_name = '') AND deleted_at IS NULL;
+Step 3 -- Update the seed script
+In artifacts/api-server/src/db/seed.ts, update every user creation block to include first_name and last_name. Add these to every INSERT INTO users statement and every ON CONFLICT (email) DO UPDATE block so re-running the seed also updates existing names. Use the same names as the backfill above for all seed accounts.
+Step 4 -- Backend: update all user-related controllers
+authController.ts:
+
+login response: include firstName and lastName in the returned user object and JWT payload
+me endpoint (GET /auth/me): include firstName and lastName in the response
+
+userController.ts:
+
+createUser: accept firstName and lastName as required fields. Return 400 if either is missing or empty. Store in the database.
+listUsers: include first_name, last_name in the SELECT. Return as firstName, lastName in the response.
+listTripAdmins: same -- include names in SELECT and response.
+
+cancellationController.ts:
+
+listCancellationRequests: also select u.first_name || ' ' || u.last_name AS requested_by_name and return it as requestedByName in the response.
+
+Step 5 -- Update TypeScript types
+Find wherever AuthUser, TokenPayload, or any user-related TypeScript interface is defined (likely artifacts/mobile/types/index.ts and artifacts/api-server/src/middleware/auth.ts). Add firstName: string and lastName: string to all relevant interfaces.
+Step 6 -- Frontend: update user creation modals
+Super Admin Users tab ((superadmin)/users.tsx):
+
+Add First Name and Last Name fields to the Create User modal, above the email field. Both required. Pass them as firstName and lastName in the createUser API call.
+State Admin Trip Admins tab ((stateadmin)/trip-admins.tsx):
+
+Same -- add First Name and Last Name fields to the Create Trip Admin modal.
+Step 7 -- Frontend: show names everywhere users are displayed
+Update every place that currently shows only an email to show the full name prominently with the email below it in smaller gray text:
+
+(superadmin)/users.tsx -- user cards: show firstName + ' ' + lastName as the primary label, email below in smaller gray text
+(stateadmin)/trip-admins.tsx -- Trip Admin cards: same pattern
+(stateadmin)/index.tsx -- cancellation request cards: show requestedByName as the Trip Admin identifier instead of email
+(superadmin)/trips.tsx -- if the creator email appears anywhere on trip cards, replace with full name
+(tripadmin)/index.tsx -- same check
+
+Step 8 -- Frontend: update auth context and TopBar
+The auth context (useAuth) must expose firstName and lastName from the stored user object so all screens can access them.
+The TopBar component currently derives initials from the email. Update it to use the first letter of firstName from the auth context instead. If firstName is not yet available (e.g. old session), fall back to the first letter of the email local part.
+Step 9 -- TypeScript check
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.
+
+PART 2 -- Testing
+Backend Tests:
+Test 1 -- GET /api/auth/me as any logged-in user returns firstName and lastName in the response.
+Test 2 -- POST /api/users without firstName returns 400 validation error.
+Test 3 -- POST /api/users without lastName returns 400 validation error.
+Test 4 -- GET /api/users as Super Admin returns firstName and lastName for every user in the list.
+Test 5 -- GET /api/users/trip-admins as State Admin returns firstName and lastName for every Trip Admin.
+Test 6 -- GET /api/cancellation-requests as State Admin returns requestedByName for each request.
+Frontend App Tests (390x844px, tap only):
+Test 7 -- Login as Super Admin. Go to Users tab. Confirm each user card shows the full name prominently and email below in smaller gray text.
+Test 8 -- Open the Create User modal. Confirm First Name and Last Name fields are present and required. Try submitting without a first name -- confirm validation error.
+Test 9 -- Login as State Admin. Go to Trip Admins tab. Confirm each card shows the Trip Admin's full name. Open Create Trip Admin modal -- confirm name fields are present.
+Test 10 -- Go to the Requests tab. Confirm cancellation request cards show the Trip Admin's full name rather than email.
+Test 11 -- Login as Trip Admin. Confirm the TopBar avatar shows the first letter of their first name (e.g. "L" for Lagos Trip Admin 1).
+Test 12 -- Console is clean throughout.
+
+Report every file changed, every test result, and flag anything needing physical iPhone re-verification.

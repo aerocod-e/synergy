@@ -33,8 +33,11 @@ export async function login(req: Request, res: Response): Promise<void> {
       entity_id: string | null;
       is_active: boolean;
       deleted_at: Date | null;
+      first_name: string;
+      last_name: string;
     }>(
-      `SELECT id, email, password_hash, role, entity_type, entity_id, is_active, deleted_at
+      `SELECT id, email, password_hash, role, entity_type, entity_id, is_active, deleted_at,
+              first_name, last_name
        FROM users WHERE email = $1 LIMIT 1`,
       [email]
     );
@@ -68,7 +71,9 @@ export async function login(req: Request, res: Response): Promise<void> {
       user.id,
       user.role,
       user.entity_type,
-      user.entity_id
+      user.entity_id,
+      user.first_name,
+      user.last_name
     );
 
     res.status(200).json({
@@ -81,6 +86,8 @@ export async function login(req: Request, res: Response): Promise<void> {
           role: user.role,
           entityType: user.entity_type,
           entityId: user.entity_id,
+          firstName: user.first_name,
+          lastName: user.last_name,
         },
       },
       message: "Login successful",
@@ -159,6 +166,40 @@ export function logout(_req: Request, res: Response): void {
   res.status(200).json({ data: { success: true }, message: "Logged out" });
 }
 
-export function me(req: Request, res: Response): void {
-  res.status(200).json({ data: req.user, message: "Authenticated user" });
+export async function me(req: Request, res: Response): Promise<void> {
+  try {
+    const { rows } = await pool.query<{
+      id: string;
+      email: string;
+      first_name: string;
+      last_name: string;
+      role: string;
+      entity_type: string | null;
+      entity_id: string | null;
+    }>(
+      `SELECT id, email, first_name, last_name, role, entity_type, entity_id
+       FROM users WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+      [req.user!.userId]
+    );
+    if (!rows[0]) {
+      res.status(401).json({ error: "UNAUTHORIZED", message: "User not found" });
+      return;
+    }
+    const u = rows[0];
+    res.status(200).json({
+      data: {
+        userId: u.id,
+        email: u.email,
+        firstName: u.first_name,
+        lastName: u.last_name,
+        role: u.role,
+        entityType: u.entity_type,
+        entityId: u.entity_id,
+      },
+      message: "Authenticated user",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to fetch user" });
+  }
 }

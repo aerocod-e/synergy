@@ -263,6 +263,7 @@ export async function listCancellationRequests(req: Request, res: Response): Pro
         loading_state: string;
         unloading_state: string;
         requested_by_email: string;
+        requested_by_name: string;
       }>(
         `SELECT
            cr.id,
@@ -275,7 +276,8 @@ export async function listCancellationRequests(req: Request, res: Response): Pro
            d.full_name           AS driver_name,
            ls.name               AS loading_state,
            us2.name              AS unloading_state,
-           u.email               AS requested_by_email
+           u.email               AS requested_by_email,
+           u.first_name || ' ' || u.last_name AS requested_by_name
          FROM cancellation_requests cr
          JOIN trips    t   ON t.id   = cr.trip_id
          JOIN vehicles v   ON v.id   = t.vehicle_id
@@ -308,6 +310,7 @@ export async function listCancellationRequests(req: Request, res: Response): Pro
           loadingState:       r.loading_state,
           unloadingState:     r.unloading_state,
           requestedByEmail:   r.requested_by_email,
+          requestedByName:    r.requested_by_name,
         })),
         pagination: { page, limit, total, totalPages },
       },

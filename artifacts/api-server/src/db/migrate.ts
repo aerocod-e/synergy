@@ -267,7 +267,15 @@ async function migrate(): Promise<void> {
     `);
     console.log('✓ Backfilled trips.trip_code for all existing trips');
 
-    console.log('\n✅ Migration complete: 13 tables, trip_code column + sequence.');
+    // ── first_name / last_name on users ──────────────────────────────────
+    await client.query(`
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS first_name VARCHAR(100) NOT NULL DEFAULT '',
+        ADD COLUMN IF NOT EXISTS last_name  VARCHAR(100) NOT NULL DEFAULT ''
+    `);
+    console.log('✓ users: first_name, last_name columns added (if not exists)');
+
+    console.log('\n✅ Migration complete: 13 tables, trip_code column + sequence + name columns.');
   } finally {
     client.release();
     await pool.end();

@@ -38,10 +38,20 @@ function roleLabel(user: User): string {
 
 function UserRow({ user }: { user: User }) {
   const badgeColors = getRoleBadgeColors(user.role);
+  const displayName = (user.firstName || user.lastName)
+    ? `${user.firstName} ${user.lastName}`.trim()
+    : null;
   return (
     <View style={styles.item}>
       <View style={styles.itemHeader}>
-        <Text style={styles.email} numberOfLines={1}>{user.email}</Text>
+        <View style={{ flex: 1, marginRight: 8 }}>
+          {displayName ? (
+            <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
+          ) : null}
+          <Text style={displayName ? styles.emailSecondary : styles.email} numberOfLines={1}>
+            {user.email}
+          </Text>
+        </View>
         <View style={[styles.statusDot, user.isActive ? styles.dotActive : styles.dotInactive]} />
       </View>
       <View style={[styles.roleBadge, { backgroundColor: badgeColors.bg }]}>
@@ -70,6 +80,8 @@ export default function UsersScreen() {
   const [stakeholders, setStakeholders] = useState<Stakeholder[]>([]);
 
   const [modalVisible, setModalVisible] = useState(false);
+  const [formFirstName, setFormFirstName] = useState('');
+  const [formLastName, setFormLastName] = useState('');
   const [formEmail, setFormEmail] = useState('');
   const [formPassword, setFormPassword] = useState('');
   const [formRole, setFormRole] = useState<CreatableRole | null>(null);
@@ -124,6 +136,8 @@ export default function UsersScreen() {
   }, [fetchUsers]);
 
   const openModal = () => {
+    setFormFirstName('');
+    setFormLastName('');
     setFormEmail('');
     setFormPassword('');
     setFormRole(null);
@@ -139,6 +153,14 @@ export default function UsersScreen() {
 
   const handleSubmit = async () => {
     setFormError(null);
+    if (!formFirstName.trim()) {
+      setFormError('First name is required.');
+      return;
+    }
+    if (!formLastName.trim()) {
+      setFormError('Last name is required.');
+      return;
+    }
     if (!formEmail.trim() || !formEmail.includes('@')) {
       setFormError('A valid email is required.');
       return;
@@ -159,6 +181,8 @@ export default function UsersScreen() {
     setSubmitting(true);
     try {
       await createUser({
+        firstName: formFirstName.trim(),
+        lastName: formLastName.trim(),
         email: formEmail.trim(),
         password: formPassword,
         role: formRole,
@@ -273,8 +297,32 @@ export default function UsersScreen() {
             contentContainerStyle={styles.modalScrollContent}
             keyboardShouldPersistTaps="handled"
           >
+            {/* First Name */}
+            <Text style={styles.fieldLabel}>First Name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="First name"
+              placeholderTextColor={theme.colors.placeholder}
+              autoCapitalize="words"
+              autoCorrect={false}
+              value={formFirstName}
+              onChangeText={setFormFirstName}
+            />
+
+            {/* Last Name */}
+            <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>Last Name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Last name"
+              placeholderTextColor={theme.colors.placeholder}
+              autoCapitalize="words"
+              autoCorrect={false}
+              value={formLastName}
+              onChangeText={setFormLastName}
+            />
+
             {/* Email */}
-            <Text style={styles.fieldLabel}>Email</Text>
+            <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>Email</Text>
             <TextInput
               style={styles.input}
               placeholder="user@example.com"
@@ -408,12 +456,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 10,
   },
+  name: {
+    fontWeight: '700',
+    fontSize: 14,
+    color: theme.colors.black,
+    marginBottom: 2,
+  },
   email: {
     fontWeight: '700',
     fontSize: 14,
     color: theme.colors.black,
     flex: 1,
     marginRight: 8,
+  },
+  emailSecondary: {
+    fontSize: 12,
+    color: theme.colors.grey1,
   },
   statusDot: { width: 10, height: 10, borderRadius: 5 },
   dotActive: { backgroundColor: theme.colors.green },

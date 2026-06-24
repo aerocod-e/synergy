@@ -160,9 +160,10 @@ async function seed(): Promise<void> {
 
     // ── Super admin ───────────────────────────────────────────────────────
     const superAdminRes = await client.query<{ id: string }>(
-      `INSERT INTO users (email, password_hash, role, entity_type, entity_id)
-       VALUES ($1, $2, 'super_admin', NULL, NULL)
-       ON CONFLICT (email) DO NOTHING
+      `INSERT INTO users (email, password_hash, role, entity_type, entity_id, first_name, last_name)
+       VALUES ($1, $2, 'super_admin', NULL, NULL, 'Super', 'Admin')
+       ON CONFLICT (email) DO UPDATE
+         SET first_name = 'Super', last_name = 'Admin'
        RETURNING id`,
       ['superadmin@synergy.com', adminHash],
     );
@@ -176,9 +177,9 @@ async function seed(): Promise<void> {
 
     // ── Stakeholder admins ────────────────────────────────────────────────
     const stakeholderAdmins = [
-      { email: 'alpha.admin@synergy.com', idx: 0 },
-      { email: 'beta.admin@synergy.com',  idx: 1 },
-      { email: 'gamma.admin@synergy.com', idx: 2 },
+      { email: 'alpha.admin@synergy.com', idx: 0, firstName: 'Alpha', lastName: 'Stakeholder' },
+      { email: 'beta.admin@synergy.com',  idx: 1, firstName: 'Beta',  lastName: 'Stakeholder' },
+      { email: 'gamma.admin@synergy.com', idx: 2, firstName: 'Gamma', lastName: 'Stakeholder' },
     ];
 
     let shAdminsInserted = 0;
@@ -186,10 +187,11 @@ async function seed(): Promise<void> {
       const shId = stakeholderIds[sa.idx];
       if (!shId) continue;
       const res = await client.query(
-        `INSERT INTO users (email, password_hash, role, entity_type, entity_id)
-         VALUES ($1, $2, 'stakeholder', 'stakeholder', $3)
-         ON CONFLICT (email) DO NOTHING`,
-        [sa.email, adminHash, shId],
+        `INSERT INTO users (email, password_hash, role, entity_type, entity_id, first_name, last_name)
+         VALUES ($1, $2, 'stakeholder', 'stakeholder', $3, $4, $5)
+         ON CONFLICT (email) DO UPDATE
+           SET first_name = EXCLUDED.first_name, last_name = EXCLUDED.last_name`,
+        [sa.email, adminHash, shId, sa.firstName, sa.lastName],
       );
       shAdminsInserted += res.rowCount ?? 0;
     }
@@ -197,11 +199,11 @@ async function seed(): Promise<void> {
 
     // ── State admins (5 demo states) ──────────────────────────────────────
     const stateAdmins = [
-      { email: 'lagos.admin@synergy.com',  code: 'LG'  },
-      { email: 'kano.admin@synergy.com',   code: 'KN'  },
-      { email: 'rivers.admin@synergy.com', code: 'RI'  },
-      { email: 'fct.admin@synergy.com',    code: 'FCT' },
-      { email: 'ogun.admin@synergy.com',   code: 'OG'  },
+      { email: 'lagos.admin@synergy.com',  code: 'LG',  firstName: 'Lagos',  lastName: 'State Admin' },
+      { email: 'kano.admin@synergy.com',   code: 'KN',  firstName: 'Kano',   lastName: 'State Admin' },
+      { email: 'rivers.admin@synergy.com', code: 'RI',  firstName: 'Rivers', lastName: 'State Admin' },
+      { email: 'fct.admin@synergy.com',    code: 'FCT', firstName: 'FCT',    lastName: 'State Admin' },
+      { email: 'ogun.admin@synergy.com',   code: 'OG',  firstName: 'Ogun',   lastName: 'State Admin' },
     ];
 
     let stateAdminsInserted = 0;
@@ -209,10 +211,11 @@ async function seed(): Promise<void> {
       const stateId = stateIdMap[sa.code];
       if (!stateId) continue;
       const res = await client.query(
-        `INSERT INTO users (email, password_hash, role, entity_type, entity_id)
-         VALUES ($1, $2, 'state_admin', 'state', $3)
-         ON CONFLICT (email) DO NOTHING`,
-        [sa.email, adminHash, stateId],
+        `INSERT INTO users (email, password_hash, role, entity_type, entity_id, first_name, last_name)
+         VALUES ($1, $2, 'state_admin', 'state', $3, $4, $5)
+         ON CONFLICT (email) DO UPDATE
+           SET first_name = EXCLUDED.first_name, last_name = EXCLUDED.last_name`,
+        [sa.email, adminHash, stateId, sa.firstName, sa.lastName],
       );
       stateAdminsInserted += res.rowCount ?? 0;
     }
@@ -261,12 +264,12 @@ async function seed(): Promise<void> {
 
     // ── Trip admin accounts ───────────────────────────────────────────────
     const TRIP_ADMINS_DEMO = [
-      { email: 'lagos.ta1@synergy.com',  code: 'LG',  canCancel: true  },
-      { email: 'lagos.ta2@synergy.com',  code: 'LG',  canCancel: false },
-      { email: 'rivers.ta1@synergy.com', code: 'RI',  canCancel: false },
-      { email: 'kano.ta1@synergy.com',   code: 'KN',  canCancel: false },
-      { email: 'fct.ta1@synergy.com',    code: 'FCT', canCancel: false },
-      { email: 'ogun.ta1@synergy.com',   code: 'OG',  canCancel: false },
+      { email: 'lagos.ta1@synergy.com',  code: 'LG',  canCancel: true,  firstName: 'Lagos',  lastName: 'Trip Admin 1' },
+      { email: 'lagos.ta2@synergy.com',  code: 'LG',  canCancel: false, firstName: 'Lagos',  lastName: 'Trip Admin 2' },
+      { email: 'rivers.ta1@synergy.com', code: 'RI',  canCancel: false, firstName: 'Rivers', lastName: 'Trip Admin 1' },
+      { email: 'kano.ta1@synergy.com',   code: 'KN',  canCancel: false, firstName: 'Kano',   lastName: 'Trip Admin 1' },
+      { email: 'fct.ta1@synergy.com',    code: 'FCT', canCancel: false, firstName: 'FCT',    lastName: 'Trip Admin 1' },
+      { email: 'ogun.ta1@synergy.com',   code: 'OG',  canCancel: false, firstName: 'Ogun',   lastName: 'Trip Admin 1' },
     ];
 
     const taIdMap: Record<string, string> = {};
@@ -277,15 +280,17 @@ async function seed(): Promise<void> {
       if (!stateId) continue;
       const res = await client.query<{ id: string }>(
         `INSERT INTO users
-           (email, password_hash, role, entity_type, entity_id, can_cancel_without_approval)
-         VALUES ($1, $2, 'trip_admin', 'state', $3, $4)
+           (email, password_hash, role, entity_type, entity_id, can_cancel_without_approval, first_name, last_name)
+         VALUES ($1, $2, 'trip_admin', 'state', $3, $4, $5, $6)
          ON CONFLICT (email) DO UPDATE
-           SET password_hash              = EXCLUDED.password_hash,
-               is_active                  = true,
-               deleted_at                 = NULL,
-               can_cancel_without_approval = EXCLUDED.can_cancel_without_approval
+           SET password_hash               = EXCLUDED.password_hash,
+               is_active                   = true,
+               deleted_at                  = NULL,
+               can_cancel_without_approval = EXCLUDED.can_cancel_without_approval,
+               first_name                  = EXCLUDED.first_name,
+               last_name                   = EXCLUDED.last_name
          RETURNING id`,
-        [ta.email, demoHash, stateId, ta.canCancel],
+        [ta.email, demoHash, stateId, ta.canCancel, ta.firstName, ta.lastName],
       );
       const id = res.rows[0]?.id;
       if (id) { taIdMap[ta.email] = id; taUpserted++; }
