@@ -55,8 +55,8 @@ interface StateItem {
   id: string;
   name: string;
   code: string;
-  loading_rate: number;
-  unloading_rate: number;
+  loadingRate: number;
+  unloadingRate: number;
 }
 
 // ── Status badge helpers ───────────────────────────────────────────────────────
@@ -688,7 +688,8 @@ export default function TripAdminTrips() {
                 <Text style={styles.feeLabel}>Loading Fee</Text>
                 {loadingStateId ? (
                   <Text style={styles.feeAmount}>
-                    {formatNaira(states.find((s) => s.id === loadingStateId)?.loading_rate ?? 0)}
+                    {formatNaira(states.find((s) => s.id === loadingStateId)?.loadingRate ?? 0)}
+                    {loadingStateName ? ` (${loadingStateName} rate)` : ''}
                   </Text>
                 ) : (
                   <Text style={[styles.feeAmount, styles.feePlaceholder]}>Select loading state</Text>
@@ -698,7 +699,8 @@ export default function TripAdminTrips() {
                 <Text style={styles.feeLabel}>Unloading Fee</Text>
                 {unloadingStateId ? (
                   <Text style={styles.feeAmount}>
-                    {formatNaira(states.find((s) => s.id === unloadingStateId)?.unloading_rate ?? 0)}
+                    {formatNaira(states.find((s) => s.id === unloadingStateId)?.unloadingRate ?? 0)}
+                    {unloadingStateName ? ` (${unloadingStateName} rate)` : ''}
                   </Text>
                 ) : (
                   <Text style={[styles.feeAmount, styles.feePlaceholder]}>Select unloading state</Text>

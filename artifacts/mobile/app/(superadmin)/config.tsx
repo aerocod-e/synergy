@@ -45,8 +45,8 @@ interface StateRateItem {
   id: string;
   name: string;
   code: string;
-  loading_rate: number;
-  unloading_rate: number;
+  loadingRate: number;
+  unloadingRate: number;
 }
 
 function nairaToKobo(val: string): number {
@@ -150,6 +150,7 @@ export default function ConfigScreen() {
   const [editUnloadingRate, setEditUnloadingRate] = useState('');
   const [savingStateId, setSavingStateId] = useState<string | null>(null);
   const [stateRateError, setStateRateError] = useState<string | null>(null);
+  const [stateSearch, setStateSearch] = useState('');
 
   const loadData = useCallback(async () => {
     setPageError(null);
@@ -236,8 +237,8 @@ export default function ConfigScreen() {
 
   const handleEditState = (s: StateRateItem) => {
     setEditingStateId(s.id);
-    setEditLoadingRate((s.loading_rate / 100).toFixed(2));
-    setEditUnloadingRate((s.unloading_rate / 100).toFixed(2));
+    setEditLoadingRate((s.loadingRate / 100).toFixed(2));
+    setEditUnloadingRate((s.unloadingRate / 100).toFixed(2));
     setStateRateError(null);
   };
 
@@ -254,12 +255,12 @@ export default function ConfigScreen() {
     setStateRateError(null);
     try {
       const result = await updateStateRates(stateId, {
-        loading_rate: nairaToKobo(editLoadingRate),
-        unloading_rate: nairaToKobo(editUnloadingRate),
+        loadingRate: nairaToKobo(editLoadingRate),
+        unloadingRate: nairaToKobo(editUnloadingRate),
       });
       const updated = result?.state as StateRateItem;
       setStateRates((prev) =>
-        prev.map((s) => (s.id === stateId ? { ...s, loading_rate: updated.loading_rate, unloading_rate: updated.unloading_rate } : s))
+        prev.map((s) => (s.id === stateId ? { ...s, loadingRate: updated.loadingRate, unloadingRate: updated.unloadingRate } : s))
       );
       setEditingStateId(null);
     } catch (e: any) {
@@ -303,13 +304,29 @@ export default function ConfigScreen() {
 
         {/* ── State Rates ── */}
         <Text style={styles.sectionLabel}>State Loading & Unloading Rates</Text>
+        <TextInput
+          style={styles.stateSearchInput}
+          placeholder="Search states…"
+          placeholderTextColor={theme.colors.placeholder}
+          value={stateSearch}
+          onChangeText={setStateSearch}
+          clearButtonMode="while-editing"
+          autoCorrect={false}
+          autoCapitalize="none"
+        />
         {stateRates.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyText}>Loading state rates…</Text>
           </View>
         ) : (
           <View style={styles.stateRatesCard}>
-            {stateRates.map((s, idx) => (
+            {stateRates
+              .filter((s) =>
+                stateSearch.trim() === '' ||
+                s.name.toLowerCase().includes(stateSearch.trim().toLowerCase()) ||
+                s.code.toLowerCase().includes(stateSearch.trim().toLowerCase())
+              )
+              .map((s, idx) => (
               <View key={s.id}>
                 {idx > 0 && <View style={styles.rowDivider} />}
                 {editingStateId === s.id ? (
@@ -371,11 +388,11 @@ export default function ConfigScreen() {
                     <View style={styles.stateRateValues}>
                       <View style={styles.stateRateValueGroup}>
                         <Text style={styles.stateRateValueLabel}>Load</Text>
-                        <Text style={styles.stateRateValue}>{formatNaira(s.loading_rate)}</Text>
+                        <Text style={styles.stateRateValue}>{formatNaira(s.loadingRate)}</Text>
                       </View>
                       <View style={styles.stateRateValueGroup}>
                         <Text style={styles.stateRateValueLabel}>Unload</Text>
-                        <Text style={styles.stateRateValue}>{formatNaira(s.unloading_rate)}</Text>
+                        <Text style={styles.stateRateValue}>{formatNaira(s.unloadingRate)}</Text>
                       </View>
                       <TouchableOpacity
                         onPress={() => handleEditState(s)}
@@ -663,6 +680,18 @@ const styles = StyleSheet.create({
   },
 
   // ── State rates ──────────────────────────────────────────────────────────────
+  stateSearchInput: {
+    marginHorizontal: 20,
+    marginBottom: 10,
+    backgroundColor: theme.colors.white,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.colors.separator,
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
+    fontSize: 14,
+    color: theme.colors.black,
+  },
   stateRatesCard: {
     backgroundColor: theme.colors.white,
     marginHorizontal: 20,

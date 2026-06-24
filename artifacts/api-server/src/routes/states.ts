@@ -19,7 +19,15 @@ async function listStates(_req: Request, res: Response): Promise<void> {
     );
 
     res.json({
-      data: { states: rows },
+      data: {
+        states: rows.map((r) => ({
+          id: r.id,
+          name: r.name,
+          code: r.code,
+          loadingRate: r.loading_rate,
+          unloadingRate: r.unloading_rate,
+        })),
+      },
       message: "States retrieved",
     });
   } catch (err) {
@@ -30,21 +38,21 @@ async function listStates(_req: Request, res: Response): Promise<void> {
 
 async function updateStateRates(req: Request, res: Response): Promise<void> {
   const { id } = req.params as { id: string };
-  const { loading_rate, unloading_rate } = req.body as {
-    loading_rate?: unknown;
-    unloading_rate?: unknown;
+  const { loadingRate, unloadingRate } = req.body as {
+    loadingRate?: unknown;
+    unloadingRate?: unknown;
   };
 
-  function isPositiveInt(v: unknown): v is number {
-    return typeof v === "number" && Number.isInteger(v) && v > 0;
+  function isNonNegativeInt(v: unknown): v is number {
+    return typeof v === "number" && Number.isInteger(v) && v >= 0;
   }
 
-  if (!isPositiveInt(loading_rate)) {
-    res.status(400).json({ error: "BAD_REQUEST", message: "loading_rate must be a positive integer (kobo)" });
+  if (!isNonNegativeInt(loadingRate)) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "loadingRate must be a non-negative integer (kobo)" });
     return;
   }
-  if (!isPositiveInt(unloading_rate)) {
-    res.status(400).json({ error: "BAD_REQUEST", message: "unloading_rate must be a positive integer (kobo)" });
+  if (!isNonNegativeInt(unloadingRate)) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "unloadingRate must be a non-negative integer (kobo)" });
     return;
   }
 
@@ -60,7 +68,7 @@ async function updateStateRates(req: Request, res: Response): Promise<void> {
        SET loading_rate = $1, unloading_rate = $2, updated_at = NOW()
        WHERE id = $3
        RETURNING id, name, code, loading_rate, unloading_rate`,
-      [loading_rate, unloading_rate, id]
+      [loadingRate, unloadingRate, id]
     );
 
     if (rows.length === 0) {
@@ -68,7 +76,19 @@ async function updateStateRates(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    res.json({ data: { state: rows[0] }, message: "State rates updated" });
+    const r = rows[0];
+    res.json({
+      data: {
+        state: {
+          id: r.id,
+          name: r.name,
+          code: r.code,
+          loadingRate: r.loading_rate,
+          unloadingRate: r.unloading_rate,
+        },
+      },
+      message: "State rates updated",
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to update state rates" });
