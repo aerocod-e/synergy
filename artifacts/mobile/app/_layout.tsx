@@ -118,6 +118,8 @@ export default function RootLayout() {
     'Feather': require('../assets/fonts/Feather.ttf'),
   });
 
+  console.log('[FontDebug] fontsLoaded:', fontsLoaded, 'fontError:', fontError);
+
   useEffect(() => {
     if (fontsLoaded || fontError) {
       SplashScreen.hideAsync();
