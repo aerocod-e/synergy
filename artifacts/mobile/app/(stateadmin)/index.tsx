@@ -13,7 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import Ionicons from '@react-native-vector-icons/ionicons';
+import { AlertCircle, CheckCircle, ChevronRight, CloudOff, MapPin, Search, User } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
 import ScreenTransition from '@/components/ScreenTransition';
@@ -163,7 +163,7 @@ export default function StateAdminHome() {
         </View>
 
         <View style={styles.cardRow}>
-          <Ionicons name="location-outline" size={14} color={theme.colors.grey1} />
+          <MapPin size={14} color={theme.colors.grey1} />
           <Text style={styles.cardRowText} numberOfLines={1}>
             {item.loadingState} → {item.unloadingState}
           </Text>
@@ -171,13 +171,13 @@ export default function StateAdminHome() {
 
         {item.driverName && (
           <View style={styles.cardRow}>
-            <Ionicons name="person-outline" size={14} color={theme.colors.grey1} />
+            <User size={14} color={theme.colors.grey1} />
             <Text style={styles.cardRowText} numberOfLines={1}>{item.driverName}</Text>
           </View>
         )}
 
         <View style={styles.cardRow}>
-          <Ionicons name="person-outline" size={14} color={theme.colors.grey1} />
+          <User size={14} color={theme.colors.grey1} />
           <Text style={styles.cardRowText} numberOfLines={1}>
             {item.requestedByName && item.requestedByName.trim() ? item.requestedByName : item.requestedByEmail}
           </Text>
@@ -227,7 +227,7 @@ export default function StateAdminHome() {
   if (fetchError && requests.length === 0) {
     return (
       <View style={styles.center}>
-        <Ionicons name="cloud-offline-outline" size={48} color={theme.colors.inactive} />
+        <CloudOff size={48} color={theme.colors.inactive} />
         <Text style={styles.fetchErrorTitle}>{fetchError}</Text>
         <TouchableOpacity
           style={styles.retryButton}
@@ -264,7 +264,7 @@ export default function StateAdminHome() {
         }
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Ionicons name="checkmark-circle-outline" size={52} color={theme.colors.inactive} />
+            <CheckCircle size={52} color={theme.colors.inactive} />
             <Text style={styles.emptyTitle}>All clear</Text>
             <Text style={styles.emptySubtitle}>No pending cancellation requests</Text>
           </View>
@@ -289,9 +289,9 @@ export default function StateAdminHome() {
               onPress={() => router.push('/(public)/lookup')}
               activeOpacity={0.7}
             >
-              <Ionicons name="search-outline" size={18} color={theme.colors.primary} />
+              <Search size={18} color={theme.colors.primary} />
               <Text style={styles.verifyRowText}>Public Lookup</Text>
-              <Ionicons name="chevron-forward" size={16} color={theme.colors.grey1} />
+              <ChevronRight size={16} color={theme.colors.grey1} />
             </TouchableOpacity>
             <View style={{ height: theme.PILL_NAV_BOTTOM_PADDING }} />
           </>
@@ -327,7 +327,7 @@ export default function StateAdminHome() {
             />
             {rejectError && (
               <View style={styles.errorBox}>
-                <Ionicons name="alert-circle-outline" size={16} color={theme.colors.error} />
+                <AlertCircle size={16} color={theme.colors.error} />
                 <Text style={styles.errorText}>{rejectError}</Text>
               </View>
             )}

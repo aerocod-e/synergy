@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Ionicons from '@react-native-vector-icons/ionicons';
+import { AlertCircle, ChevronLeft, Key, Lock, PauseCircle, PlayCircle, Trash2 } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuthContext } from '@/app/_layout';
@@ -165,7 +165,7 @@ export default function UserDetailScreen() {
   if (fetchError || !user) {
     return (
       <View style={styles.centered}>
-        <Ionicons name="alert-circle-outline" size={48} color={theme.colors.inactive} />
+        <AlertCircle size={48} color={theme.colors.inactive} />
         <Text style={styles.errorText}>Failed to load user</Text>
         <TouchableOpacity style={styles.retryButton} onPress={fetchUser}>
           <Text style={styles.retryButtonText}>Retry</Text>
@@ -193,7 +193,7 @@ export default function UserDetailScreen() {
           style={styles.backButton}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
+          <ChevronLeft size={24} color={theme.colors.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>User Details</Text>
         <View style={styles.headerSpacer} />
@@ -268,7 +268,7 @@ export default function UserDetailScreen() {
         <Text style={[styles.sectionTitle, styles.sectionSpaced]}>Email</Text>
         <View style={styles.readOnlyField}>
           <Text style={styles.readOnlyValue}>{user.email}</Text>
-          <Ionicons name="lock-closed-outline" size={14} color={theme.colors.grey1} />
+          <Lock size={14} color={theme.colors.grey1} />
         </View>
 
         {/* Entity (read-only) */}
@@ -305,7 +305,7 @@ export default function UserDetailScreen() {
               {actionLoading
                 ? <ActivityIndicator color={theme.colors.white} size="small" />
                 : <>
-                    <Ionicons name="key-outline" size={16} color={theme.colors.white} style={styles.actionIcon} />
+                    <Key size={16} color={theme.colors.white} style={styles.actionIcon} />
                     <Text style={styles.actionButtonText}>Reset Password</Text>
                   </>}
             </TouchableOpacity>
@@ -321,7 +321,7 @@ export default function UserDetailScreen() {
               {actionLoading
                 ? <ActivityIndicator color={theme.colors.white} size="small" />
                 : <>
-                    <Ionicons name="pause-circle-outline" size={16} color={theme.colors.white} style={styles.actionIcon} />
+                    <PauseCircle size={16} color={theme.colors.white} style={styles.actionIcon} />
                     <Text style={styles.actionButtonText}>Deactivate Account</Text>
                   </>}
             </TouchableOpacity>
@@ -337,7 +337,7 @@ export default function UserDetailScreen() {
               {actionLoading
                 ? <ActivityIndicator color={theme.colors.white} size="small" />
                 : <>
-                    <Ionicons name="play-circle-outline" size={16} color={theme.colors.white} style={styles.actionIcon} />
+                    <PlayCircle size={16} color={theme.colors.white} style={styles.actionIcon} />
                     <Text style={styles.actionButtonText}>Reactivate Account</Text>
                   </>}
             </TouchableOpacity>
@@ -353,7 +353,7 @@ export default function UserDetailScreen() {
               disabled={actionLoading}
               activeOpacity={0.85}
             >
-              <Ionicons name="trash-outline" size={16} color={theme.colors.white} style={styles.actionIcon} />
+              <Trash2 size={16} color={theme.colors.white} style={styles.actionIcon} />
               <Text style={styles.deleteButtonText}>Delete Account</Text>
             </TouchableOpacity>
           </View>

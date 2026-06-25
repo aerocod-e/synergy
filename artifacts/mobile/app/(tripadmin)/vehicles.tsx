@@ -13,7 +13,7 @@ import {
   Alert,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from 'expo-router';
-import Ionicons from '@react-native-vector-icons/ionicons';
+import { AlertCircle, Car, CloudOff, LogOut, Pencil, Plus, PlusCircle, Trash2, X } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
 import ScreenTransition from '@/components/ScreenTransition';
@@ -105,10 +105,10 @@ export default function TripAdminVehicles() {
               style={styles.headerBtn}
               accessibilityLabel="Register vehicle"
             >
-              <Ionicons name="add-circle-outline" size={26} color={theme.colors.primary} />
+              <PlusCircle size={26} color={theme.colors.primary} />
             </TouchableOpacity>
             <TouchableOpacity onPress={handleLogout} style={styles.headerBtn}>
-              <Ionicons name="log-out-outline" size={24} color={theme.colors.primary} />
+              <LogOut size={24} color={theme.colors.primary} />
             </TouchableOpacity>
           </View>
         ),
@@ -226,7 +226,7 @@ export default function TripAdminVehicles() {
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             accessibilityLabel="Edit vehicle"
           >
-            <Ionicons name="create-outline" size={22} color={theme.colors.primary} />
+            <Pencil size={22} color={theme.colors.primary} />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => handleDeleteVehicle(item)}
@@ -236,14 +236,14 @@ export default function TripAdminVehicles() {
           >
             {deleting[item.id]
               ? <ActivityIndicator size="small" color={theme.colors.error} />
-              : <Ionicons name="trash-outline" size={22} color={theme.colors.error} />
+              : <Trash2 size={22} color={theme.colors.error} />
             }
           </TouchableOpacity>
         </View>
       </View>
       {deleteError[item.id] ? (
         <View style={styles.cardError}>
-          <Ionicons name="alert-circle-outline" size={13} color={theme.colors.error} />
+          <AlertCircle size={13} color={theme.colors.error} />
           <Text style={styles.cardErrorText}>{deleteError[item.id]}</Text>
         </View>
       ) : null}
@@ -261,7 +261,7 @@ export default function TripAdminVehicles() {
   if (fetchError && vehicles.length === 0) {
     return (
       <View style={styles.center}>
-        <Ionicons name="cloud-offline-outline" size={48} color={theme.colors.inactive} />
+        <CloudOff size={48} color={theme.colors.inactive} />
         <Text style={styles.fetchErrorTitle}>{fetchError}</Text>
         <TouchableOpacity
           style={styles.retryButton}
@@ -293,7 +293,7 @@ export default function TripAdminVehicles() {
         }
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Ionicons name="car-outline" size={48} color={theme.colors.inactive} />
+            <Car size={48} color={theme.colors.inactive} />
             <Text style={styles.emptyTitle}>No vehicles yet</Text>
             <Text style={styles.emptySubtitle}>Tap + to register your first vehicle</Text>
           </View>
@@ -327,7 +327,7 @@ export default function TripAdminVehicles() {
           activeOpacity={0.85}
           accessibilityLabel="Register vehicle"
         >
-          <Ionicons name="add" size={28} color={theme.colors.white} />
+          <Plus size={28} color={theme.colors.white} />
         </TouchableOpacity>
       )}
 
@@ -345,7 +345,7 @@ export default function TripAdminVehicles() {
               onPress={() => setEditModalVisible(false)}
               accessibilityLabel="Close modal"
             >
-              <Ionicons name="close" size={24} color={theme.colors.grey2} />
+              <X size={24} color={theme.colors.grey2} />
             </TouchableOpacity>
           </View>
 
@@ -363,7 +363,7 @@ export default function TripAdminVehicles() {
 
             {editError && (
               <View style={styles.errorBox}>
-                <Ionicons name="alert-circle-outline" size={16} color={theme.colors.error} />
+                <AlertCircle size={16} color={theme.colors.error} />
                 <Text style={styles.errorText}>{editError}</Text>
               </View>
             )}
@@ -398,7 +398,7 @@ export default function TripAdminVehicles() {
               onPress={() => setModalVisible(false)}
               accessibilityLabel="Close modal"
             >
-              <Ionicons name="close" size={24} color={theme.colors.grey2} />
+              <X size={24} color={theme.colors.grey2} />
             </TouchableOpacity>
           </View>
 
@@ -413,7 +413,7 @@ export default function TripAdminVehicles() {
 
             {registerError && (
               <View style={styles.errorBox}>
-                <Ionicons name="alert-circle-outline" size={16} color={theme.colors.error} />
+                <AlertCircle size={16} color={theme.colors.error} />
                 <Text style={styles.errorText}>{registerError}</Text>
               </View>
             )}

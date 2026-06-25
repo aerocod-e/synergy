@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, TouchableOpacity, View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import Ionicons from '@react-native-vector-icons/ionicons';
+import { LogOut } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthContext } from '@/app/_layout';
 import { theme } from '@/constants/theme';
@@ -46,7 +46,7 @@ export default function TopBar() {
         {isLoggingOut ? (
           <ActivityIndicator size="small" color={theme.colors.primary} />
         ) : (
-          <Ionicons name="log-out-outline" size={24} color={theme.colors.primary} />
+          <LogOut size={24} color={theme.colors.primary} />
         )}
       </TouchableOpacity>
     </View>

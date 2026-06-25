@@ -1,0 +1,25 @@
+Replit Agent Prompt:
+We are replacing all icon usage in the app with lucide-react-native, an SVG-based icon library with zero font loading dependencies. This permanently fixes the Android icon rendering bug.
+Step 1: Install the required packages from artifacts/mobile/:
+bashpnpm add lucide-react-native react-native-svg
+Step 2: Remove the font-related setup we added during the failed migration. In app/_layout.tsx:
+
+Remove the setDynamicLoadingEnabled import and call
+Remove the 'Ionicons' and 'Feather' entries from useFonts
+Remove any Font.isLoaded diagnostic imports or effects if present
+Leave all Inter font entries and the splash screen guard untouched
+
+Also remove assets/fonts/Ionicons.ttf and assets/fonts/Feather.ttf -- they are no longer needed.
+Step 3: Update app.json -- remove the @react-native-vector-icons/ionicons and @react-native-vector-icons/feather plugin entries. They are no longer needed.
+Step 4: Replace all icon usages across the codebase using this exact mapping. For every file that currently imports from @react-native-vector-icons/ionicons or @react-native-vector-icons/feather, replace the import with named imports from lucide-react-native and update every icon name per this table:
+Ionicons → Lucide:
+Old name (string prop)New componentaddPlusadd-circle-outlinePlusCirclealert-circle-outlineAlertCirclearrow-backArrowLeftcalendar-outlineCalendarcall-outlinePhonecar-outlineCarcard-outlineCreditCardcheckmarkCheckcheckmark-circle-outlineCheckCirclechevron-backChevronLeftchevron-forwardChevronRightcloseXclose-circleXCirclecloud-offline-outlineCloudOffcreate-outlinePencildocument-outlineFileTextellipseCircleellipse-outlineCircleeye-off-outlineEyeOffeye-outlineEyekey-outlineKeylocation-outlineMapPinlock-closed-outlineLocklog-out-outlineLogOutnavigate-outlineNavigationopen-outlineExternalLinkpause-circle-outlinePauseCirclepencil-outlinePencilpeople-outlineUsersperson-add-outlineUserPlusperson-circle-outlineUserCircleperson-outlineUserplay-circle-outlinePlayCirclereceipt-outlineReceiptsearchSearchsearch-outlineSearchtrash-outlineTrash2warning-outlineAlertTriangle
+Feather → Lucide:
+Old nameNew componentalert-circleAlertCirclehomeHomexX
+Step 5: The two dynamic icon usages need special handling:
+components/PillTabBar.tsx -- The TAB_ICONS map currently maps tab names to Ionicons string names. Convert it to map tab names directly to Lucide components. Replace the <Ionicons> render with the Lucide component stored in the map, rendered as <IconComponent size={size} color={color} />.
+app/(superadmin)/index.tsx -- The icon prop is currently a string passed from a parent. Change the SummaryCardProps.icon type from a string name to React.ComponentType<{ size?: number; color?: string }> and render it as <Icon size={size} color={color} />. Update the parent component that passes the icon prop to pass the Lucide component itself instead of a string name.
+app/(tabs)/_layout.tsx -- This file has an iOS/Android conditional using SymbolView on iOS and Feather on Android for the home tab. Keep the SymbolView branch for iOS untouched. Replace only the Android/Feather branch with <Home size={size} color={color} /> from lucide-react-native.
+Step 6: Remove @react-native-vector-icons/ionicons, @react-native-vector-icons/feather, and @react-native-vector-icons/common from package.json dependencies. Keep @expo/vector-icons as it may be a transitive dependency.
+Step 7: Run pnpm typecheck and fix any TypeScript errors. Then run npx expo start --clear and confirm Metro starts cleanly.
+Report back: TypeScript result, any files that needed non-obvious fixes, and confirmation Metro is running.

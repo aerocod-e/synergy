@@ -1,4 +1,4 @@
-import Ionicons from '@react-native-vector-icons/ionicons';
+import { Check, X } from 'lucide-react-native';
 import {
   FlatList,
   Modal,
@@ -66,7 +66,7 @@ export default function SearchablePicker({
         <View style={styles.header}>
           <Text style={styles.title}>{title}</Text>
           <TouchableOpacity onPress={onClose} hitSlop={12}>
-            <Ionicons name="close" size={24} color={theme.colors.grey2} />
+            <X size={24} color={theme.colors.grey2} />
           </TouchableOpacity>
         </View>
 
@@ -106,7 +106,7 @@ export default function SearchablePicker({
                     ) : null}
                   </View>
                   {isSelected && (
-                    <Ionicons name="checkmark" size={20} color={theme.colors.primary} />
+                    <Check size={20} color={theme.colors.primary} />
                   )}
                 </TouchableOpacity>
               );

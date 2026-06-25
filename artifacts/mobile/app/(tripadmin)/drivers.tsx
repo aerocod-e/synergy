@@ -13,7 +13,7 @@ import {
   Alert,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from 'expo-router';
-import Ionicons from '@react-native-vector-icons/ionicons';
+import { AlertCircle, CloudOff, CreditCard, LogOut, Pencil, Phone, Plus, PlusCircle, Trash2, User, X } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
 import ScreenTransition from '@/components/ScreenTransition';
@@ -81,10 +81,10 @@ export default function TripAdminDrivers() {
                 style={styles.headerBtn}
                 accessibilityLabel="Register driver"
               >
-                <Ionicons name="add-circle-outline" size={26} color={theme.colors.primary} />
+                <PlusCircle size={26} color={theme.colors.primary} />
               </TouchableOpacity>
               <TouchableOpacity onPress={handleLogout} style={styles.headerBtn}>
-                <Ionicons name="log-out-outline" size={24} color={theme.colors.primary} />
+                <LogOut size={24} color={theme.colors.primary} />
               </TouchableOpacity>
             </View>
           ),
@@ -235,11 +235,11 @@ export default function TripAdminDrivers() {
         <View style={styles.cardLeft}>
           <Text style={styles.driverName}>{item.fullName}</Text>
           <View style={styles.detailRow}>
-            <Ionicons name="card-outline" size={13} color={theme.colors.grey1} />
+            <CreditCard size={13} color={theme.colors.grey1} />
             <Text style={styles.detailText}>{item.licenseNumber}</Text>
           </View>
           <View style={styles.detailRow}>
-            <Ionicons name="call-outline" size={13} color={theme.colors.grey1} />
+            <Phone size={13} color={theme.colors.grey1} />
             <Text style={styles.detailText}>{item.phoneNumber}</Text>
           </View>
           <Text style={styles.tripCount}>
@@ -252,7 +252,7 @@ export default function TripAdminDrivers() {
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             accessibilityLabel="Edit driver"
           >
-            <Ionicons name="create-outline" size={22} color={theme.colors.primary} />
+            <Pencil size={22} color={theme.colors.primary} />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => handleDeleteDriver(item)}
@@ -262,14 +262,14 @@ export default function TripAdminDrivers() {
           >
             {deleting[item.id]
               ? <ActivityIndicator size="small" color={theme.colors.error} />
-              : <Ionicons name="trash-outline" size={22} color={theme.colors.error} />
+              : <Trash2 size={22} color={theme.colors.error} />
             }
           </TouchableOpacity>
         </View>
       </View>
       {deleteError[item.id] ? (
         <View style={styles.cardError}>
-          <Ionicons name="alert-circle-outline" size={13} color={theme.colors.error} />
+          <AlertCircle size={13} color={theme.colors.error} />
           <Text style={styles.cardErrorText}>{deleteError[item.id]}</Text>
         </View>
       ) : null}
@@ -287,7 +287,7 @@ export default function TripAdminDrivers() {
   if (fetchError && drivers.length === 0) {
     return (
       <View style={styles.center}>
-        <Ionicons name="cloud-offline-outline" size={48} color={theme.colors.inactive} />
+        <CloudOff size={48} color={theme.colors.inactive} />
         <Text style={styles.fetchErrorTitle}>{fetchError}</Text>
         <TouchableOpacity
           style={styles.retryButton}
@@ -319,7 +319,7 @@ export default function TripAdminDrivers() {
         }
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Ionicons name="person-outline" size={48} color={theme.colors.inactive} />
+            <User size={48} color={theme.colors.inactive} />
             <Text style={styles.emptyTitle}>No drivers yet</Text>
             <Text style={styles.emptySubtitle}>Tap + to register your first driver</Text>
           </View>
@@ -352,7 +352,7 @@ export default function TripAdminDrivers() {
           activeOpacity={0.85}
           accessibilityLabel="Register driver"
         >
-          <Ionicons name="add" size={28} color={theme.colors.white} />
+          <Plus size={28} color={theme.colors.white} />
         </TouchableOpacity>
       )}
 
@@ -363,7 +363,7 @@ export default function TripAdminDrivers() {
           activeOpacity={0.85}
           accessibilityLabel="Register new driver"
         >
-          <Ionicons name="add-circle-outline" size={20} color={theme.colors.white} />
+          <PlusCircle size={20} color={theme.colors.white} />
           <Text style={styles.webAddBtnText}>Register New Driver</Text>
         </TouchableOpacity>
       )}
@@ -382,7 +382,7 @@ export default function TripAdminDrivers() {
               onPress={() => setEditingDriver(null)}
               accessibilityLabel="Close modal"
             >
-              <Ionicons name="close" size={24} color={theme.colors.grey2} />
+              <X size={24} color={theme.colors.grey2} />
             </TouchableOpacity>
           </View>
 
@@ -416,7 +416,7 @@ export default function TripAdminDrivers() {
 
             {editError && (
               <View style={styles.errorBox}>
-                <Ionicons name="alert-circle-outline" size={16} color={theme.colors.error} />
+                <AlertCircle size={16} color={theme.colors.error} />
                 <Text style={styles.errorText}>{editError}</Text>
               </View>
             )}
@@ -451,7 +451,7 @@ export default function TripAdminDrivers() {
               onPress={() => setModalVisible(false)}
               accessibilityLabel="Close modal"
             >
-              <Ionicons name="close" size={24} color={theme.colors.grey2} />
+              <X size={24} color={theme.colors.grey2} />
             </TouchableOpacity>
           </View>
 
@@ -490,7 +490,7 @@ export default function TripAdminDrivers() {
 
             {registerError && (
               <View style={styles.errorBox}>
-                <Ionicons name="alert-circle-outline" size={16} color={theme.colors.error} />
+                <AlertCircle size={16} color={theme.colors.error} />
                 <Text style={styles.errorText}>{registerError}</Text>
               </View>
             )}

@@ -16,7 +16,7 @@ import {
   Alert,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from 'expo-router';
-import Ionicons from '@react-native-vector-icons/ionicons';
+import { AlertCircle, AlertTriangle, Ban, CheckCircle, CloudOff, Eye, EyeOff, Plus, PlusCircle, Trash2, UserCircle, Users, X } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
 import ScreenTransition from '@/components/ScreenTransition';
@@ -146,7 +146,7 @@ export default function StateAdminTripAdmins() {
             style={styles.headerBtn}
             accessibilityLabel="Add Trip Admin"
           >
-            <Ionicons name="add-circle-outline" size={26} color={theme.colors.primary} />
+            <PlusCircle size={26} color={theme.colors.primary} />
           </TouchableOpacity>
         ),
       });
@@ -311,7 +311,7 @@ export default function StateAdminTripAdmins() {
     <View style={[styles.card, !item.isActive && styles.cardInactive]}>
       <View style={styles.cardTop}>
         <View style={styles.emailRow}>
-          <Ionicons name="person-circle-outline" size={20} color={theme.colors.grey1} />
+          <UserCircle size={20} color={theme.colors.grey1} />
           <View style={{ flex: 1 }}>
             {displayName ? (
               <Text style={styles.nameText} numberOfLines={1}>{displayName}</Text>
@@ -359,11 +359,9 @@ export default function StateAdminTripAdmins() {
             <ActivityIndicator size="small" color={theme.colors.white} />
           ) : (
             <>
-              <Ionicons
-                name={item.isActive ? 'ban-outline' : 'checkmark-circle-outline'}
-                size={15}
-                color={theme.colors.white}
-              />
+              {item.isActive ? <Ban size={15}
+                color={theme.colors.white} /> : <CheckCircle size={15}
+                color={theme.colors.white} />}
               <Text style={styles.activeToggleBtnText}>
                 {item.isActive ? 'Deactivate' : 'Reactivate'}
               </Text>
@@ -374,7 +372,7 @@ export default function StateAdminTripAdmins() {
 
       {activeToggleError[item.id] && (
         <View style={styles.cardError}>
-          <Ionicons name="alert-circle-outline" size={13} color={theme.colors.error} />
+          <AlertCircle size={13} color={theme.colors.error} />
           <Text style={styles.cardErrorText}>{activeToggleError[item.id]}</Text>
         </View>
       )}
@@ -389,7 +387,7 @@ export default function StateAdminTripAdmins() {
           <ActivityIndicator size="small" color={theme.colors.white} />
         ) : (
           <>
-            <Ionicons name="trash-outline" size={15} color={theme.colors.white} />
+            <Trash2 size={15} color={theme.colors.white} />
             <Text style={styles.deleteAdminBtnText}>Delete Account</Text>
           </>
         )}
@@ -397,7 +395,7 @@ export default function StateAdminTripAdmins() {
 
       {deleteError[item.id] && (
         <View style={styles.cardError}>
-          <Ionicons name="alert-circle-outline" size={13} color={theme.colors.error} />
+          <AlertCircle size={13} color={theme.colors.error} />
           <Text style={styles.cardErrorText}>{deleteError[item.id]}</Text>
         </View>
       )}
@@ -418,7 +416,7 @@ export default function StateAdminTripAdmins() {
   if (fetchError && admins.length === 0) {
     return (
       <View style={styles.center}>
-        <Ionicons name="cloud-offline-outline" size={48} color={theme.colors.inactive} />
+        <CloudOff size={48} color={theme.colors.inactive} />
         <Text style={styles.fetchErrorTitle}>{fetchError}</Text>
         <TouchableOpacity
           style={styles.retryButton}
@@ -455,7 +453,7 @@ export default function StateAdminTripAdmins() {
             <Text style={styles.listHeaderTitle}>Trip Admins</Text>
             {toggleError && (
               <View style={styles.inlineError}>
-                <Ionicons name="alert-circle-outline" size={15} color={theme.colors.error} />
+                <AlertCircle size={15} color={theme.colors.error} />
                 <Text style={styles.inlineErrorText}>{toggleError}</Text>
               </View>
             )}
@@ -463,7 +461,7 @@ export default function StateAdminTripAdmins() {
         }
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Ionicons name="people-outline" size={48} color={theme.colors.inactive} />
+            <Users size={48} color={theme.colors.inactive} />
             <Text style={styles.emptyTitle}>No Trip Admins yet</Text>
             <Text style={styles.emptySubtitle}>Tap + to add the first Trip Admin</Text>
           </View>
@@ -496,7 +494,7 @@ export default function StateAdminTripAdmins() {
           activeOpacity={0.85}
           accessibilityLabel="Add Trip Admin"
         >
-          <Ionicons name="add" size={28} color={theme.colors.white} />
+          <Plus size={28} color={theme.colors.white} />
         </TouchableOpacity>
       )}
 
@@ -510,7 +508,7 @@ export default function StateAdminTripAdmins() {
         <View style={styles.overlayBackdrop}>
           <View style={styles.warningCard}>
             <View style={styles.warningIconRow}>
-              <Ionicons name="warning-outline" size={28} color="#F59E0B" />
+              <AlertTriangle size={28} color="#F59E0B" />
             </View>
             <Text style={styles.warningTitle}>Active Trips Warning</Text>
             <Text style={styles.warningBody}>
@@ -568,7 +566,7 @@ export default function StateAdminTripAdmins() {
               onPress={() => setModalVisible(false)}
               accessibilityLabel="Close"
             >
-              <Ionicons name="close" size={24} color={theme.colors.grey2} />
+              <X size={24} color={theme.colors.grey2} />
             </TouchableOpacity>
           </View>
 
@@ -628,17 +626,15 @@ export default function StateAdminTripAdmins() {
                 onPress={() => setShowPassword((v) => !v)}
                 activeOpacity={0.7}
               >
-                <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={20}
-                  color={theme.colors.grey1}
-                />
+                {showPassword ? <EyeOff size={20}
+                  color={theme.colors.grey1} /> : <Eye size={20}
+                  color={theme.colors.grey1} />}
               </TouchableOpacity>
             </View>
 
             {submitError && (
               <View style={styles.errorBox}>
-                <Ionicons name="alert-circle-outline" size={16} color={theme.colors.error} />
+                <AlertCircle size={16} color={theme.colors.error} />
                 <Text style={styles.errorText}>{submitError}</Text>
               </View>
             )}

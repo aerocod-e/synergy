@@ -34,9 +34,7 @@
         }
       ],
       "expo-font",
-      "expo-web-browser",
-      ["@react-native-vector-icons/ionicons"],
-      ["@react-native-vector-icons/feather"]
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

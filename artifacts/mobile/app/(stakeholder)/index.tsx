@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import Ionicons from '@react-native-vector-icons/ionicons';
+import { Car, CloudOff, ExternalLink, Navigation, Receipt } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
 import ScreenTransition from '@/components/ScreenTransition';
@@ -161,7 +161,7 @@ export default function StakeholderHome() {
   if (fetchError) {
     return (
       <View style={styles.center}>
-        <Ionicons name="cloud-offline-outline" size={48} color={theme.colors.inactive} />
+        <CloudOff size={48} color={theme.colors.inactive} />
         <Text style={styles.errorTitle}>{fetchError}</Text>
         <TouchableOpacity
           style={styles.retryButton}
@@ -180,13 +180,13 @@ export default function StakeholderHome() {
     <View style={styles.card}>
       <View style={styles.cardMain}>
         <View style={styles.routeRow}>
-          <Ionicons name="navigate-outline" size={14} color={theme.colors.grey1} />
+          <Navigation size={14} color={theme.colors.grey1} />
           <Text style={styles.routeText} numberOfLines={1}>
             {item.loadingStateName} → {item.unloadingStateName}
           </Text>
         </View>
         <View style={styles.vehicleRow}>
-          <Ionicons name="car-outline" size={13} color={theme.colors.grey1} />
+          <Car size={13} color={theme.colors.grey1} />
           <Text style={styles.vehicleText}>{item.vehicleNumber}</Text>
         </View>
         <Text style={styles.dateText}>{formatWAT(item.createdAt)}</Text>
@@ -222,7 +222,7 @@ export default function StakeholderHome() {
         activeOpacity={0.7}
       >
         <Text style={styles.verifyLinkText}>Verify a payment publicly</Text>
-        <Ionicons name="open-outline" size={14} color={theme.colors.primary} />
+        <ExternalLink size={14} color={theme.colors.primary} />
       </TouchableOpacity>
       <View style={{ height: theme.PILL_NAV_BOTTOM_PADDING }} />
     </>
@@ -294,7 +294,7 @@ export default function StakeholderHome() {
         }
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Ionicons name="receipt-outline" size={48} color={theme.colors.inactive} />
+            <Receipt size={48} color={theme.colors.inactive} />
             <Text style={styles.emptyTitle}>No transactions yet</Text>
             <Text style={styles.emptySubtitle}>
               {activeFilter === 'all'

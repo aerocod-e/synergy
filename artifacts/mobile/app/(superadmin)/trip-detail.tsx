@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import Ionicons from '@react-native-vector-icons/ionicons';
+import { AlertCircle, ChevronLeft } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
 import { getTripById } from '@/services/api';
 import TripDetailView, { type TripDetail } from '@/components/TripDetailView';
@@ -40,7 +40,7 @@ export default function SuperAdminTripDetail() {
             style={styles.backButton}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
+            <ChevronLeft size={24} color={theme.colors.primary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Trip Details</Text>
           <View style={styles.headerSpacer} />
@@ -61,13 +61,13 @@ export default function SuperAdminTripDetail() {
             style={styles.backButton}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
+            <ChevronLeft size={24} color={theme.colors.primary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Trip Details</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.centered}>
-          <Ionicons name="alert-circle-outline" size={48} color={theme.colors.inactive} />
+          <AlertCircle size={48} color={theme.colors.inactive} />
           <Text style={styles.errorText}>Failed to load trip</Text>
           <TouchableOpacity style={styles.retryButton} onPress={fetchTrip}>
             <Text style={styles.retryButtonText}>Retry</Text>
@@ -85,7 +85,7 @@ export default function SuperAdminTripDetail() {
           style={styles.backButton}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
+          <ChevronLeft size={24} color={theme.colors.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Trip Details</Text>
         <View style={styles.headerSpacer} />

@@ -14,15 +14,12 @@ import { ActivityIndicator, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { setDynamicLoadingEnabled } from "@react-native-vector-icons/common";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useAuth } from "@/hooks/useAuth";
 import { AuthTokens, AuthUser } from "@/types";
 
 SplashScreen.preventAutoHideAsync();
-
-setDynamicLoadingEnabled(false);
 
 const queryClient = new QueryClient();
 
@@ -117,8 +114,6 @@ export default function RootLayout() {
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
-    'Ionicons': require('../assets/fonts/Ionicons.ttf'),
-    'Feather': require('../assets/fonts/Feather.ttf'),
   });
 
   useEffect(() => {

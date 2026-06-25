@@ -1,4 +1,4 @@
-import Ionicons from '@react-native-vector-icons/ionicons';
+import { ArrowLeft, Calendar, Car, ChevronDown, ChevronUp, FileText, Navigation, Search, User, XCircle } from 'lucide-react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -104,24 +104,24 @@ function TripCard({
       </View>
 
       <View style={styles.infoRow}>
-        <Ionicons name="navigate-outline" size={14} color={theme.colors.grey1} style={styles.infoIcon} />
+        <Navigation size={14} color={theme.colors.grey1} style={styles.infoIcon} />
         <Text style={styles.infoText}>{trip.loadingStateName} → {trip.unloadingStateName}</Text>
       </View>
 
       <View style={styles.infoRow}>
-        <Ionicons name="car-outline" size={14} color={theme.colors.grey1} style={styles.infoIcon} />
+        <Car size={14} color={theme.colors.grey1} style={styles.infoIcon} />
         <Text style={styles.infoText}>{trip.vehicleNumber}</Text>
         {trip.driverName ? (
           <>
             <Text style={styles.dot}> · </Text>
-            <Ionicons name="person-outline" size={14} color={theme.colors.grey1} style={styles.infoIcon} />
+            <User size={14} color={theme.colors.grey1} style={styles.infoIcon} />
             <Text style={styles.infoText}>{trip.driverName}</Text>
           </>
         ) : null}
       </View>
 
       <View style={styles.infoRow}>
-        <Ionicons name="calendar-outline" size={14} color={theme.colors.grey1} style={styles.infoIcon} />
+        <Calendar size={14} color={theme.colors.grey1} style={styles.infoIcon} />
         <Text style={styles.infoText}>{date}</Text>
       </View>
 
@@ -129,11 +129,9 @@ function TripCard({
         <Text style={styles.expandLabel}>
           {expanded ? 'Hide payment details' : 'View payment details'}
         </Text>
-        <Ionicons
-          name={expanded ? 'chevron-up' : 'chevron-down'}
-          size={16}
-          color={theme.colors.grey1}
-        />
+        {expanded ? <ChevronUp size={16}
+          color={theme.colors.grey1} /> : <ChevronDown size={16}
+          color={theme.colors.grey1} />}
       </View>
 
       {expanded && (
@@ -213,7 +211,7 @@ export default function LookupScreen() {
           style={styles.backBtn}
           hitSlop={8}
         >
-          <Ionicons name="arrow-back" size={22} color={theme.colors.black} />
+          <ArrowLeft size={22} color={theme.colors.black} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Trip Lookup</Text>
         <View style={styles.headerSpacer} />
@@ -221,7 +219,7 @@ export default function LookupScreen() {
 
       <View style={styles.searchRow}>
         <View style={styles.searchBar}>
-          <Ionicons name="search" size={18} color={theme.colors.grey1} style={styles.searchIcon} />
+          <Search size={18} color={theme.colors.grey1} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder="Trip ID, driver, vehicle, license, or location"
@@ -234,7 +232,7 @@ export default function LookupScreen() {
           />
           {query.length > 0 && (
             <TouchableOpacity onPress={() => setQuery('')} hitSlop={8}>
-              <Ionicons name="close-circle" size={18} color={theme.colors.grey1} />
+              <XCircle size={18} color={theme.colors.grey1} />
             </TouchableOpacity>
           )}
         </View>
@@ -247,7 +245,7 @@ export default function LookupScreen() {
         </View>
       ) : !hasSearched ? (
         <View style={styles.center}>
-          <Ionicons name="search-outline" size={56} color={theme.colors.inactive} />
+          <Search size={56} color={theme.colors.inactive} />
           <Text style={styles.emptyTitle}>Verify trip payment status</Text>
           <Text style={styles.emptySubtitle}>
             Search by Trip ID, driver name, license number, phone number, vehicle plate, or location
@@ -255,7 +253,7 @@ export default function LookupScreen() {
         </View>
       ) : results.length === 0 ? (
         <View style={styles.center}>
-          <Ionicons name="document-outline" size={56} color={theme.colors.inactive} />
+          <FileText size={56} color={theme.colors.inactive} />
           <Text style={styles.emptyTitle}>No trips found</Text>
           <Text style={styles.emptySubtitle}>Try a different search term</Text>
         </View>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import Ionicons from '@react-native-vector-icons/ionicons';
+import { AlertCircle, ChevronRight, Search } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
 import { getTripById } from '@/services/api';
 import TripDetailView, { type TripDetail } from '@/components/TripDetailView';
@@ -42,7 +42,7 @@ export default function TripAdminTripDetail() {
   if (error || !trip) {
     return (
       <View style={styles.centered}>
-        <Ionicons name="alert-circle-outline" size={48} color={theme.colors.inactive} />
+        <AlertCircle size={48} color={theme.colors.inactive} />
         <Text style={styles.errorText}>Failed to load trip</Text>
         <TouchableOpacity style={styles.retryButton} onPress={fetchTrip}>
           <Text style={styles.retryButtonText}>Retry</Text>
@@ -57,9 +57,9 @@ export default function TripAdminTripDetail() {
       onPress={() => router.push(`/(public)/lookup?q=${encodeURIComponent(trip.tripCode!)}`)}
       activeOpacity={0.7}
     >
-      <Ionicons name="search-outline" size={18} color={theme.colors.primary} />
+      <Search size={18} color={theme.colors.primary} />
       <Text style={styles.verifyRowText}>Verify this trip's payment status</Text>
-      <Ionicons name="chevron-forward" size={16} color={theme.colors.grey1} />
+      <ChevronRight size={16} color={theme.colors.grey1} />
     </TouchableOpacity>
   ) : undefined;
 

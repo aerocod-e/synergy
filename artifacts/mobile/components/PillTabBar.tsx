@@ -1,19 +1,19 @@
-import Ionicons from '@react-native-vector-icons/ionicons';
 import { BlurView } from 'expo-blur';
-import { useEffect, useRef, useState } from 'react';
+import { Car, Circle, List, Receipt, Settings, User, Users } from 'lucide-react-native';
+import { ComponentType, useEffect, useRef, useState } from 'react';
 import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
 
-type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
+type IconComponent = ComponentType<{ size?: number; color?: string }>;
 
-const TAB_ICONS: Record<string, { active: IoniconsName; inactive: IoniconsName }> = {
-  index: { active: 'list', inactive: 'list' },
-  config: { active: 'settings', inactive: 'settings-outline' },
-  users: { active: 'people', inactive: 'people-outline' },
-  ledger: { active: 'receipt', inactive: 'receipt-outline' },
-  vehicles: { active: 'car', inactive: 'car-outline' },
-  'trip-admins': { active: 'person', inactive: 'person-outline' },
+const TAB_ICONS: Record<string, IconComponent> = {
+  index: List,
+  config: Settings,
+  users: Users,
+  ledger: Receipt,
+  vehicles: Car,
+  'trip-admins': User,
 };
 
 const PILL_PADDING = 6;
@@ -99,11 +99,7 @@ export default function PillTabBar(props: any) {
               : options.title ?? route.name;
           const isFocused = state.routes[state.index]?.key === route.key;
 
-          const iconSet = TAB_ICONS[route.name] ?? {
-            active: 'ellipse' as IoniconsName,
-            inactive: 'ellipse-outline' as IoniconsName,
-          };
-          const iconName: IoniconsName = isFocused ? iconSet.active : iconSet.inactive;
+          const IconComponent = TAB_ICONS[route.name] ?? Circle;
 
           const onPress = () => {
             const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
@@ -121,8 +117,7 @@ export default function PillTabBar(props: any) {
               accessibilityState={isFocused ? { selected: true } : {}}
               accessibilityLabel={options.tabBarAccessibilityLabel}
             >
-              <Ionicons
-                name={iconName}
+              <IconComponent
                 size={20}
                 color={isFocused ? theme.colors.white : theme.colors.grey1}
               />

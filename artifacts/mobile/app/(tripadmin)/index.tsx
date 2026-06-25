@@ -17,7 +17,7 @@ import {
   Platform,
 } from 'react-native';
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
-import Ionicons from '@react-native-vector-icons/ionicons';
+import { AlertCircle, AlertTriangle, Car, ChevronDown, ChevronUp, CloudOff, LogOut, MapPin, Plus, PlusCircle, User, X } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
 import ScreenTransition from '@/components/ScreenTransition';
@@ -242,10 +242,10 @@ export default function TripAdminTrips() {
               style={styles.headerBtn}
               accessibilityLabel="New trip"
             >
-              <Ionicons name="add-circle-outline" size={26} color={theme.colors.primary} />
+              <PlusCircle size={26} color={theme.colors.primary} />
             </TouchableOpacity>
             <TouchableOpacity onPress={handleLogout} style={styles.headerBtn}>
-              <Ionicons name="log-out-outline" size={24} color={theme.colors.primary} />
+              <LogOut size={24} color={theme.colors.primary} />
             </TouchableOpacity>
           </View>
         ),
@@ -366,14 +366,14 @@ export default function TripAdminTrips() {
           </View>
         </View>
         <View style={styles.cardRoute}>
-          <Ionicons name="location-outline" size={14} color={theme.colors.grey1} />
+          <MapPin size={14} color={theme.colors.grey1} />
           <Text style={styles.routeText} numberOfLines={1}>
             {item.loadingState.name} → {item.unloadingState.name}
           </Text>
         </View>
         {item.driver && (
           <View style={styles.cardDriver}>
-            <Ionicons name="person-outline" size={14} color={theme.colors.grey1} />
+            <User size={14} color={theme.colors.grey1} />
             <Text style={styles.driverEmail} numberOfLines={1}>{item.driver.email}</Text>
           </View>
         )}
@@ -408,7 +408,7 @@ export default function TripAdminTrips() {
   if (fetchError && trips.length === 0) {
     return (
       <View style={styles.center}>
-        <Ionicons name="cloud-offline-outline" size={48} color={theme.colors.inactive} />
+        <CloudOff size={48} color={theme.colors.inactive} />
         <Text style={styles.fetchErrorTitle}>{fetchError}</Text>
         <TouchableOpacity
           style={styles.retryButton}
@@ -442,7 +442,7 @@ export default function TripAdminTrips() {
         }
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Ionicons name="car-outline" size={48} color={theme.colors.inactive} />
+            <Car size={48} color={theme.colors.inactive} />
             <Text style={styles.emptyTitle}>No trips yet</Text>
             <Text style={styles.emptySubtitle}>Tap + to create your first trip</Text>
           </View>
@@ -475,7 +475,7 @@ export default function TripAdminTrips() {
           activeOpacity={0.85}
           accessibilityLabel="New trip"
         >
-          <Ionicons name="add" size={28} color={theme.colors.white} />
+          <Plus size={28} color={theme.colors.white} />
         </TouchableOpacity>
       )}
 
@@ -497,7 +497,7 @@ export default function TripAdminTrips() {
               onPress={() => setModalVisible(false)}
               accessibilityLabel="Close"
             >
-              <Ionicons name="close" size={24} color={theme.colors.grey2} />
+              <X size={24} color={theme.colors.grey2} />
             </TouchableOpacity>
           </View>
 
@@ -515,7 +515,7 @@ export default function TripAdminTrips() {
               {/* Pricing chart error */}
               {pricingError && (
                 <View style={styles.pricingErrorBox}>
-                  <Ionicons name="warning-outline" size={18} color="#d97706" />
+                  <AlertTriangle size={18} color="#d97706" />
                   <Text style={styles.pricingErrorText}>{pricingError}</Text>
                 </View>
               )}
@@ -584,7 +584,7 @@ export default function TripAdminTrips() {
               )}
               {vehicleRegisterError && (
                 <View style={styles.errorBox}>
-                  <Ionicons name="alert-circle-outline" size={16} color={theme.colors.error} />
+                  <AlertCircle size={16} color={theme.colors.error} />
                   <Text style={styles.errorText}>{vehicleRegisterError}</Text>
                 </View>
               )}
@@ -616,11 +616,9 @@ export default function TripAdminTrips() {
                 >
                   {loadingStateName || 'Select loading state…'}
                 </Text>
-                <Ionicons
-                  name={activeStatePicker === 'loading' ? 'chevron-up' : 'chevron-down'}
-                  size={18}
-                  color={theme.colors.grey1}
-                />
+                {activeStatePicker === 'loading' ? <ChevronUp size={18}
+                  color={theme.colors.grey1} /> : <ChevronDown size={18}
+                  color={theme.colors.grey1} />}
               </TouchableOpacity>
               {activeStatePicker === 'loading' && (
                 <ScrollView
@@ -658,11 +656,9 @@ export default function TripAdminTrips() {
                 >
                   {unloadingStateName || 'Select unloading state…'}
                 </Text>
-                <Ionicons
-                  name={activeStatePicker === 'unloading' ? 'chevron-up' : 'chevron-down'}
-                  size={18}
-                  color={theme.colors.grey1}
-                />
+                {activeStatePicker === 'unloading' ? <ChevronUp size={18}
+                  color={theme.colors.grey1} /> : <ChevronDown size={18}
+                  color={theme.colors.grey1} />}
               </TouchableOpacity>
               {activeStatePicker === 'unloading' && (
                 <ScrollView
@@ -734,7 +730,7 @@ export default function TripAdminTrips() {
               {/* Submit error */}
               {submitError && (
                 <View style={styles.errorBox}>
-                  <Ionicons name="alert-circle-outline" size={16} color={theme.colors.error} />
+                  <AlertCircle size={16} color={theme.colors.error} />
                   <Text style={styles.errorText}>{submitError}</Text>
                 </View>
               )}
@@ -778,7 +774,7 @@ export default function TripAdminTrips() {
               <Text style={styles.cancelSheetTitle}>Request Cancellation</Text>
               {cancelModalTripStatus === 'in_transit' && (
                 <View style={styles.inTransitWarningBanner}>
-                  <Ionicons name="warning-outline" size={18} color="#d97706" />
+                  <AlertTriangle size={18} color="#d97706" />
                   <Text style={styles.inTransitWarningText}>
                     This trip is currently in transit. Cancellation requests for in-transit trips require State Admin approval and may take longer to process.
                   </Text>
@@ -804,7 +800,7 @@ export default function TripAdminTrips() {
               <Text style={styles.charCounter}>{cancelReason.length} / 500</Text>
               {cancelError && (
                 <View style={[styles.errorBox, { marginTop: 8 }]}>
-                  <Ionicons name="alert-circle-outline" size={16} color={theme.colors.error} />
+                  <AlertCircle size={16} color={theme.colors.error} />
                   <Text style={styles.errorText}>{cancelError}</Text>
                 </View>
               )}

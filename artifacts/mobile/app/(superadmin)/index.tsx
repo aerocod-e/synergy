@@ -7,8 +7,20 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Ionicons from '@react-native-vector-icons/ionicons';
-import type { ComponentProps } from 'react';
+import {
+  AlertTriangle,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  Briefcase,
+  Building2,
+  CloudOff,
+  Map,
+  ShieldCheck,
+  User,
+  Users,
+  Wallet,
+} from 'lucide-react-native';
+import type { ComponentType } from 'react';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
 import ScreenTransition from '@/components/ScreenTransition';
@@ -40,10 +52,8 @@ function SkeletonCard({ wide = false }: { wide?: boolean }) {
   );
 }
 
-type IoniconsName = ComponentProps<typeof Ionicons>['name'];
-
 interface SummaryCardProps {
-  icon: IoniconsName;
+  icon: ComponentType<{ size?: number; color?: string; style?: any }>;
   iconColor?: string;
   value: string;
   label: string;
@@ -51,11 +61,11 @@ interface SummaryCardProps {
   valueColor?: string;
 }
 
-function SummaryCard({ icon, iconColor, value, label, wide = false, valueColor }: SummaryCardProps) {
+function SummaryCard({ icon: Icon, iconColor, value, label, wide = false, valueColor }: SummaryCardProps) {
   if (wide) {
     return (
       <View style={[styles.card, styles.cardWide]}>
-        <Ionicons name={icon} size={32} color={iconColor ?? theme.colors.primary} />
+        <Icon size={32} color={iconColor ?? theme.colors.primary} />
         <View style={styles.cardWideContent}>
           <Text style={[styles.cardValue, valueColor ? { color: valueColor } : {}]}>{value}</Text>
           <Text style={styles.cardLabel}>{label}</Text>
@@ -65,7 +75,7 @@ function SummaryCard({ icon, iconColor, value, label, wide = false, valueColor }
   }
   return (
     <View style={styles.card}>
-      <Ionicons name={icon} size={26} color={iconColor ?? theme.colors.primary} style={styles.cardIcon} />
+      <Icon size={26} color={iconColor ?? theme.colors.primary} style={styles.cardIcon} />
       <Text style={[styles.cardValue, valueColor ? { color: valueColor } : {}]}>{value}</Text>
       <Text style={styles.cardLabel}>{label}</Text>
     </View>
@@ -171,7 +181,7 @@ export default function SuperAdminDashboard() {
   if (hasError) {
     return (
       <View style={styles.centered}>
-        <Ionicons name="cloud-offline-outline" size={48} color={theme.colors.inactive} />
+        <CloudOff size={48} color={theme.colors.inactive} />
         <Text style={styles.errorText}>Failed to load dashboard</Text>
         <TouchableOpacity style={styles.retryButton} onPress={() => fetchDashboard()}>
           <Text style={styles.retryButtonText}>Retry</Text>
@@ -199,19 +209,19 @@ export default function SuperAdminDashboard() {
       <Text style={styles.sectionLabel}>USERS</Text>
       <View style={styles.grid}>
         <SummaryCard
-          icon="shield-checkmark-outline"
+          icon={ShieldCheck}
           value={String(data?.stateAdmins ?? '—')}
           label="State Admins"
         />
         <SummaryCard
-          icon="person-outline"
+          icon={User}
           value={String(data?.tripAdmins ?? '—')}
           label="Trip Admins"
         />
       </View>
       <View style={styles.grid}>
         <SummaryCard
-          icon="briefcase-outline"
+          icon={Briefcase}
           iconColor="#15803d"
           value={String(data?.stakeholderUsers ?? '—')}
           label="Stakeholder Users"
@@ -221,19 +231,19 @@ export default function SuperAdminDashboard() {
       <Text style={[styles.sectionLabel, styles.sectionLabelSpaced]}>PLATFORM</Text>
       <View style={styles.grid}>
         <SummaryCard
-          icon="map-outline"
+          icon={Map}
           value={String(data?.statesCount ?? '—')}
           label="States"
         />
         <SummaryCard
-          icon="business-outline"
+          icon={Building2}
           iconColor="#d97706"
           value={String(data?.stakeholdersCount ?? '—')}
           label="Stakeholders"
         />
       </View>
       <SummaryCard
-        icon="wallet-outline"
+        icon={Wallet}
         iconColor="#15803d"
         value={data != null ? formatNaira(data.grandTotal) : '—'}
         label="Platform Grand Total Collected"
@@ -244,26 +254,26 @@ export default function SuperAdminDashboard() {
       <Text style={[styles.sectionLabel, styles.sectionLabelSpaced]}>ACTIVE PRICING CHART</Text>
       {data?.pricing == null ? (
         <View style={[styles.card, styles.cardWide, styles.noPricingCard]}>
-          <Ionicons name="warning-outline" size={22} color="#d97706" />
+          <AlertTriangle size={22} color="#d97706" />
           <Text style={styles.noPricingText}>No active pricing chart configured</Text>
         </View>
       ) : (
         <>
           <View style={styles.grid}>
             <SummaryCard
-              icon="arrow-up-circle-outline"
+              icon={ArrowUpCircle}
               value={formatNaira(data.pricing.loadingFee)}
               label="Loading Fee"
             />
             <SummaryCard
-              icon="arrow-down-circle-outline"
+              icon={ArrowDownCircle}
               iconColor="#2a8a4a"
               value={formatNaira(data.pricing.unloadingFee)}
               label="Unloading Fee"
             />
           </View>
           <SummaryCard
-            icon="people-outline"
+            icon={Users}
             iconColor="#d97706"
             value={String(data.pricing.rateCount)}
             label="Stakeholder Rates Configured"

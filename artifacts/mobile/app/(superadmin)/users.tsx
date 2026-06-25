@@ -13,7 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Ionicons from '@react-native-vector-icons/ionicons';
+import { Check, ChevronRight, UserPlus, X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { getUsers, createUser, getStates } from '@/services/api';
@@ -58,7 +58,7 @@ function UserRow({ user, onPress }: { user: User; onPress: () => void }) {
         </View>
         <View style={styles.itemRight}>
           <View style={[styles.statusDot, user.isActive ? styles.dotActive : styles.dotInactive]} />
-          <Ionicons name="chevron-forward" size={16} color={theme.colors.inactive} style={styles.chevron} />
+          <ChevronRight size={16} color={theme.colors.inactive} style={styles.chevron} />
         </View>
       </View>
       <View style={[styles.roleBadge, { backgroundColor: badgeColors.bg }]}>
@@ -283,7 +283,7 @@ export default function UsersScreen() {
 
       {/* FAB */}
       <TouchableOpacity style={styles.fab} onPress={openModal} activeOpacity={0.85}>
-        <Ionicons name="person-add-outline" size={22} color={theme.colors.white} />
+        <UserPlus size={22} color={theme.colors.white} />
       </TouchableOpacity>
 
       {/* Create User Modal */}
@@ -301,7 +301,7 @@ export default function UsersScreen() {
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>New User</Text>
             <TouchableOpacity onPress={() => setModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Ionicons name="close" size={24} color={theme.colors.grey2} />
+              <X size={24} color={theme.colors.grey2} />
             </TouchableOpacity>
           </View>
 
@@ -415,7 +415,7 @@ export default function UsersScreen() {
                                 {item.label}
                               </Text>
                               {selected && (
-                                <Ionicons name="checkmark" size={16} color={theme.colors.primary} />
+                                <Check size={16} color={theme.colors.primary} />
                               )}
                             </TouchableOpacity>
                           );

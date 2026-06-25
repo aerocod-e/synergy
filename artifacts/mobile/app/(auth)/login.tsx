@@ -1,4 +1,4 @@
-import Ionicons from '@react-native-vector-icons/ionicons';
+import { Eye, EyeOff, Search, X } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
@@ -210,8 +210,6 @@ export default function LoginScreen() {
           <View style={styles.header}>
             <Text style={styles.appName}>Synergy Systems</Text>
             <Text style={styles.subtitle}>Cargo Tax Management</Text>
-            <Text style={{ fontFamily: 'Ionicons', fontSize: 30, color: 'red' }}>{'\uF382'}</Text>
-            <Text style={{ fontFamily: 'Feather', fontSize: 30, color: 'blue' }}>{'\uF184'}</Text>
           </View>
 
           <View style={styles.formCard}>
@@ -248,11 +246,9 @@ export default function LoginScreen() {
                 style={styles.eyeBtn}
                 activeOpacity={0.7}
               >
-                <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={20}
-                  color={theme.colors.grey1}
-                />
+                {showPassword ? <EyeOff size={20}
+                  color={theme.colors.grey1} /> : <Eye size={20}
+                  color={theme.colors.grey1} />}
               </TouchableOpacity>
             </View>
 
@@ -287,7 +283,7 @@ export default function LoginScreen() {
             onPress={() => router.push('/(public)/lookup')}
             activeOpacity={0.7}
           >
-            <Ionicons name="search-outline" size={14} color={theme.colors.primary} />
+            <Search size={14} color={theme.colors.primary} />
             <Text style={styles.publicLookupText}>Verify a trip payment</Text>
           </TouchableOpacity>
         </View>
@@ -310,7 +306,7 @@ export default function LoginScreen() {
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>Demo accounts</Text>
               <TouchableOpacity onPress={closeDemo}>
-                <Ionicons name="close" size={20} color={theme.colors.grey1} />
+                <X size={20} color={theme.colors.grey1} />
               </TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false} bounces={false}>

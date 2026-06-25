@@ -3,3 +3,4 @@
 - [Expo web FAB pattern](expo-web-fab-pattern.md) — floating FABs fail on Expo web; use navigation.setOptions headerRight instead for primary action buttons in Tab screens.
 - [Expo web add-button reliability](expo-web-add-button.md) — useFocusEffect/setOptions header button may not fire in time for Playwright; add a Platform.OS==='web' absolute-positioned button in screen body as fallback.
 - [Expo web pointerEvents warning](expo-web-pointer-events.md) — react-native-web 0.21.x emits a warnOnce for any pointerEvents JSX prop; root fix is patching createDOMProps to remove the warnOnce call.
+- [Expo Android icon rendering](expo-android-icons.md) — use lucide-react-native (SVG), not font-based vector icons; icon-as-component-prop pattern + pin react-native-svg to Expo version.

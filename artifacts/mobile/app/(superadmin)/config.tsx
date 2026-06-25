@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Ionicons from '@react-native-vector-icons/ionicons';
+import { ChevronRight, Pencil, Search, X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
@@ -483,7 +483,7 @@ export default function ConfigScreen() {
                         style={styles.editStateBtn}
                         activeOpacity={0.7}
                       >
-                        <Ionicons name="pencil-outline" size={15} color={theme.colors.primary} />
+                        <Pencil size={15} color={theme.colors.primary} />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -589,9 +589,9 @@ export default function ConfigScreen() {
           onPress={() => router.push('/(public)/lookup')}
           activeOpacity={0.7}
         >
-          <Ionicons name="search-outline" size={20} color={theme.colors.primary} />
+          <Search size={20} color={theme.colors.primary} />
           <Text style={styles.verifyRowText}>Verify Trip Payment</Text>
-          <Ionicons name="chevron-forward" size={16} color={theme.colors.grey1} />
+          <ChevronRight size={16} color={theme.colors.grey1} />
         </TouchableOpacity>
 
         <View style={styles.bottomSpacer} />
@@ -613,7 +613,7 @@ export default function ConfigScreen() {
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Set Rate</Text>
             <TouchableOpacity onPress={() => setSetRateModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Ionicons name="close" size={24} color={theme.colors.grey2} />
+              <X size={24} color={theme.colors.grey2} />
             </TouchableOpacity>
           </View>
           <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="handled">

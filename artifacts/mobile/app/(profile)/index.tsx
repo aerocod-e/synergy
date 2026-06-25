@@ -1,4 +1,4 @@
-import Ionicons from '@react-native-vector-icons/ionicons';
+import { Eye, EyeOff } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
   View,
@@ -139,11 +139,9 @@ export default function ProfileScreen() {
               style={styles.eyeBtn}
               activeOpacity={0.7}
             >
-              <Ionicons
-                name={showCurrentPw ? 'eye-off-outline' : 'eye-outline'}
-                size={20}
-                color={theme.colors.grey1}
-              />
+              {showCurrentPw ? <EyeOff size={20}
+                color={theme.colors.grey1} /> : <Eye size={20}
+                color={theme.colors.grey1} />}
             </TouchableOpacity>
           </View>
 
@@ -163,11 +161,9 @@ export default function ProfileScreen() {
               style={styles.eyeBtn}
               activeOpacity={0.7}
             >
-              <Ionicons
-                name={showNewPw ? 'eye-off-outline' : 'eye-outline'}
-                size={20}
-                color={theme.colors.grey1}
-              />
+              {showNewPw ? <EyeOff size={20}
+                color={theme.colors.grey1} /> : <Eye size={20}
+                color={theme.colors.grey1} />}
             </TouchableOpacity>
           </View>
           {newPwTooShort && (
@@ -190,11 +186,9 @@ export default function ProfileScreen() {
               style={styles.eyeBtn}
               activeOpacity={0.7}
             >
-              <Ionicons
-                name={showConfirmPw ? 'eye-off-outline' : 'eye-outline'}
-                size={20}
-                color={theme.colors.grey1}
-              />
+              {showConfirmPw ? <EyeOff size={20}
+                color={theme.colors.grey1} /> : <Eye size={20}
+                color={theme.colors.grey1} />}
             </TouchableOpacity>
           </View>
           {pwMismatch && (
