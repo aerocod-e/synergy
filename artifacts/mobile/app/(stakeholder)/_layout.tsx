@@ -4,7 +4,7 @@ export default function StakeholderLayout() {
   return (
     <Tabs
       tabBar={() => null}
-      screenOptions={{ headerShown: false, animation: 'fade' }}
+      screenOptions={{ headerShown: false }}
     >
       <Tabs.Screen name="index" options={{ title: 'Dashboard' }} />
     </Tabs>

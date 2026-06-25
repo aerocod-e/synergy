@@ -5,7 +5,7 @@ export default function TripAdminLayout() {
   return (
     <Tabs
       tabBar={(props) => <PillTabBar {...props} />}
-      screenOptions={{ headerShown: false, animation: 'fade' }}
+      screenOptions={{ headerShown: false }}
     >
       <Tabs.Screen name="index"       options={{ title: 'Trips',    tabBarLabel: 'Trips' }} />
       <Tabs.Screen name="vehicles"    options={{ title: 'Vehicles', tabBarLabel: 'Vehicles' }} />
