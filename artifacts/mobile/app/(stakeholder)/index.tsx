@@ -233,7 +233,7 @@ export default function StakeholderHome() {
   return (
     <View style={styles.container}>
       <TopBar />
-      <ScreenTransition style={{ flex: 1 }}>
+      <ScreenTransition style={{ flex: 1 }} sheet>
       {/* Balance card */}
       <View style={styles.balanceCard}>
         <Text style={styles.balanceLabel}>TOTAL COLLECTED</Text>
