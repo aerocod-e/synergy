@@ -114,8 +114,6 @@ export default function RootLayout() {
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
-    Ionicons: require('@react-native-vector-icons/ionicons/fonts/Ionicons.ttf'),
-    Feather: require('@react-native-vector-icons/feather/fonts/Feather.ttf'),
   });
 
   useEffect(() => {
