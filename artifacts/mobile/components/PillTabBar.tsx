@@ -19,7 +19,7 @@ const TAB_ICONS: Record<string, { active: IoniconsName; inactive: IoniconsName }
 const PILL_PADDING = 6;
 const SLIDER_VERTICAL_INSET = 6;
 
-const HIDDEN_ROUTES = new Set(['create-trip', 'trip-detail']);
+const HIDDEN_ROUTES = new Set(['create-trip', 'trip-detail', 'user-detail']);
 
 export default function PillTabBar(props: any) {
   const { state, descriptors, navigation } = props as {
