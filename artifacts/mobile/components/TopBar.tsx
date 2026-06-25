@@ -1,4 +1,5 @@
-import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, TouchableOpacity, View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,6 +10,7 @@ export default function TopBar() {
   const { user, logout } = useAuthContext();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const initial = user?.firstName
     ? user.firstName[0].toUpperCase()
@@ -17,8 +19,14 @@ export default function TopBar() {
     : '?';
 
   const handleLogout = async () => {
-    await logout();
-    router.replace('/(auth)/login');
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await logout();
+      router.replace('/(auth)/login');
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   return (
@@ -29,8 +37,17 @@ export default function TopBar() {
         </View>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn} activeOpacity={0.8}>
-        <Ionicons name="log-out-outline" size={24} color={theme.colors.primary} />
+      <TouchableOpacity
+        onPress={handleLogout}
+        style={styles.logoutBtn}
+        activeOpacity={0.8}
+        disabled={isLoggingOut}
+      >
+        {isLoggingOut ? (
+          <ActivityIndicator size="small" color={theme.colors.primary} />
+        ) : (
+          <Ionicons name="log-out-outline" size={24} color={theme.colors.primary} />
+        )}
       </TouchableOpacity>
     </View>
   );
@@ -60,5 +77,8 @@ const styles = StyleSheet.create({
   },
   logoutBtn: {
     padding: 8,
+    width: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

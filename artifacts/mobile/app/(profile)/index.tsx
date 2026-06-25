@@ -44,6 +44,7 @@ export default function ProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   const fullName =
     [user?.firstName, user?.lastName].filter(Boolean).join(' ');
@@ -75,8 +76,14 @@ export default function ProfileScreen() {
   };
 
   const handleSignOut = async () => {
-    await logout();
-    router.replace('/(auth)/login');
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await logout();
+      router.replace('/(auth)/login');
+    } finally {
+      setSigningOut(false);
+    }
   };
 
   return (
@@ -175,11 +182,16 @@ export default function ProfileScreen() {
 
         {/* Sign Out */}
         <TouchableOpacity
-          style={styles.signOutBtn}
+          style={[styles.signOutBtn, signingOut && styles.btnDisabled]}
           onPress={handleSignOut}
+          disabled={signingOut}
           activeOpacity={0.85}
         >
-          <Text style={styles.signOutText}>Sign Out</Text>
+          {signingOut ? (
+            <ActivityIndicator color={theme.colors.white} />
+          ) : (
+            <Text style={styles.signOutText}>Sign Out</Text>
+          )}
         </TouchableOpacity>
 
         <Text style={styles.version}>v1.0.0</Text>

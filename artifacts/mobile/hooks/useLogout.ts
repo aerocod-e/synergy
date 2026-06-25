@@ -1,14 +1,22 @@
+import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useAuthContext } from '@/app/_layout';
 
 export function useLogout() {
   const { logout } = useAuthContext();
   const router = useRouter();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleLogout = async () => {
-    await logout();
-    router.replace('/(auth)/login');
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await logout();
+      router.replace('/(auth)/login');
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
-  return { handleLogout };
+  return { handleLogout, isLoggingOut };
 }
