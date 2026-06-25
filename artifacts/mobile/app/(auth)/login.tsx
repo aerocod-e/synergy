@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
+  Animated,
   ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
@@ -139,7 +140,9 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [demoOpen, setDemoOpen] = useState(false);
+  const [demoVisible, setDemoVisible] = useState(false);
+  const overlayOpacity = useRef(new Animated.Value(0)).current;
+  const sheetTranslateY = useRef(new Animated.Value(400)).current;
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -170,11 +173,28 @@ export default function LoginScreen() {
     }
   };
 
+  const openDemo = () => {
+    setDemoVisible(true);
+    overlayOpacity.setValue(0);
+    sheetTranslateY.setValue(400);
+    Animated.parallel([
+      Animated.timing(overlayOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.spring(sheetTranslateY, { toValue: 0, useNativeDriver: true, tension: 68, friction: 11 }),
+    ]).start();
+  };
+
+  const closeDemo = () => {
+    Animated.parallel([
+      Animated.timing(overlayOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
+      Animated.timing(sheetTranslateY, { toValue: 400, duration: 200, useNativeDriver: true }),
+    ]).start(() => setDemoVisible(false));
+  };
+
   const handleSelectDemo = (account: DemoAccount) => {
     setEmail(account.email);
     setPassword(account.password);
     setError('');
-    setDemoOpen(false);
+    closeDemo();
   };
 
   return (
@@ -250,7 +270,7 @@ export default function LoginScreen() {
 
             <TouchableOpacity
               style={styles.demoTrigger}
-              onPress={() => setDemoOpen(true)}
+              onPress={openDemo}
               activeOpacity={0.7}
             >
               <Text style={styles.demoTriggerText}>Use a demo account</Text>
@@ -269,20 +289,21 @@ export default function LoginScreen() {
       </KeyboardAvoidingView>
 
       <Modal
-        visible={demoOpen}
+        visible={demoVisible}
         transparent
-        animationType="slide"
-        onRequestClose={() => setDemoOpen(false)}
+        animationType="none"
+        onRequestClose={closeDemo}
       >
-        <TouchableOpacity
-          style={styles.overlay}
-          activeOpacity={1}
-          onPress={() => setDemoOpen(false)}
-        >
-          <View style={styles.sheet}>
+        <Animated.View
+          style={[StyleSheet.absoluteFillObject, styles.backdrop, { opacity: overlayOpacity }]}
+          pointerEvents="none"
+        />
+        <View style={styles.overlayLayout} pointerEvents="box-none">
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={closeDemo} />
+          <Animated.View style={[styles.sheet, { transform: [{ translateY: sheetTranslateY }] }]}>
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>Demo accounts</Text>
-              <TouchableOpacity onPress={() => setDemoOpen(false)}>
+              <TouchableOpacity onPress={closeDemo}>
                 <Ionicons name="close" size={20} color={theme.colors.grey1} />
               </TouchableOpacity>
             </View>
@@ -306,8 +327,8 @@ export default function LoginScreen() {
                 </TouchableOpacity>
               ))}
             </ScrollView>
-          </View>
-        </TouchableOpacity>
+          </Animated.View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -411,9 +432,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.colors.grey1,
   },
-  overlay: {
-    flex: 1,
+  backdrop: {
     backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  overlayLayout: {
+    flex: 1,
     justifyContent: 'flex-end',
   },
   sheet: {
