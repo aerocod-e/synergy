@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@react-native-vector-icons/ionicons';
+import type { ComponentProps } from 'react';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
 import ScreenTransition from '@/components/ScreenTransition';
@@ -39,8 +40,10 @@ function SkeletonCard({ wide = false }: { wide?: boolean }) {
   );
 }
 
+type IoniconsName = ComponentProps<typeof Ionicons>['name'];
+
 interface SummaryCardProps {
-  icon: string;
+  icon: IoniconsName;
   iconColor?: string;
   value: string;
   label: string;
@@ -52,7 +55,7 @@ function SummaryCard({ icon, iconColor, value, label, wide = false, valueColor }
   if (wide) {
     return (
       <View style={[styles.card, styles.cardWide]}>
-        <Ionicons name={icon as any} size={32} color={iconColor ?? theme.colors.primary} />
+        <Ionicons name={icon} size={32} color={iconColor ?? theme.colors.primary} />
         <View style={styles.cardWideContent}>
           <Text style={[styles.cardValue, valueColor ? { color: valueColor } : {}]}>{value}</Text>
           <Text style={styles.cardLabel}>{label}</Text>
@@ -62,7 +65,7 @@ function SummaryCard({ icon, iconColor, value, label, wide = false, valueColor }
   }
   return (
     <View style={styles.card}>
-      <Ionicons name={icon as any} size={26} color={iconColor ?? theme.colors.primary} style={styles.cardIcon} />
+      <Ionicons name={icon} size={26} color={iconColor ?? theme.colors.primary} style={styles.cardIcon} />
       <Text style={[styles.cardValue, valueColor ? { color: valueColor } : {}]}>{value}</Text>
       <Text style={styles.cardLabel}>{label}</Text>
     </View>

@@ -26,7 +26,6 @@
       "favicon": "./assets/images/icon.png",
       "baseUrl": "/mobile/"
     },
-    "fonts": ["./assets/fonts/Ionicons.ttf", "./assets/fonts/Feather.ttf"],
     "plugins": [
       [
         "expo-router",
@@ -35,7 +34,9 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      ["@react-native-vector-icons/ionicons"],
+      ["@react-native-vector-icons/feather"]
     ],
     "experiments": {
       "typedRoutes": true,
