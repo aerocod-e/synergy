@@ -13,6 +13,8 @@ import {
 import { useRouter } from 'expo-router';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
+import ScreenTransition from '@/components/ScreenTransition';
+import SlideUpList from '@/components/SlideUpList';
 import { getTrips } from '@/services/api';
 
 type TripStatus = 'created' | 'in_transit' | 'completed' | 'cancelled';
@@ -225,6 +227,7 @@ export default function SuperAdminTripsList() {
   return (
     <View style={styles.container}>
       <TopBar />
+      <ScreenTransition style={{ flex: 1 }}>
       <View style={styles.summaryCard}>
         <View style={styles.summaryHalf}>
           <Text style={styles.summaryValue}>{activeCount}</Text>
@@ -356,6 +359,7 @@ export default function SuperAdminTripsList() {
             </TouchableOpacity>
           </View>
         ) : (
+          <SlideUpList style={{ flex: 1 }}>
           <FlatList
             style={styles.list}
             data={filteredTrips}
@@ -400,8 +404,10 @@ export default function SuperAdminTripsList() {
               </View>
             )}
           />
+          </SlideUpList>
         )}
       </View>
+      </ScreenTransition>
     </View>
   );
 }

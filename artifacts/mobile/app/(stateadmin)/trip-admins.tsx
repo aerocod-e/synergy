@@ -19,6 +19,8 @@ import { useFocusEffect, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
+import ScreenTransition from '@/components/ScreenTransition';
+import SlideUpList from '@/components/SlideUpList';
 import { listTripAdmins, createUser, updateCancellationRights, toggleUserActive, getTripAdminActiveTripsCount, deleteTripAdmin as deleteTripAdminApi } from '@/services/api';
 import { useAuthContext } from '@/app/_layout';
 
@@ -434,6 +436,8 @@ export default function StateAdminTripAdmins() {
   return (
     <View style={styles.container}>
       <TopBar />
+      <ScreenTransition style={{ flex: 1 }}>
+      <SlideUpList style={{ flex: 1 }}>
       <FlatList
         data={admins}
         keyExtractor={(a) => a.id}
@@ -483,6 +487,7 @@ export default function StateAdminTripAdmins() {
           </View>
         )}
       />
+      </SlideUpList>
 
       {Platform.OS !== 'web' && (
         <TouchableOpacity
@@ -653,6 +658,7 @@ export default function StateAdminTripAdmins() {
           </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
+      </ScreenTransition>
     </View>
   );
 }

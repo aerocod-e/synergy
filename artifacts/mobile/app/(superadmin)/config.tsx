@@ -25,6 +25,8 @@ import {
 import type { Stakeholder } from '@/types/index';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
+import ScreenTransition from '@/components/ScreenTransition';
+import SlideUpList from '@/components/SlideUpList';
 import { formatNaira } from '@/utils/formatCurrency';
 
 interface StakeholderRate {
@@ -375,6 +377,8 @@ export default function ConfigScreen() {
   return (
     <View style={{ flex: 1 }}>
       <TopBar />
+      <ScreenTransition style={{ flex: 1 }}>
+      <SlideUpList style={{ flex: 1 }}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -593,6 +597,7 @@ export default function ConfigScreen() {
         <View style={styles.bottomSpacer} />
       </ScrollView>
     </KeyboardAvoidingView>
+      </SlideUpList>
 
       {/* Set Rate Modal */}
       <Modal
@@ -642,6 +647,7 @@ export default function ConfigScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
+      </ScreenTransition>
     </View>
   );
 }

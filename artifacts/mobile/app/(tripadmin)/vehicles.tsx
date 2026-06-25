@@ -16,6 +16,8 @@ import { useFocusEffect, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
+import ScreenTransition from '@/components/ScreenTransition';
+import SlideUpList from '@/components/SlideUpList';
 import VehicleSearchInput, { type Vehicle } from '@/components/VehicleSearchInput';
 import { listVehicles, createVehicle, updateVehicle, deleteVehicle as deleteVehicleApi } from '@/services/api';
 import { useLogout } from '@/hooks/useLogout';
@@ -275,6 +277,8 @@ export default function TripAdminVehicles() {
   return (
     <View style={styles.container}>
       <TopBar />
+      <ScreenTransition style={{ flex: 1 }}>
+      <SlideUpList style={{ flex: 1 }}>
       <FlatList
         data={vehicles}
         keyExtractor={(v) => v.id}
@@ -313,6 +317,7 @@ export default function TripAdminVehicles() {
           </View>
         )}
       />
+      </SlideUpList>
 
       {/* FAB — native only; on web the header + button is used instead */}
       {Platform.OS !== 'web' && (
@@ -423,6 +428,7 @@ export default function TripAdminVehicles() {
           </View>
         </View>
       </Modal>
+      </ScreenTransition>
     </View>
   );
 }

@@ -20,6 +20,8 @@ import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
+import ScreenTransition from '@/components/ScreenTransition';
+import SlideUpList from '@/components/SlideUpList';
 import VehicleSearchInput, { type Vehicle } from '@/components/VehicleSearchInput';
 import DriverSearchInput, { type Driver } from '@/components/DriverSearchInput';
 import { getTrips, createTrip, getActivePricingChart, getStates, requestCancellation, createVehicle } from '@/services/api';
@@ -424,6 +426,8 @@ export default function TripAdminTrips() {
   return (
     <View style={styles.container}>
       <TopBar />
+      <ScreenTransition style={{ flex: 1 }}>
+      <SlideUpList style={{ flex: 1 }}>
       <FlatList
         data={trips}
         keyExtractor={(t) => t.id}
@@ -462,6 +466,7 @@ export default function TripAdminTrips() {
           </View>
         )}
       />
+      </SlideUpList>
 
       {Platform.OS !== 'web' && (
         <TouchableOpacity
@@ -830,6 +835,7 @@ export default function TripAdminTrips() {
         </KeyboardAvoidingView>
       </Modal>
 
+      </ScreenTransition>
     </View>
   );
 }

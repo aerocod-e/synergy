@@ -10,6 +10,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
+import ScreenTransition from '@/components/ScreenTransition';
+import SlideUpList from '@/components/SlideUpList';
 import { formatNaira } from '@/utils/formatCurrency';
 import { getUsers, getStates, getStakeholders, getActivePricingChart, getAllWallets } from '@/services/api';
 
@@ -178,6 +180,8 @@ export default function SuperAdminDashboard() {
   return (
     <View style={{ flex: 1 }}>
       <TopBar />
+      <ScreenTransition style={{ flex: 1 }}>
+      <SlideUpList style={{ flex: 1 }}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -265,6 +269,8 @@ export default function SuperAdminDashboard() {
         </>
       )}
     </ScrollView>
+      </SlideUpList>
+      </ScreenTransition>
     </View>
   );
 }

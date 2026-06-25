@@ -12,6 +12,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
+import ScreenTransition from '@/components/ScreenTransition';
+import SlideUpList from '@/components/SlideUpList';
 import { getMyWallet, getMyLedger } from '@/services/api';
 import { formatNaira, formatNairaWithSign } from '@/utils/formatCurrency';
 
@@ -231,6 +233,7 @@ export default function StakeholderHome() {
   return (
     <View style={styles.container}>
       <TopBar />
+      <ScreenTransition style={{ flex: 1 }}>
       {/* Balance card */}
       <View style={styles.balanceCard}>
         <Text style={styles.balanceLabel}>TOTAL COLLECTED</Text>
@@ -276,6 +279,7 @@ export default function StakeholderHome() {
       )}
 
       {/* Ledger list */}
+      <SlideUpList style={{ flex: 1 }}>
       <FlatList
         data={entries}
         keyExtractor={(e) => e.ledgerId}
@@ -301,6 +305,8 @@ export default function StakeholderHome() {
         }
         ListFooterComponent={renderFooter}
       />
+      </SlideUpList>
+      </ScreenTransition>
     </View>
   );
 }

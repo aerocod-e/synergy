@@ -5,7 +5,7 @@ export default function SuperAdminLayout() {
   return (
     <Tabs
       tabBar={(props) => <PillTabBar {...props} />}
-      screenOptions={{ headerShown: false }}
+      screenOptions={{ headerShown: false, animation: 'fade' }}
     >
       <Tabs.Screen name="index"       options={{ title: 'Home' }} />
       <Tabs.Screen name="trips"       options={{ title: 'Trips' }} />

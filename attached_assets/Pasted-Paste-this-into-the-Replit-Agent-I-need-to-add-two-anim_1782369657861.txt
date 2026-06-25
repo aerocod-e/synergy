@@ -1,0 +1,128 @@
+Paste this into the Replit Agent:
+
+I need to add two animation improvements to the app. No logic or data changes -- animations only. Follow all steps in order.
+Step 1 -- Tab switching animation (App Store style cross-fade with subtle upward slide)
+Open artifacts/mobile/app/(superadmin)/_layout.tsx, (stateadmin)/_layout.tsx, (tripadmin)/_layout.tsx, and (stakeholder)/_layout.tsx.
+In each file, add the following to the screenOptions of the Tabs navigator:
+tsxanimation: 'fade',
+Then wrap each role's main screen content in a shared animation wrapper. Create a new component artifacts/mobile/components/ScreenTransition.tsx:
+tsximport React, { useEffect, useRef } from 'react';
+import { Animated, StyleSheet, ViewProps } from 'react-native';
+
+interface Props extends ViewProps {
+  children: React.ReactNode;
+}
+
+export default function ScreenTransition({ children, style, ...props }: Props) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(12)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  return (
+    <Animated.View
+      style={[styles.container, { opacity, transform: [{ translateY }] }, style]}
+      {...props}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+});
+Wrap the root content View in every main screen with <ScreenTransition> instead of a plain <View>. The screens to update are:
+
+(superadmin)/index.tsx
+(superadmin)/trips.tsx
+(superadmin)/config.tsx
+(superadmin)/users.tsx
+(stateadmin)/index.tsx
+(stateadmin)/trip-admins.tsx
+(tripadmin)/index.tsx
+(tripadmin)/vehicles.tsx
+(tripadmin)/drivers.tsx
+(stakeholder)/index.tsx
+
+Each screen's outermost View (the one that currently has flex: 1 and backgroundColor) should become <ScreenTransition style={{ flex: 1, backgroundColor: theme.colors.background }}>.
+Important: Do not wrap the TopBar inside ScreenTransition -- the TopBar should stay static. Only the content below the TopBar should animate in. So the structure should be:
+tsx<View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+  <TopBar />
+  <ScreenTransition style={{ flex: 1 }}>
+    {/* all the lists, cards, filters etc */}
+  </ScreenTransition>
+</View>
+Step 2 -- List slide-up entrance animation
+The list content on each screen should slide up from below when it first appears, like a bottom sheet drawing up. This replaces any existing per-item stagger animations.
+Create a new component artifacts/mobile/components/SlideUpList.tsx:
+tsximport React, { useEffect, useRef } from 'react';
+import { Animated, StyleSheet, ViewProps } from 'react-native';
+
+interface Props extends ViewProps {
+  children: React.ReactNode;
+  delay?: number;
+}
+
+export default function SlideUpList({ children, style, delay = 80, ...props }: Props) {
+  const translateY = useRef(new Animated.Value(60)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(translateY, {
+        toValue: 0,
+        delay,
+        useNativeDriver: true,
+        tension: 65,
+        friction: 10,
+      }),
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 250,
+        delay,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  return (
+    <Animated.View
+      style={[styles.container, { opacity, transform: [{ translateY }] }, style]}
+      {...props}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+});
+Wrap the FlatList (or ScrollView) on each main screen inside <SlideUpList>. The FlatList itself stays unchanged -- only its container animates. Example:
+tsx<SlideUpList style={{ flex: 1 }}>
+  <FlatList ... />
+</SlideUpList>
+Apply to all the same screens listed in Step 1.
+Step 3 -- Remove any existing per-item stagger animations
+Search across all screen files for any existing Animated usage that creates per-item entrance animations (staggered delays per list item, individual card fade-ins, etc.). Remove these entirely since SlideUpList replaces them. The list as a whole animates in, not individual items.
+Step 4 -- TypeScript check
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Must return zero errors.

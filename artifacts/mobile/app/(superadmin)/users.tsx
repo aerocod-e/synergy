@@ -20,6 +20,8 @@ import { getUsers, createUser, getStates } from '@/services/api';
 import type { User, State } from '@/types/index';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
+import ScreenTransition from '@/components/ScreenTransition';
+import SlideUpList from '@/components/SlideUpList';
 
 type CreatableRole = 'state_admin' | 'stakeholder';
 
@@ -234,6 +236,8 @@ export default function UsersScreen() {
   return (
     <View style={styles.root}>
       <TopBar />
+      <ScreenTransition style={{ flex: 1 }}>
+      <SlideUpList style={{ flex: 1 }}>
       <FlatList
         style={styles.list}
         data={users}
@@ -275,6 +279,7 @@ export default function UsersScreen() {
           </View>
         )}
       />
+      </SlideUpList>
 
       {/* FAB */}
       <TouchableOpacity style={styles.fab} onPress={openModal} activeOpacity={0.85}>
@@ -443,6 +448,7 @@ export default function UsersScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
+      </ScreenTransition>
     </View>
   );
 }

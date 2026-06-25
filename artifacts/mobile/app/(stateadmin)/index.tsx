@@ -16,6 +16,8 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
+import ScreenTransition from '@/components/ScreenTransition';
+import SlideUpList from '@/components/SlideUpList';
 import {
   listCancellationRequests,
   approveCancellationRequest,
@@ -243,6 +245,8 @@ export default function StateAdminHome() {
   return (
     <View style={styles.container}>
       <TopBar />
+      <ScreenTransition style={{ flex: 1 }}>
+      <SlideUpList style={{ flex: 1 }}>
       <FlatList
         data={requests}
         keyExtractor={(r) => r.id}
@@ -293,6 +297,7 @@ export default function StateAdminHome() {
           </>
         )}
       />
+      </SlideUpList>
 
       {/* ── Reject modal ── */}
       <Modal
@@ -351,6 +356,7 @@ export default function StateAdminHome() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+      </ScreenTransition>
     </View>
   );
 }
