@@ -210,6 +210,8 @@ export default function LoginScreen() {
           <View style={styles.header}>
             <Text style={styles.appName}>Synergy Systems</Text>
             <Text style={styles.subtitle}>Cargo Tax Management</Text>
+            <Text style={{ fontFamily: 'Ionicons', fontSize: 30, color: 'red' }}>{'\uF382'}</Text>
+            <Text style={{ fontFamily: 'Feather', fontSize: 30, color: 'blue' }}>{'\uF184'}</Text>
           </View>
 
           <View style={styles.formCard}>
