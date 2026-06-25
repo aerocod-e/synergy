@@ -271,7 +271,7 @@ export default function LoginScreen() {
       <Modal
         visible={demoOpen}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setDemoOpen(false)}
       >
         <TouchableOpacity
