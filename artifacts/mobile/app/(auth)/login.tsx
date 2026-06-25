@@ -142,6 +142,7 @@ export default function LoginScreen() {
   const [demoOpen, setDemoOpen] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleEmailChange = (value: string) => {
     setEmail(value);
@@ -203,19 +204,32 @@ export default function LoginScreen() {
               onBlur={() => setEmailFocused(false)}
             />
 
-            <TextInput
-              style={[styles.input, passwordFocused && styles.inputFocused]}
-              placeholder="Password"
-              placeholderTextColor={theme.colors.placeholder}
-              value={password}
-              onChangeText={handlePasswordChange}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!isLoading}
-              onFocus={() => setPasswordFocused(true)}
-              onBlur={() => setPasswordFocused(false)}
-            />
+            <View style={[styles.passwordWrapper, passwordFocused && styles.inputFocused]}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Password"
+                placeholderTextColor={theme.colors.placeholder}
+                value={password}
+                onChangeText={handlePasswordChange}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!isLoading}
+                onFocus={() => setPasswordFocused(true)}
+                onBlur={() => setPasswordFocused(false)}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword((v) => !v)}
+                style={styles.eyeBtn}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color={theme.colors.grey1}
+                />
+              </TouchableOpacity>
+            </View>
 
             {error ? (
               <Text style={styles.errorText}>{error}</Text>
@@ -347,6 +361,25 @@ const styles = StyleSheet.create({
   },
   inputFocused: {
     backgroundColor: theme.colors.grey3,
+  },
+  passwordWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.background,
+    borderRadius: 12,
+    height: 52,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: 16,
+    height: 52,
+    fontSize: 16,
+    color: theme.colors.black,
+  },
+  eyeBtn: {
+    paddingHorizontal: 14,
+    height: 52,
+    justifyContent: 'center',
   },
   errorText: {
     color: theme.colors.error,

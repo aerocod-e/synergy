@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
   View,
@@ -41,6 +42,9 @@ export default function ProfileScreen() {
   const [currentPw, setCurrentPw] = useState('');
   const [newPw, setNewPw] = useState('');
   const [confirmPw, setConfirmPw] = useState('');
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -119,41 +123,80 @@ export default function ProfileScreen() {
         <Text style={styles.sectionTitle}>Change Password</Text>
 
         <View style={styles.passwordCard}>
-          <TextInput
-            style={styles.input}
-            placeholder="Current Password"
-            placeholderTextColor={theme.colors.placeholder}
-            secureTextEntry
-            value={currentPw}
-            onChangeText={setCurrentPw}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
+          <View style={styles.pwFieldRow}>
+            <TextInput
+              style={styles.pwTextInput}
+              placeholder="Current Password"
+              placeholderTextColor={theme.colors.placeholder}
+              secureTextEntry={!showCurrentPw}
+              value={currentPw}
+              onChangeText={setCurrentPw}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <TouchableOpacity
+              onPress={() => setShowCurrentPw((v) => !v)}
+              style={styles.eyeBtn}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={showCurrentPw ? 'eye-off-outline' : 'eye-outline'}
+                size={20}
+                color={theme.colors.grey1}
+              />
+            </TouchableOpacity>
+          </View>
 
-          <TextInput
-            style={[styles.input, styles.inputSpaced]}
-            placeholder="New Password"
-            placeholderTextColor={theme.colors.placeholder}
-            secureTextEntry
-            value={newPw}
-            onChangeText={(t) => { setNewPw(t); setSaveSuccess(false); setSaveError(null); }}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
+          <View style={[styles.pwFieldRow, styles.inputSpaced]}>
+            <TextInput
+              style={styles.pwTextInput}
+              placeholder="New Password"
+              placeholderTextColor={theme.colors.placeholder}
+              secureTextEntry={!showNewPw}
+              value={newPw}
+              onChangeText={(t) => { setNewPw(t); setSaveSuccess(false); setSaveError(null); }}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <TouchableOpacity
+              onPress={() => setShowNewPw((v) => !v)}
+              style={styles.eyeBtn}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={showNewPw ? 'eye-off-outline' : 'eye-outline'}
+                size={20}
+                color={theme.colors.grey1}
+              />
+            </TouchableOpacity>
+          </View>
           {newPwTooShort && (
             <Text style={styles.fieldError}>New password must be at least 8 characters</Text>
           )}
 
-          <TextInput
-            style={[styles.input, styles.inputSpaced]}
-            placeholder="Confirm New Password"
-            placeholderTextColor={theme.colors.placeholder}
-            secureTextEntry
-            value={confirmPw}
-            onChangeText={(t) => { setConfirmPw(t); setSaveSuccess(false); setSaveError(null); }}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
+          <View style={[styles.pwFieldRow, styles.inputSpaced]}>
+            <TextInput
+              style={styles.pwTextInput}
+              placeholder="Confirm New Password"
+              placeholderTextColor={theme.colors.placeholder}
+              secureTextEntry={!showConfirmPw}
+              value={confirmPw}
+              onChangeText={(t) => { setConfirmPw(t); setSaveSuccess(false); setSaveError(null); }}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <TouchableOpacity
+              onPress={() => setShowConfirmPw((v) => !v)}
+              style={styles.eyeBtn}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={showConfirmPw ? 'eye-off-outline' : 'eye-outline'}
+                size={20}
+                color={theme.colors.grey1}
+              />
+            </TouchableOpacity>
+          </View>
           {pwMismatch && (
             <Text style={styles.fieldError}>Passwords do not match</Text>
           )}
@@ -253,6 +296,23 @@ const styles = StyleSheet.create({
     padding: 14,
     fontSize: 15,
     color: theme.colors.black,
+  },
+  pwFieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.grey4,
+    borderRadius: 8,
+  },
+  pwTextInput: {
+    flex: 1,
+    padding: 14,
+    fontSize: 15,
+    color: theme.colors.black,
+  },
+  eyeBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    justifyContent: 'center',
   },
   inputSpaced: { marginTop: 12 },
   fieldError: {
