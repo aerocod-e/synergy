@@ -10,7 +10,7 @@ import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import React, { createContext, useContext, useEffect } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, Platform, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -109,6 +109,9 @@ function RootLayoutNav() {
 export default function RootLayout() {
   const auth = useAuth();
 
+  const { isDynamicLoadingEnabled } = require('@react-native-vector-icons/common');
+  console.log('[DynamicLoading]', Platform.OS, isDynamicLoadingEnabled());
+
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -117,6 +120,8 @@ export default function RootLayout() {
     'Ionicons': require('../assets/fonts/Ionicons.ttf'),
     'Feather': require('../assets/fonts/Feather.ttf'),
   });
+
+  console.log('[FontDebug]', Platform.OS, { fontsLoaded, fontError: fontError?.message });
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
