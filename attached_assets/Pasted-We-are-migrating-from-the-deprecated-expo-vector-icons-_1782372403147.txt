@@ -1,0 +1,41 @@
+We are migrating from the deprecated @expo/vector-icons to the new @react-native-vector-icons/* scoped packages to fix a bug where Ionicons and Feather icons render as broken glyphs on Android in Expo Go. Work through the following phases in order. Do not skip ahead.
+
+Phase 1: Install new packages and update app.json
+In artifacts/mobile/:
+
+Install the two new scoped packages:
+
+pnpm add @react-native-vector-icons/ionicons @react-native-vector-icons/feather
+
+In app.json, under the expo.plugins array, add plugin entries for both new packages so they register their fonts correctly with the Expo build system. The plugin entry format for each is ["@react-native-vector-icons/ionicons"] and ["@react-native-vector-icons/feather"].
+In app.json, remove the existing fonts array entries for ./assets/fonts/Ionicons.ttf and ./assets/fonts/Feather.ttf -- these will now be handled by the plugins above.
+Delete the files artifacts/mobile/assets/fonts/Ionicons.ttf and artifacts/mobile/assets/fonts/Feather.ttf from the repo since they are replaced by the new packages' bundled assets.
+
+
+Phase 2: Run the automatic codemod
+From inside artifacts/mobile/, run:
+npx @react-native-vector-icons/codemod
+This will automatically rewrite most of the import statements across the codebase. After it completes, report back exactly which files it touched and what changes it made.
+
+Phase 3: Manually fix the two dynamic icon usages -- do these carefully
+The codemod will not correctly handle these two files because they use runtime-computed icon names. Fix them by hand:
+components/PillTabBar.tsx -- The TAB_ICONS lookup map produces icon names that are passed to Ionicons at runtime. After the codemod runs, the type of the icon name prop on the Ionicons component will have changed. Update the type annotation on the iconName variable (and the TAB_ICONS map values if they are typed) to use React.ComponentProps<typeof Ionicons>['name'] from the new package so TypeScript is satisfied without using as any.
+app/(superadmin)/index.tsx -- The icon prop is a string passed from a parent and cast with as any. Apply the same fix: type the prop as React.ComponentProps<typeof Ionicons>['name'] and remove the as any cast.
+
+Phase 4: Clean up app/_layout.tsx
+This file currently imports Ionicons and Feather from @expo/vector-icons solely to load the TTF fonts via useFonts. Now that the new packages register fonts via their Expo plugins (Phase 1), this manual font loading is no longer needed.
+
+Remove the Ionicons and Feather imports at the top of _layout.tsx.
+Remove the corresponding useFonts call entries for these icon fonts (or the entire useFonts hook if it was only used for these two fonts -- check carefully and only remove entries for Ionicons and Feather, leave any custom app font loading in place).
+Remove any expo-font import if it is now unused after the above removals.
+
+
+Phase 5: Verify and clear cache
+
+Run npx expo-doctor from artifacts/mobile/ and report the output.
+Confirm that @expo/vector-icons has zero remaining imports across artifacts/mobile/app/ and artifacts/mobile/components/ with a grep: grep -r "@expo/vector-icons" artifacts/mobile/app artifacts/mobile/components.
+Do not remove @expo/vector-icons from package.json yet -- some transitive dependencies may still reference it. Just confirm all our direct usages are gone.
+Clear the Metro cache by running: npx expo start --clear and confirm it starts without errors.
+
+Report back after each phase before moving to the next one.
+
