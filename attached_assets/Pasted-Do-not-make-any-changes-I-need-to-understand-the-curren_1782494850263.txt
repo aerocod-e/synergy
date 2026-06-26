@@ -1,0 +1,35 @@
+Do not make any changes. I need to understand the current state before restructuring the pricing system around vehicle types. Answer the following:
+1 -- Current vehicles table
+From migrate.ts, list all columns on the vehicles table. Confirm whether a vehicle_type_id or any type-related column already exists.
+2 -- Current pricing chart structure
+From migrate.ts, list all columns on:
+
+pricing_charts
+pricing_chart_stakeholder_rates
+
+Confirm exactly what the current pricing chart links to -- is it per-stakeholder only, or does it reference anything else?
+3 -- Current trip creation fee logic
+In tripController.ts, find createTrip. Report exactly how fees are currently calculated:
+
+Where does the loading fee come from? (state rates? manual input? pricing chart?)
+Where does the unloading fee come from?
+Where do stakeholder fees come from?
+What tables are written to when fees are allocated?
+
+4 -- Current stakeholders in the database
+Run: SELECT id, name FROM stakeholders WHERE deleted_at IS NULL ORDER BY name
+
+Report the exact current stakeholder names and IDs.
+5 -- Current wallet allocation
+When a trip is created, how does the system determine which wallet gets credited for the loading fee and which gets credited for the unloading fee? Is it linked to the loading state's wallet or the trip creator's wallet? Read the wallet credit logic in createTrip carefully.
+6 -- State Admin wallet
+Does a wallet exist for each state in the wallets table? Run:
+
+SELECT w.owner_type, s.name, w.total_collected FROM wallets w JOIN states s ON s.id = w.owner_id WHERE w.owner_type = 'state' LIMIT 10
+
+Report what comes back.
+7 -- Current trip fees table
+List all columns in trip_fees. Confirm what recipient_type and recipient_id reference for loading and unloading fees specifically.
+8 -- What screens currently show wallet/ledger data
+List every screen in the mobile app that calls getMyWallet() or getMyLedger(). Confirm which roles can currently access these endpoints.
+Report findings only. No changes.
