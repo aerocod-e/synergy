@@ -15,6 +15,20 @@ async function migrate(): Promise<void> {
     `);
     console.log('✓ Table created: states');
 
+    // vehicle_types — fee schedule keyed by vehicle category; amounts in kobo
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS vehicle_types (
+        id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name          VARCHAR(100) NOT NULL UNIQUE,
+        loading_fee   INTEGER NOT NULL DEFAULT 0,
+        unloading_fee INTEGER NOT NULL DEFAULT 0,
+        is_active     BOOLEAN NOT NULL DEFAULT true,
+        created_at    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )
+    `);
+    console.log('✓ Table created: vehicle_types');
+
     // stakeholders — UNIQUE(name) for idempotent seeding
     await client.query(`
       CREATE TABLE IF NOT EXISTS stakeholders (
@@ -61,7 +75,7 @@ async function migrate(): Promise<void> {
     `);
     console.log('✓ Table created: pricing_charts');
 
-    // pricing_chart_stakeholder_rates — per-stakeholder rates for a chart
+    // pricing_chart_stakeholder_rates — per-stakeholder per-vehicle-type rates
     await client.query(`
       CREATE TABLE IF NOT EXISTS pricing_chart_stakeholder_rates (
         id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -74,6 +88,28 @@ async function migrate(): Promise<void> {
       )
     `);
     console.log('✓ Table created: pricing_chart_stakeholder_rates');
+
+    // Add vehicle_type_id column to pricing_chart_stakeholder_rates
+    await client.query(`
+      ALTER TABLE pricing_chart_stakeholder_rates
+        ADD COLUMN IF NOT EXISTS vehicle_type_id UUID REFERENCES vehicle_types(id)
+    `);
+    console.log('✓ pricing_chart_stakeholder_rates: vehicle_type_id column added');
+
+    // Drop old unique constraint (pricing_chart_id, stakeholder_id) and replace with
+    // a three-column constraint that includes vehicle_type_id.
+    // NOTE: PostgreSQL truncates auto-generated constraint names to 63 chars — use
+    // the actual truncated name, not the full logical one.
+    await client.query(`
+      ALTER TABLE pricing_chart_stakeholder_rates
+        DROP CONSTRAINT IF EXISTS pricing_chart_stakeholder_rat_pricing_chart_id_stakeholder__key
+    `);
+    await client.query(`
+      ALTER TABLE pricing_chart_stakeholder_rates
+        ADD CONSTRAINT pricing_chart_stakeholder_rates_unique
+        UNIQUE (pricing_chart_id, stakeholder_id, vehicle_type_id)
+    `);
+    console.log('✓ pricing_chart_stakeholder_rates: unique constraint updated to (chart, stakeholder, vehicle_type)');
 
     // drivers — references users(id) via created_by
     await client.query(`
@@ -104,6 +140,13 @@ async function migrate(): Promise<void> {
       )
     `);
     console.log('✓ Table created: vehicles');
+
+    // Add vehicle_type_id FK to vehicles
+    await client.query(`
+      ALTER TABLE vehicles
+        ADD COLUMN IF NOT EXISTS vehicle_type_id UUID REFERENCES vehicle_types(id)
+    `);
+    console.log('✓ vehicles: vehicle_type_id column added');
 
     // trips — references users and states; soft-delete via deleted_at
     await client.query(`
@@ -275,15 +318,17 @@ async function migrate(): Promise<void> {
     `);
     console.log('✓ users: first_name, last_name columns added (if not exists)');
 
-    // ── per-state loading / unloading rates ──────────────────────────────
+    // ── Drop deprecated per-state loading / unloading rate columns ────────
+    // Fees are now driven by vehicle_types.loading_fee / unloading_fee
     await client.query(`
-      ALTER TABLE states
-        ADD COLUMN IF NOT EXISTS loading_rate   INTEGER NOT NULL DEFAULT 0,
-        ADD COLUMN IF NOT EXISTS unloading_rate INTEGER NOT NULL DEFAULT 0
+      ALTER TABLE states DROP COLUMN IF EXISTS loading_rate
     `);
-    console.log('✓ states: loading_rate, unloading_rate columns added (if not exists)');
+    await client.query(`
+      ALTER TABLE states DROP COLUMN IF EXISTS unloading_rate
+    `);
+    console.log('✓ states: deprecated loading_rate and unloading_rate columns dropped');
 
-    // Make legacy pricing_chart fee columns optional (deprecated in favour of per-state rates)
+    // Make legacy pricing_chart fee columns optional (deprecated in favour of vehicle-type rates)
     await client.query(`
       ALTER TABLE pricing_charts
         ALTER COLUMN loading_fee  SET DEFAULT 0,
@@ -291,7 +336,7 @@ async function migrate(): Promise<void> {
     `);
     console.log('✓ pricing_charts: loading_fee / unloading_fee set DEFAULT 0 (deprecated)');
 
-    console.log('\n✅ Migration complete: 13 tables + per-state rate columns.');
+    console.log('\n✅ Migration complete: 14 tables + vehicle_type_id columns + vehicle-type-based pricing.');
   } finally {
     client.release();
     await pool.end();

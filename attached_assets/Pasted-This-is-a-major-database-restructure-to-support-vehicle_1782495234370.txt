@@ -1,0 +1,148 @@
+This is a major database restructure to support vehicle-type-based pricing. Follow all steps in order. Do not touch any frontend files in this task.
+Step 1 -- Add vehicle_types table
+In artifacts/api-server/src/db/migrate.ts, add a new vehicle_types table after the states table block:
+sqlCREATE TABLE IF NOT EXISTS vehicle_types (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name          VARCHAR(100) NOT NULL UNIQUE,
+  loading_fee   INTEGER NOT NULL DEFAULT 0,
+  unloading_fee INTEGER NOT NULL DEFAULT 0,
+  is_active     BOOLEAN NOT NULL DEFAULT true,
+  created_at    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+Step 2 -- Add vehicle_type_id to vehicles table
+sqlALTER TABLE vehicles ADD COLUMN IF NOT EXISTS vehicle_type_id UUID REFERENCES vehicle_types(id);
+Step 3 -- Add vehicle_type_id to pricing_chart_stakeholder_rates
+sqlALTER TABLE pricing_chart_stakeholder_rates 
+  ADD COLUMN IF NOT EXISTS vehicle_type_id UUID REFERENCES vehicle_types(id);
+Drop the existing unique constraint and replace it:
+sqlALTER TABLE pricing_chart_stakeholder_rates 
+  DROP CONSTRAINT IF EXISTS pricing_chart_stakeholder_rates_pricing_chart_id_stakeholder_id_key;
+
+ALTER TABLE pricing_chart_stakeholder_rates
+  ADD CONSTRAINT pricing_chart_stakeholder_rates_unique 
+  UNIQUE (pricing_chart_id, stakeholder_id, vehicle_type_id);
+Step 4 -- Drop deprecated state rate columns
+sqlALTER TABLE states DROP COLUMN IF EXISTS loading_rate;
+ALTER TABLE states DROP COLUMN IF EXISTS unloading_rate;
+Step 5 -- Update success log
+Update the migration success log to reflect the new table count.
+Run the migration and confirm it completes successfully.
+Step 6 -- Update the seed script
+In artifacts/api-server/src/db/seed.ts, make the following changes:
+Replace stakeholder names:
+
+Update the three existing seed stakeholders from Alpha/Beta/Gamma to the correct names. Use ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name -- but since we are changing the name itself, do this by email of the linked user or by old name:
+sqlUPDATE stakeholders SET name = 'Consultant' WHERE name = 'Stakeholder Alpha';
+UPDATE stakeholders SET name = 'Vendor' WHERE name = 'Stakeholder Beta';
+UPDATE stakeholders SET name = 'Integrator' WHERE name = 'Stakeholder Gamma';
+Also update the user display names to match:
+sqlUPDATE users SET first_name = 'Consultant', last_name = 'Account' WHERE email = 'alpha.admin@synergy.com';
+UPDATE users SET first_name = 'Vendor', last_name = 'Account' WHERE email = 'beta.admin@synergy.com';
+UPDATE users SET first_name = 'Gamma', last_name = 'Account' WHERE email = 'gamma.admin@synergy.com';
+Seed vehicle types:
+
+Insert the 7 vehicle types from the pricing PDF. All amounts in kobo:
+sqlINSERT INTO vehicle_types (name, loading_fee, unloading_fee) VALUES
+('Buses and Equivalent',           52500,  52500),
+('Pickup Vans and Equivalent (4 Tyres)', 140000, 140000),
+('Pickup Non-Heavy Duty 6/8 Tyres', 192500, 192500),
+('Heavy Duty 6/8 Tyres',           280000, 280000),
+('Luxury Buses and Equivalent',    350000, 350000),
+('12/14 Tyres and Equivalent',     665000, 665000),
+('18 Tyres and above',             875000, 875000)
+ON CONFLICT (name) DO UPDATE SET 
+  loading_fee = EXCLUDED.loading_fee,
+  unloading_fee = EXCLUDED.unloading_fee;
+Seed stakeholder rates per vehicle type:
+
+For the active pricing chart, insert one rate row per stakeholder per vehicle type. Amounts from the PDF in kobo. Consultant = alpha, Vendor = beta, Integrator = gamma:
+sql-- For each vehicle type, insert rates for all three stakeholders
+-- Use subqueries to look up IDs by name rather than hardcoding UUIDs
+-- Wrap in DO $$ block for idempotency
+
+DO $$
+DECLARE
+  v_chart_id UUID;
+  v_consultant_id UUID;
+  v_vendor_id UUID;
+  v_integrator_id UUID;
+BEGIN
+  SELECT id INTO v_chart_id FROM pricing_charts WHERE is_active = true LIMIT 1;
+  SELECT id INTO v_consultant_id FROM stakeholders WHERE name = 'Consultant';
+  SELECT id INTO v_vendor_id FROM stakeholders WHERE name = 'Vendor';
+  SELECT id INTO v_integrator_id FROM stakeholders WHERE name = 'Integrator';
+
+  IF v_chart_id IS NULL THEN RETURN; END IF;
+
+  -- Delete existing rates for this chart to re-seed cleanly
+  DELETE FROM pricing_chart_stakeholder_rates WHERE pricing_chart_id = v_chart_id;
+
+  -- Insert rates: (chart, stakeholder, vehicle_type, amount)
+  INSERT INTO pricing_chart_stakeholder_rates (pricing_chart_id, stakeholder_id, vehicle_type_id, amount)
+  SELECT v_chart_id, v_consultant_id, id,
+    CASE name
+      WHEN 'Buses and Equivalent' THEN 15000
+      WHEN 'Pickup Vans and Equivalent (4 Tyres)' THEN 0
+      WHEN 'Pickup Non-Heavy Duty 6/8 Tyres' THEN 15000
+      WHEN 'Heavy Duty 6/8 Tyres' THEN 40000
+      WHEN 'Luxury Buses and Equivalent' THEN 50000
+      WHEN '12/14 Tyres and Equivalent' THEN 220000
+      WHEN '18 Tyres and above' THEN 350000
+    END
+  FROM vehicle_types;
+
+  INSERT INTO pricing_chart_stakeholder_rates (pricing_chart_id, stakeholder_id, vehicle_type_id, amount)
+  SELECT v_chart_id, v_vendor_id, id,
+    CASE name
+      WHEN 'Buses and Equivalent' THEN 15000
+      WHEN 'Pickup Vans and Equivalent (4 Tyres)' THEN 50000
+      WHEN 'Pickup Non-Heavy Duty 6/8 Tyres' THEN 50000
+      WHEN 'Heavy Duty 6/8 Tyres' THEN 50000
+      WHEN 'Luxury Buses and Equivalent' THEN 50000
+      WHEN '12/14 Tyres and Equivalent' THEN 150000
+      WHEN '18 Tyres and above' THEN 200000
+    END
+  FROM vehicle_types;
+
+  INSERT INTO pricing_chart_stakeholder_rates (pricing_chart_id, stakeholder_id, vehicle_type_id, amount)
+  SELECT v_chart_id, v_integrator_id, id,
+    CASE name
+      WHEN 'Buses and Equivalent' THEN 15000
+      WHEN 'Pickup Vans and Equivalent (4 Tyres)' THEN 70000
+      WHEN 'Pickup Non-Heavy Duty 6/8 Tyres' THEN 100000
+      WHEN 'Heavy Duty 6/8 Tyres' THEN 150000
+      WHEN 'Luxury Buses and Equivalent' THEN 200000
+      WHEN '12/14 Tyres and Equivalent' THEN 200000
+      WHEN '18 Tyres and above' THEN 200000
+    END
+  FROM vehicle_types;
+END $$;
+Seed vehicle type assignments on demo vehicles:
+
+Update the demo vehicles to have a vehicle type assigned. Assign sensibly based on registration number prefix:
+sqlUPDATE vehicles SET vehicle_type_id = (SELECT id FROM vehicle_types WHERE name = 'Heavy Duty 6/8 Tyres')
+WHERE vehicle_type_id IS NULL AND deleted_at IS NULL;
+This assigns all currently untyped vehicles to Heavy Duty as a default for demo purposes.
+Step 7 -- Clean up test stakeholders
+Soft-deactivate the test stakeholders created during development that are not part of the real demo:
+sqlUPDATE stakeholders SET is_active = false 
+WHERE name IN ('Merge Test Union', 'New Transport Union', 'Test Union', 'Test Org Reactivate');
+Step 8 -- Run the seed and verify
+Run pnpm --filter @workspace/api-server run seed and then run pnpm --filter @workspace/api-server run migrate.
+Confirm:
+
+vehicle_types table has 7 rows with correct names and amounts
+vehicles table has a vehicle_type_id column and all demo vehicles have a type assigned
+pricing_chart_stakeholder_rates has a vehicle_type_id column and has the new rate rows
+states table no longer has loading_rate or unloading_rate columns
+Stakeholders are now named Consultant, Vendor, Integrator
+Test stakeholders are deactivated
+Run SELECT name, loading_fee, unloading_fee FROM vehicle_types ORDER BY loading_fee and report results
+Run SELECT s.name, vt.name as vehicle_type, pcsr.amount FROM pricing_chart_stakeholder_rates pcsr JOIN stakeholders s ON s.id = pcsr.stakeholder_id JOIN vehicle_types vt ON vt.id = pcsr.vehicle_type_id ORDER BY vt.name, s.name and report results
+
+
+TypeScript check (backend only):
+pnpm --filter @workspace/api-server exec tsc --noEmit
+Must return zero errors. Note: the mobile app will have TypeScript errors after this since it references loadingRate/unloadingRate from states -- that is expected and will be fixed in the next prompt.
+Report every change made and all verification query results.

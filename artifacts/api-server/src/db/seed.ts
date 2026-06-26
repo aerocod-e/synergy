@@ -46,20 +46,33 @@ const STATES = [
 
 // ── 2. Stakeholders ────────────────────────────────────────────────────────
 const STAKEHOLDERS = [
-  { name: 'Stakeholder Alpha', description: 'Placeholder stakeholder 1' },
-  { name: 'Stakeholder Beta',  description: 'Placeholder stakeholder 2' },
-  { name: 'Stakeholder Gamma', description: 'Placeholder stakeholder 3' },
+  { name: 'Consultant', description: 'Consultant stakeholder' },
+  { name: 'Vendor',     description: 'Vendor stakeholder'     },
+  { name: 'Integrator', description: 'Integrator stakeholder' },
 ];
 
-// ── 3. Demo pricing constants (kobo) ───────────────────────────────────────
-const DEMO_LOADING_FEE   = 500_000;  // ₦5,000
-const DEMO_UNLOADING_FEE = 300_000;  // ₦3,000
-
-const DEMO_STAKEHOLDER_RATES = [
-  { stakeholderName: 'Stakeholder Alpha', amount: 100_000 },  // ₦1,000
-  { stakeholderName: 'Stakeholder Beta',  amount:  75_000 },  // ₦750
-  { stakeholderName: 'Stakeholder Gamma', amount:  50_000 },  // ₦500
+// ── 3. Vehicle types (amounts in kobo) ────────────────────────────────────
+const VEHICLE_TYPES = [
+  { name: 'Buses and Equivalent',                    loading_fee:  52_500, unloading_fee:  52_500 },
+  { name: 'Pickup Vans and Equivalent (4 Tyres)',    loading_fee: 140_000, unloading_fee: 140_000 },
+  { name: 'Pickup Non-Heavy Duty 6/8 Tyres',        loading_fee: 192_500, unloading_fee: 192_500 },
+  { name: 'Heavy Duty 6/8 Tyres',                   loading_fee: 280_000, unloading_fee: 280_000 },
+  { name: 'Luxury Buses and Equivalent',             loading_fee: 350_000, unloading_fee: 350_000 },
+  { name: '12/14 Tyres and Equivalent',              loading_fee: 665_000, unloading_fee: 665_000 },
+  { name: '18 Tyres and above',                      loading_fee: 875_000, unloading_fee: 875_000 },
 ];
+
+// ── 4. Stakeholder rates per vehicle type (amounts in kobo) ───────────────
+// Keys are vehicle type names; values are { Consultant, Vendor, Integrator } amounts
+const STAKEHOLDER_RATES_BY_VEHICLE_TYPE: Record<string, Record<string, number>> = {
+  'Buses and Equivalent':                  { Consultant:  15_000, Vendor:  15_000, Integrator:  15_000 },
+  'Pickup Vans and Equivalent (4 Tyres)':  { Consultant:       0, Vendor:  50_000, Integrator:  70_000 },
+  'Pickup Non-Heavy Duty 6/8 Tyres':       { Consultant:  15_000, Vendor:  50_000, Integrator: 100_000 },
+  'Heavy Duty 6/8 Tyres':                  { Consultant:  40_000, Vendor:  50_000, Integrator: 150_000 },
+  'Luxury Buses and Equivalent':           { Consultant:  50_000, Vendor:  50_000, Integrator: 200_000 },
+  '12/14 Tyres and Equivalent':            { Consultant: 220_000, Vendor: 150_000, Integrator: 200_000 },
+  '18 Tyres and above':                    { Consultant: 350_000, Vendor: 200_000, Integrator: 200_000 },
+};
 
 async function seed(): Promise<void> {
   const client = await pool.connect();
@@ -88,6 +101,31 @@ async function seed(): Promise<void> {
     }
     console.log('✓ Stale role migration: 0 legacy-role rows remain');
 
+    // ── Rename legacy stakeholder names ───────────────────────────────────
+    await client.query(`UPDATE stakeholders SET name = 'Consultant' WHERE name = 'Stakeholder Alpha'`);
+    await client.query(`UPDATE stakeholders SET name = 'Vendor'     WHERE name = 'Stakeholder Beta'`);
+    await client.query(`UPDATE stakeholders SET name = 'Integrator' WHERE name = 'Stakeholder Gamma'`);
+    await client.query(`
+      UPDATE users SET first_name = 'Consultant', last_name = 'Account'
+      WHERE email = 'alpha.admin@synergy.com'
+    `);
+    await client.query(`
+      UPDATE users SET first_name = 'Vendor', last_name = 'Account'
+      WHERE email = 'beta.admin@synergy.com'
+    `);
+    await client.query(`
+      UPDATE users SET first_name = 'Integrator', last_name = 'Account'
+      WHERE email = 'gamma.admin@synergy.com'
+    `);
+    console.log('✓ Stakeholder names updated: Alpha→Consultant, Beta→Vendor, Gamma→Integrator');
+
+    // ── Deactivate test/development stakeholders ──────────────────────────
+    await client.query(`
+      UPDATE stakeholders SET is_active = false
+      WHERE name IN ('Merge Test Union', 'New Transport Union', 'Test Union', 'Test Org Reactivate')
+    `);
+    console.log('✓ Test stakeholders deactivated');
+
     // ── States ────────────────────────────────────────────────────────────
     let statesUpserted = 0;
     const stateIdMap: Record<string, string> = {};
@@ -108,25 +146,23 @@ async function seed(): Promise<void> {
     }
     console.log(`✓ States upserted: ${statesUpserted}`);
 
-    // ── Per-state loading / unloading rates ───────────────────────────────
-    const STATE_RATES: Array<{ code: string; loading_rate: number; unloading_rate: number }> = [
-      { code: 'LG',  loading_rate: 500_000, unloading_rate: 300_000 },  // Lagos
-      { code: 'KN',  loading_rate: 400_000, unloading_rate: 250_000 },  // Kano
-      { code: 'RI',  loading_rate: 450_000, unloading_rate: 280_000 },  // Rivers
-      { code: 'FCT', loading_rate: 420_000, unloading_rate: 260_000 },  // FCT Abuja
-      { code: 'OG',  loading_rate: 350_000, unloading_rate: 200_000 },  // Ogun
-    ];
-    for (const r of STATE_RATES) {
-      await client.query(
-        `UPDATE states SET loading_rate = $1, unloading_rate = $2 WHERE code = $3`,
-        [r.loading_rate, r.unloading_rate, r.code],
+    // ── Vehicle types ─────────────────────────────────────────────────────
+    const vehicleTypeIdByName: Record<string, string> = {};
+
+    for (const vt of VEHICLE_TYPES) {
+      const res = await client.query<{ id: string }>(
+        `INSERT INTO vehicle_types (name, loading_fee, unloading_fee)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (name) DO UPDATE
+           SET loading_fee   = EXCLUDED.loading_fee,
+               unloading_fee = EXCLUDED.unloading_fee
+         RETURNING id`,
+        [vt.name, vt.loading_fee, vt.unloading_fee],
       );
+      const id = res.rows[0]?.id;
+      if (id) vehicleTypeIdByName[vt.name] = id;
     }
-    // Default rate for every other state that hasn't been assigned yet
-    await client.query(
-      `UPDATE states SET loading_rate = 300000, unloading_rate = 200000 WHERE loading_rate = 0`,
-    );
-    console.log('✓ Per-state rates seeded');
+    console.log(`✓ Vehicle types upserted: ${Object.keys(vehicleTypeIdByName).length}`);
 
     // ── Stakeholders ──────────────────────────────────────────────────────
     let stakeholdersUpserted = 0;
@@ -189,7 +225,6 @@ async function seed(): Promise<void> {
     );
     console.log(`✓ Super admin inserted: ${superAdminRes.rowCount ?? 0}`);
 
-    // Fetch super admin id (may already exist)
     const superAdminRow = await client.query<{ id: string }>(
       `SELECT id FROM users WHERE email = 'superadmin@synergy.com' AND deleted_at IS NULL LIMIT 1`,
     );
@@ -197,9 +232,9 @@ async function seed(): Promise<void> {
 
     // ── Stakeholder admins ────────────────────────────────────────────────
     const stakeholderAdmins = [
-      { email: 'alpha.admin@synergy.com', idx: 0, firstName: 'Alpha', lastName: 'Stakeholder' },
-      { email: 'beta.admin@synergy.com',  idx: 1, firstName: 'Beta',  lastName: 'Stakeholder' },
-      { email: 'gamma.admin@synergy.com', idx: 2, firstName: 'Gamma', lastName: 'Stakeholder' },
+      { email: 'alpha.admin@synergy.com', idx: 0, firstName: 'Consultant', lastName: 'Account' },
+      { email: 'beta.admin@synergy.com',  idx: 1, firstName: 'Vendor',     lastName: 'Account' },
+      { email: 'gamma.admin@synergy.com', idx: 2, firstName: 'Integrator', lastName: 'Account' },
     ];
 
     let shAdminsInserted = 0;
@@ -245,13 +280,11 @@ async function seed(): Promise<void> {
     // Deactivate all currently active charts
     await client.query(`UPDATE pricing_charts SET is_active = false WHERE is_active = true`);
 
-    // Find or create the demo pricing chart (matched by fees + creator)
+    // Find or create the demo pricing chart (matched by creator; loading/unloading fees are deprecated)
     let pricingChartId: string;
     const existingChart = await client.query<{ id: string }>(
-      `SELECT id FROM pricing_charts
-       WHERE loading_fee = $1 AND unloading_fee = $2 AND created_by = $3
-       LIMIT 1`,
-      [DEMO_LOADING_FEE, DEMO_UNLOADING_FEE, superAdminId],
+      `SELECT id FROM pricing_charts WHERE created_by = $1 ORDER BY created_at ASC LIMIT 1`,
+      [superAdminId],
     );
 
     if (existingChart.rows.length > 0) {
@@ -261,26 +294,40 @@ async function seed(): Promise<void> {
     } else {
       const newChart = await client.query<{ id: string }>(
         `INSERT INTO pricing_charts (loading_fee, unloading_fee, is_active, created_by)
-         VALUES ($1, $2, true, $3)
+         VALUES (0, 0, true, $1)
          RETURNING id`,
-        [DEMO_LOADING_FEE, DEMO_UNLOADING_FEE, superAdminId],
+        [superAdminId],
       );
       pricingChartId = newChart.rows[0].id;
       console.log(`✓ Pricing chart: created`);
     }
 
-    // Upsert stakeholder rates for this chart
-    for (const sr of DEMO_STAKEHOLDER_RATES) {
-      const shId = stakeholderIdByName[sr.stakeholderName];
-      if (!shId) continue;
-      await client.query(
-        `INSERT INTO pricing_chart_stakeholder_rates (pricing_chart_id, stakeholder_id, amount)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (pricing_chart_id, stakeholder_id) DO UPDATE SET amount = EXCLUDED.amount`,
-        [pricingChartId, shId, sr.amount],
-      );
+    // ── Stakeholder rates per vehicle type ────────────────────────────────
+    // Delete existing rates for this chart so we can re-seed cleanly
+    await client.query(
+      `DELETE FROM pricing_chart_stakeholder_rates WHERE pricing_chart_id = $1`,
+      [pricingChartId],
+    );
+
+    let ratesInserted = 0;
+    for (const [vtName, rates] of Object.entries(STAKEHOLDER_RATES_BY_VEHICLE_TYPE)) {
+      const vtId = vehicleTypeIdByName[vtName];
+      if (!vtId) continue;
+      for (const [stakeholderName, amount] of Object.entries(rates)) {
+        const shId = stakeholderIdByName[stakeholderName];
+        if (!shId) continue;
+        await client.query(
+          `INSERT INTO pricing_chart_stakeholder_rates
+             (pricing_chart_id, stakeholder_id, vehicle_type_id, amount)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT ON CONSTRAINT pricing_chart_stakeholder_rates_unique
+           DO UPDATE SET amount = EXCLUDED.amount`,
+          [pricingChartId, shId, vtId, amount],
+        );
+        ratesInserted++;
+      }
     }
-    console.log(`✓ Pricing chart stakeholder rates upserted`);
+    console.log(`✓ Pricing chart stakeholder rates upserted: ${ratesInserted} rows (${VEHICLE_TYPES.length} types × ${STAKEHOLDERS.length} stakeholders)`);
 
     // ── Trip admin accounts ───────────────────────────────────────────────
     const TRIP_ADMINS_DEMO = [
@@ -347,6 +394,17 @@ async function seed(): Promise<void> {
     }
     console.log(`✓ Vehicles upserted: ${vehUpserted}`);
 
+    // ── Assign vehicle types to demo vehicles (Heavy Duty as default) ─────
+    const heavyDutyTypeId = vehicleTypeIdByName['Heavy Duty 6/8 Tyres'];
+    if (heavyDutyTypeId) {
+      await client.query(
+        `UPDATE vehicles SET vehicle_type_id = $1
+         WHERE vehicle_type_id IS NULL AND deleted_at IS NULL`,
+        [heavyDutyTypeId],
+      );
+      console.log('✓ Demo vehicles assigned vehicle_type_id: Heavy Duty 6/8 Tyres');
+    }
+
     // ── Drivers ───────────────────────────────────────────────────────────
     const DEMO_DRIVERS = [
       { name: 'Emeka Okafor',  lic: 'LG-2021-001', phone: '08012345671', creator: 'lagos.ta1@synergy.com'  },
@@ -375,18 +433,8 @@ async function seed(): Promise<void> {
     console.log(`✓ Drivers upserted: ${drvUpserted}`);
 
     // ── Demo Trips ────────────────────────────────────────────────────────
-    // Load stakeholder rates for the active pricing chart
-    type StakeholderRate = { stakeholderId: string; amount: number };
-    const srRes = await client.query<{ stakeholder_id: string; amount: string }>(
-      `SELECT stakeholder_id, amount
-       FROM pricing_chart_stakeholder_rates
-       WHERE pricing_chart_id = $1`,
-      [pricingChartId],
-    );
-    const shRates: StakeholderRate[] = srRes.rows.map(r => ({
-      stakeholderId: r.stakeholder_id,
-      amount: Number(r.amount),
-    }));
+    // Track every wallet touched across all trips for final reconciliation
+    const touchedWalletIds = new Set<string>();
 
     // Helper: resolve wallet ID by owner
     const getWalletId = async (ownerType: string, ownerId: string): Promise<string> => {
@@ -411,9 +459,6 @@ async function seed(): Promise<void> {
       isCancellationPending?: boolean;
     };
 
-    // Track every wallet touched across all trips for final reconciliation
-    const touchedWalletIds = new Set<string>();
-
     const insertDemoTrip = async (spec: TripSpec): Promise<void> => {
       const vehicleId     = vehicleIdMap[spec.vehicleReg];
       const driverId      = driverIdMap[spec.driverLic];
@@ -421,15 +466,30 @@ async function seed(): Promise<void> {
       const unloadStateId = stateIdMap[spec.unloadCode];
       const creatorId     = taIdMap[spec.creatorEmail];
 
-      // Look up per-state rates from DB (never hardcode amounts)
-      const stateRatesRes = await client.query<{ id: string; loading_rate: number; unloading_rate: number }>(
-        `SELECT id, loading_rate, unloading_rate FROM states WHERE id = ANY($1::uuid[])`,
-        [[loadStateId, unloadStateId]],
+      // Look up loading/unloading fees from the vehicle's type
+      const vtRes = await client.query<{ vehicle_type_id: string; loading_fee: number; unloading_fee: number }>(
+        `SELECT v.vehicle_type_id, vt.loading_fee, vt.unloading_fee
+         FROM vehicles v
+         JOIN vehicle_types vt ON vt.id = v.vehicle_type_id
+         WHERE v.id = $1`,
+        [vehicleId],
       );
-      const loadStateRow  = stateRatesRes.rows.find(r => r.id === loadStateId)!;
-      const unloadStateRow = stateRatesRes.rows.find(r => r.id === unloadStateId)!;
-      const loadingFee   = Number(loadStateRow.loading_rate);
-      const unloadingFee = Number(unloadStateRow.unloading_rate);
+      if (vtRes.rows.length === 0) {
+        throw new Error(`Vehicle ${spec.vehicleReg} has no vehicle_type_id assigned`);
+      }
+      const { vehicle_type_id: vehicleTypeId, loading_fee: loadingFee, unloading_fee: unloadingFee } = vtRes.rows[0]!;
+
+      // Load stakeholder rates for this vehicle type + active chart
+      const srRes = await client.query<{ stakeholder_id: string; amount: string }>(
+        `SELECT stakeholder_id, amount
+         FROM pricing_chart_stakeholder_rates
+         WHERE pricing_chart_id = $1 AND vehicle_type_id = $2`,
+        [pricingChartId, vehicleTypeId],
+      );
+      const shRates = srRes.rows.map(r => ({
+        stakeholderId: r.stakeholder_id,
+        amount: Number(r.amount),
+      }));
 
       // Upsert trip — ON CONFLICT DO NOTHING so events are not duplicated
       const insertTripRes = await client.query<{ id: string }>(
@@ -496,7 +556,7 @@ async function seed(): Promise<void> {
         await client.query(`DELETE FROM wallet_ledger WHERE trip_id = $1`, [tripId]);
         await client.query(`DELETE FROM trip_fees   WHERE trip_id = $1`, [tripId]);
 
-        // 3. Re-insert fees using per-state rates
+        // 3. Re-insert fees using vehicle-type rates
         const loadFeeRes = await client.query<{ id: string }>(
           `INSERT INTO trip_fees (trip_id, recipient_type, recipient_id, fee_type, amount)
            VALUES ($1, 'state', $2, 'loading', $3) RETURNING id`,
@@ -736,8 +796,8 @@ async function seed(): Promise<void> {
         [walletId],
       );
       const row = rec.rows[0]!;
-      const stored     = Number(row.stored);
-      const ledgerSum  = Number(row.ledger_sum);
+      const stored    = Number(row.stored);
+      const ledgerSum = Number(row.ledger_sum);
       if (stored !== ledgerSum) {
         failedWallets.push(
           `wallet ${walletId} (${row.owner_type}/${row.owner_id}): stored=${stored}, ledger_sum=${ledgerSum}`,
