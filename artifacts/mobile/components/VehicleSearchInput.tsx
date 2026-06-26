@@ -13,6 +13,8 @@ import { searchVehicles } from '@/services/api';
 export interface Vehicle {
   id: string;
   registrationNumber: string;
+  vehicleTypeId?: string;
+  vehicleTypeName?: string | null;
   createdBy: string;
   isActive: boolean;
   createdAt: string;
@@ -106,6 +108,9 @@ export default function VehicleSearchInput({ value, onSelect, onRegisterNew, pla
               activeOpacity={0.7}
             >
               <Text style={styles.dropdownText}>{vehicle.registrationNumber}</Text>
+              {vehicle.vehicleTypeName ? (
+                <Text style={styles.dropdownSubText}>{vehicle.vehicleTypeName}</Text>
+              ) : null}
             </TouchableOpacity>
           ))}
 
@@ -166,6 +171,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: theme.colors.black,
     fontWeight: '500',
+  },
+  dropdownSubText: {
+    fontSize: 12,
+    color: theme.colors.grey1,
+    marginTop: 2,
   },
   registerRow: {
     backgroundColor: theme.colors.blueMuted,

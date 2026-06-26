@@ -1,0 +1,81 @@
+This is the frontend update to support vehicle-type-based pricing. Follow all steps in order.
+Critical testing setup:
+
+App URL: https://2f2a3156-e178-45fc-95e3-f3726442355f-00-2f9hl4ag0p8j2.expo.kirk.replit.dev
+Viewport: 390x844px for all browser tests
+
+Step 1 -- Update vehicle registration to require vehicle type
+In artifacts/mobile/app/(tripadmin)/vehicles.tsx, update the vehicle registration modal:
+
+Add a vehicle type picker showing all 7 types from GET /api/vehicle-types
+Required field -- show validation error if not selected
+On submit, pass vehicleTypeId in the createVehicle API call
+Each vehicle card should now show the vehicle type name below the registration number
+
+Update createVehicle in services/api.ts to accept vehicleTypeId in the body.
+Also update the VehicleSearchInput component -- each search result row should show the registration number and vehicle type name so Trip Admins can distinguish vehicles of different types.
+Step 2 -- Update trip creation form
+In artifacts/mobile/app/(tripadmin)/index.tsx, completely replace the fee section of the trip creation form:
+Remove entirely:
+
+The manual loading fee display (was pre-filled from old per-state rates)
+The manual unloading fee display
+The stakeholder toggles (stakeholders are now fully automatic based on vehicle type)
+Any fees object being sent in the trip creation API call body
+
+Add:
+
+Once a vehicle is selected (via VehicleSearchInput), the selected vehicle now has a vehicleTypeName. Show a read-only fee preview section:
+Vehicle Type: Heavy Duty 6/8 Tyres
+─────────────────────────────
+Loading Fee:    ₦2,800.00
+Unloading Fee:  ₦2,800.00
+Consultant:     ₦400.00
+Vendor:         ₦500.00
+Integrator:     ₦1,500.00
+─────────────────────────────
+Total:          ₦8,000.00
+Fetch this breakdown by calling GET /api/pricing/active on form open (already fetched), then finding the vehicleTypeRates entry matching the selected vehicle's type. Show it as read-only cards -- no toggles, no editable fields. If the active chart has no rates for the selected vehicle type, show a warning.
+The trip creation API call body now only needs: vehicleId, driverId, loadingStateId, unloadingStateId, originDescription, destinationDescription. No fees at all.
+Step 3 -- Lock loading state to Trip Admin's own state
+In the trip creation form, the loading state picker currently allows any of the 37 states to be selected. Change this so:
+
+The loading state is pre-filled with the Trip Admin's own state (read from useAuth() -- the Trip Admin's entityId is their state's ID)
+The loading state field is displayed as a read-only label ("Loading from: Lagos") not a dropdown
+Only the unloading state remains a selectable dropdown
+
+To get the state name, fetch GET /api/states (already fetched for the unloading picker) and find the state matching entityId.
+Step 4 -- Update Super Admin pricing UI
+In (superadmin)/config.tsx, completely replace the pricing management section with a vehicle-type-based pricing view.
+The new pricing section should show:
+
+A heading "Pricing Chart"
+A list of all 7 vehicle types, each as an expandable card showing:
+
+Vehicle type name and total fee (loading + unloading + all stakeholder fees summed)
+Loading fee and unloading fee (read-only for now -- editable via PATCH /api/vehicle-types/:id in a future task)
+Each stakeholder's rate for this vehicle type
+
+
+Use the vehicleTypeRates array from GET /api/pricing/active to populate this
+
+Remove the old "Create New Chart" form and the old stakeholder rate inputs -- these are now managed per vehicle type.
+Keep the "Stakeholders Pending Rate" section if any unassigned stakeholders exist (for newly created stakeholders that need rates added per vehicle type).
+Add listVehicleTypes() helper to services/api.ts calling GET /api/vehicle-types.
+Step 5 -- Update vehicle type display on existing screens
+In (tripadmin)/index.tsx trip cards, add the vehicle type name below the vehicle registration number on each card.
+In TripDetailView.tsx, add a "Vehicle Type" row showing the type name alongside the existing "Vehicle No." row.
+Update getTripById response handling -- confirm vehicleTypeName is now returned and display it.
+Step 6 -- TypeScript check
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Must return zero errors.
+
+PART 2 -- Testing
+Frontend App Tests (390x844px, tap only):
+Test 1 -- Login as Trip Admin. Go to Vehicles tab. Tap "Register Vehicle". Confirm a vehicle type picker is present. Select "Heavy Duty 6/8 Tyres" and a registration number. Submit. Confirm the new vehicle card shows both registration number and vehicle type.
+Test 2 -- Open the trip creation form. Confirm the loading state is pre-filled with the Trip Admin's state (e.g. "Loading from: Lagos") and is not a dropdown. Confirm the unloading state is still a selectable dropdown.
+Test 3 -- Select a vehicle in the trip creation form. Confirm the fee preview appears showing vehicle type name, loading fee, unloading fee, each stakeholder's fee, and total. Confirm no toggles or manual entry fields exist.
+Test 4 -- Select a different vehicle with a different type. Confirm the fee preview updates to show the correct fees for the new type.
+Test 5 -- Login as Super Admin. Go to Config tab. Confirm the pricing section shows all 7 vehicle types with their fee breakdown per stakeholder. Confirm the old create-chart form is gone.
+Test 6 -- Tap a vehicle type card. Confirm it expands to show loading fee, unloading fee, and each stakeholder's rate for that type.
+Test 7 -- Console is clean throughout.

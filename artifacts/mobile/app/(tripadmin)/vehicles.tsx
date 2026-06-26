@@ -11,16 +11,22 @@ import {
   Platform,
   TextInput,
   Alert,
+  ScrollView,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from 'expo-router';
-import { AlertCircle, Car, CloudOff, LogOut, Pencil, Plus, PlusCircle, Trash2, X } from 'lucide-react-native';
+import { AlertCircle, Car, Check, CloudOff, LogOut, Pencil, Plus, PlusCircle, Trash2, X } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
 import ScreenTransition from '@/components/ScreenTransition';
 import SlideUpList from '@/components/SlideUpList';
 import VehicleSearchInput, { type Vehicle } from '@/components/VehicleSearchInput';
-import { listVehicles, createVehicle, updateVehicle, deleteVehicle as deleteVehicleApi } from '@/services/api';
+import { listVehicles, createVehicle, updateVehicle, deleteVehicle as deleteVehicleApi, listVehicleTypes } from '@/services/api';
 import { useLogout } from '@/hooks/useLogout';
+
+interface VehicleType {
+  id: string;
+  name: string;
+}
 
 interface VehicleWithCount extends Vehicle {
   tripCount: number;
@@ -49,8 +55,18 @@ export default function TripAdminVehicles() {
   const [deleting, setDeleting] = useState<Record<string, boolean>>({});
   const [deleteError, setDeleteError] = useState<Record<string, string>>({});
 
+  const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([]);
+  const [pendingRegNum, setPendingRegNum] = useState<string | null>(null);
+  const [pendingVehicleTypeId, setPendingVehicleTypeId] = useState<string>('');
+
   const navigation = useNavigation();
   const { handleLogout } = useLogout();
+
+  useEffect(() => {
+    listVehicleTypes()
+      .then((data: any) => setVehicleTypes(data?.vehicleTypes ?? []))
+      .catch(() => {});
+  }, []);
 
   const openEditVehicle = useCallback((vehicle: VehicleWithCount) => {
     setEditingVehicle(vehicle);
@@ -92,6 +108,8 @@ export default function TripAdminVehicles() {
 
   const openModal = useCallback(() => {
     setRegisterError(null);
+    setPendingRegNum(null);
+    setPendingVehicleTypeId('');
     setModalVisible(true);
   }, []);
 
@@ -145,7 +163,6 @@ export default function TripAdminVehicles() {
       setHasMore((pg.page ?? nextPage) < (pg.totalPages ?? nextPage));
       setPage(nextPage);
     } catch {
-      // silent fail
     } finally {
       setLoadingMore(false);
     }
@@ -157,13 +174,25 @@ export default function TripAdminVehicles() {
     }, [fetchVehicles])
   );
 
-  const handleRegisterNew = async (registrationNumber: string) => {
+  const handleRegisterNew = (registrationNumber: string) => {
     if (!registrationNumber) return;
+    setRegisterError(null);
+    setPendingVehicleTypeId('');
+    setPendingRegNum(registrationNumber);
+  };
+
+  const handleConfirmRegister = async () => {
+    if (!pendingRegNum || !pendingVehicleTypeId) {
+      setRegisterError('Please select a vehicle type.');
+      return;
+    }
     setRegisterError(null);
     setRegistering(true);
     try {
-      await createVehicle(registrationNumber);
+      await createVehicle({ registrationNumber: pendingRegNum, vehicleTypeId: pendingVehicleTypeId });
       setModalVisible(false);
+      setPendingRegNum(null);
+      setPendingVehicleTypeId('');
       fetchVehicles();
     } catch (err: any) {
       if (err?.error === 'CONFLICT') {
@@ -216,6 +245,9 @@ export default function TripAdminVehicles() {
           <View style={styles.plateBadge}>
             <Text style={styles.plateText}>{item.registrationNumber}</Text>
           </View>
+          {item.vehicleTypeName ? (
+            <Text style={styles.vehicleTypeName}>{item.vehicleTypeName}</Text>
+          ) : null}
           <Text style={styles.tripCount}>
             {item.tripCount} {item.tripCount === 1 ? 'trip' : 'trips'}
           </Text>
@@ -319,7 +351,6 @@ export default function TripAdminVehicles() {
       />
       </SlideUpList>
 
-      {/* FAB — native only; on web the header + button is used instead */}
       {Platform.OS !== 'web' && (
         <TouchableOpacity
           style={styles.fab}
@@ -389,27 +420,63 @@ export default function TripAdminVehicles() {
         visible={modalVisible}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={() => { setModalVisible(false); setPendingRegNum(null); }}
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Register Vehicle</Text>
             <TouchableOpacity
-              onPress={() => setModalVisible(false)}
+              onPress={() => { setModalVisible(false); setPendingRegNum(null); }}
               accessibilityLabel="Close modal"
             >
               <X size={24} color={theme.colors.grey2} />
             </TouchableOpacity>
           </View>
 
-          <View style={styles.modalBody}>
-            <Text style={styles.fieldLabel}>REGISTRATION NUMBER</Text>
-            <VehicleSearchInput
-              value=""
-              onSelect={handleSelectExisting}
-              onRegisterNew={handleRegisterNew}
-              placeholder="e.g. LAG-001-XY"
-            />
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
+            {pendingRegNum === null ? (
+              <>
+                <Text style={styles.fieldLabel}>REGISTRATION NUMBER</Text>
+                <VehicleSearchInput
+                  value=""
+                  onSelect={handleSelectExisting}
+                  onRegisterNew={handleRegisterNew}
+                  placeholder="e.g. LAG-001-XY"
+                />
+              </>
+            ) : (
+              <>
+                <View style={styles.pendingRegRow}>
+                  <View style={styles.plateBadgeSmall}>
+                    <Text style={styles.plateTextSmall}>{pendingRegNum}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => { setPendingRegNum(null); setPendingVehicleTypeId(''); setRegisterError(null); }} style={styles.changeBtn}>
+                    <Text style={styles.changeBtnText}>Change</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={[styles.fieldLabel, { marginTop: 20 }]}>SELECT VEHICLE TYPE</Text>
+                {vehicleTypes.length === 0 ? (
+                  <ActivityIndicator color={theme.colors.primary} style={{ marginTop: 12 }} />
+                ) : (
+                  vehicleTypes.map((vt) => {
+                    const selected = vt.id === pendingVehicleTypeId;
+                    return (
+                      <TouchableOpacity
+                        key={vt.id}
+                        style={[styles.typeRow, selected && styles.typeRowSelected]}
+                        onPress={() => setPendingVehicleTypeId(vt.id)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.typeRowText, selected && styles.typeRowTextSelected]}>
+                          {vt.name}
+                        </Text>
+                        {selected && <Check size={18} color={theme.colors.primary} />}
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
+              </>
+            )}
 
             {registerError && (
               <View style={styles.errorBox}>
@@ -418,14 +485,21 @@ export default function TripAdminVehicles() {
               </View>
             )}
 
-            {registering && (
-              <ActivityIndicator
-                size="small"
-                color={theme.colors.primary}
-                style={{ marginTop: 16 }}
-              />
+            {pendingRegNum !== null && (
+              <TouchableOpacity
+                style={[styles.submitButton, (registering || !pendingVehicleTypeId) && styles.submitButtonDisabled]}
+                onPress={handleConfirmRegister}
+                activeOpacity={0.85}
+                disabled={registering || !pendingVehicleTypeId}
+              >
+                {registering ? (
+                  <ActivityIndicator size="small" color={theme.colors.white} />
+                ) : (
+                  <Text style={styles.submitButtonText}>Register Vehicle</Text>
+                )}
+              </TouchableOpacity>
             )}
-          </View>
+          </ScrollView>
         </View>
       </Modal>
       </ScreenTransition>
@@ -461,7 +535,7 @@ const styles = StyleSheet.create({
   },
   cardLeft: {
     flex: 1,
-    gap: 6,
+    gap: 4,
   },
   cardActions: {
     flexDirection: 'row',
@@ -493,6 +567,11 @@ const styles = StyleSheet.create({
     color: theme.colors.blueText,
     letterSpacing: 1,
     flexShrink: 1,
+  },
+  vehicleTypeName: {
+    fontSize: 13,
+    color: theme.colors.grey1,
+    fontWeight: '500',
   },
   tripCount: {
     fontSize: 13,
@@ -637,5 +716,60 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: theme.colors.primary,
+  },
+  pendingRegRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 4,
+  },
+  plateBadgeSmall: {
+    backgroundColor: theme.colors.blueMuted,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  plateTextSmall: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.colors.blueText,
+    letterSpacing: 1,
+  },
+  changeBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.grey3,
+  },
+  changeBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.colors.grey2,
+  },
+  typeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: theme.colors.white,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 8,
+    borderWidth: 1.5,
+    borderColor: theme.colors.grey3,
+  },
+  typeRowSelected: {
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.blueMuted,
+  },
+  typeRowText: {
+    fontSize: 15,
+    color: theme.colors.black,
+    fontWeight: '500',
+  },
+  typeRowTextSelected: {
+    color: theme.colors.primary,
+    fontWeight: '700',
   },
 });

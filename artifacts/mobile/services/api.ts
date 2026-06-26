@@ -166,11 +166,15 @@ export const createPricingChart = (body: unknown) =>
 export const updatePricingChart = (id: string, body: unknown) =>
   apiRequest(`/api/pricing/${id}`, { method: 'PUT', body: JSON.stringify(body) });
 
-export const addStakeholderRate = (chartId: string, body: { stakeholderId: string; amount: number }) =>
+export const addStakeholderRate = (chartId: string, body: { stakeholderId: string; vehicleTypeId: string; amount: number }) =>
   apiRequest(`/api/pricing/${chartId}/stakeholders`, { method: 'POST', body: JSON.stringify(body) });
 
 export const activatePricingChart = (id: string) =>
   apiRequest(`/api/pricing/${id}/activate`, { method: 'POST' });
+
+// ── Vehicle Types ─────────────────────────────────────────────────────────────
+export const listVehicleTypes = () =>
+  apiRequest('/api/vehicle-types', {}, false);
 
 // ── Vehicles (Trip Admin) ─────────────────────────────────────────────────────
 export const listVehicles = (params?: Record<string, string>) =>
@@ -179,8 +183,8 @@ export const listVehicles = (params?: Record<string, string>) =>
 export const searchVehicles = (q: string) =>
   apiRequest('/api/vehicles/search?' + new URLSearchParams({ q }).toString());
 
-export const createVehicle = (registrationNumber: string) =>
-  apiRequest('/api/vehicles', { method: 'POST', body: JSON.stringify({ registrationNumber }) });
+export const createVehicle = (body: { registrationNumber: string; vehicleTypeId: string }) =>
+  apiRequest('/api/vehicles', { method: 'POST', body: JSON.stringify(body) });
 
 export const deleteVehicle = (id: string) =>
   apiRequest(`/api/vehicles/${id}`, { method: 'DELETE' });
@@ -198,7 +202,7 @@ export const createDriver = (body: { full_name: string; license_number: string; 
 export const updateDriver = (id: string, body: { full_name?: string; phone_number?: string }) =>
   apiRequest(`/api/drivers/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 
-export const updateVehicle = (id: string, body: { registrationNumber: string }) =>
+export const updateVehicle = (id: string, body: { registrationNumber: string; vehicleTypeId?: string }) =>
   apiRequest(`/api/vehicles/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 
 // ── Auth / Profile ────────────────────────────────────────────────────────────

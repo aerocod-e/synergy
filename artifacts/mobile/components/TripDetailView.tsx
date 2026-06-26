@@ -23,6 +23,8 @@ export interface TripDetail {
   id: string;
   tripCode: string | null;
   vehicleNumber: string;
+  vehicleTypeId?: string;
+  vehicleTypeName?: string | null;
   status: string;
   loadingState: { id: string; name: string; code: string };
   unloadingState: { id: string; name: string; code: string };
@@ -103,7 +105,7 @@ export default function TripDetailView({ trip, footer }: TripDetailViewProps) {
 
   const loadingFees  = trip.fees.filter((f) => f.feeType === 'loading');
   const unloadingFees = trip.fees.filter((f) => f.feeType === 'unloading');
-  const stakeholderFees = trip.fees.filter((f) => f.feeType === 'stakeholder');
+  const stakeholderFees = trip.fees.filter((f) => f.feeType === 'stakeholder' || f.feeType === 'stakeholder_fee');
 
   return (
     <ScrollView
@@ -126,6 +128,9 @@ export default function TripDetailView({ trip, footer }: TripDetailViewProps) {
         <View style={styles.vehicleRow}>
           <Text style={styles.headerMeta}>VEHICLE NO.</Text>
           <Text style={styles.vehicleNumber}>{trip.vehicleNumber}</Text>
+          {trip.vehicleTypeName ? (
+            <Text style={styles.vehicleType}>{trip.vehicleTypeName}</Text>
+          ) : null}
         </View>
       </View>
 
@@ -280,6 +285,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: theme.colors.black,
     marginTop: 2,
+  },
+  vehicleType: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: theme.colors.grey1,
+    marginTop: 4,
   },
   section: {
     marginTop: 16,

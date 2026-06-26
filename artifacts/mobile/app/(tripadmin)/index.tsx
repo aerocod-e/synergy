@@ -10,29 +10,30 @@ import {
   RefreshControl,
   ScrollView,
   TextInput,
-  Switch,
   KeyboardAvoidingView,
   Keyboard,
   Pressable,
   Platform,
 } from 'react-native';
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
-import { AlertCircle, AlertTriangle, Car, ChevronDown, ChevronUp, CloudOff, LogOut, MapPin, Plus, PlusCircle, User, X } from 'lucide-react-native';
+import { AlertCircle, AlertTriangle, Car, Check, ChevronDown, ChevronUp, CloudOff, LogOut, MapPin, Plus, PlusCircle, User, X } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
 import ScreenTransition from '@/components/ScreenTransition';
 import SlideUpList from '@/components/SlideUpList';
 import VehicleSearchInput, { type Vehicle } from '@/components/VehicleSearchInput';
 import DriverSearchInput, { type Driver } from '@/components/DriverSearchInput';
-import { getTrips, createTrip, getActivePricingChart, getStates, requestCancellation, createVehicle } from '@/services/api';
+import { getTrips, createTrip, getActivePricingChart, getStates, requestCancellation, createVehicle, listVehicleTypes } from '@/services/api';
 import { formatNaira } from '@/utils/formatCurrency';
 import { useLogout } from '@/hooks/useLogout';
+import { useAuthContext } from '@/app/_layout';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface TripItem {
   id: string;
   vehicleNumber: string;
+  vehicleTypeName?: string | null;
   status: 'created' | 'in_transit' | 'completed' | 'cancelled' | 'cancellation_pending' | string;
   loadingState: { id: string; name: string; code: string };
   unloadingState: { id: string; name: string; code: string };
@@ -42,23 +43,33 @@ interface TripItem {
   createdAt: string;
 }
 
-interface StakeholderRate {
-  id: string;
-  stakeholder_id: string;
+interface StakeholderRateItem {
+  stakeholderId: string;
+  stakeholderName: string;
   amount: number;
-  stakeholder_name: string;
+}
+
+interface VehicleTypeRate {
+  vehicleTypeId: string;
+  vehicleTypeName: string;
+  loadingFee: number;
+  unloadingFee: number;
+  stakeholderRates: StakeholderRateItem[];
 }
 
 interface PricingData {
-  stakeholderRates: StakeholderRate[];
+  vehicleTypeRates: VehicleTypeRate[];
 }
 
 interface StateItem {
   id: string;
   name: string;
   code: string;
-  loadingRate: number;
-  unloadingRate: number;
+}
+
+interface VehicleTypeItem {
+  id: string;
+  name: string;
 }
 
 // ── Status badge helpers ───────────────────────────────────────────────────────
@@ -85,6 +96,7 @@ export default function TripAdminTrips() {
   const navigation = useNavigation();
   const router = useRouter();
   const { handleLogout } = useLogout();
+  const { user } = useAuthContext();
 
   // trips list
   const PAGE_LIMIT = 20;
@@ -103,6 +115,7 @@ export default function TripAdminTrips() {
   const [pricing, setPricing] = useState<PricingData | null>(null);
   const [pricingError, setPricingError] = useState<string | null>(null);
   const [states, setStates] = useState<StateItem[]>([]);
+  const [vehicleTypes, setVehicleTypes] = useState<VehicleTypeItem[]>([]);
   const [formLoading, setFormLoading] = useState(false);
 
   // form inputs
@@ -114,14 +127,15 @@ export default function TripAdminTrips() {
   const [unloadingStateId, setUnloadingStateId] = useState('');
   const [originDescription, setOriginDescription] = useState('');
   const [destinationDescription, setDestinationDescription] = useState('');
-  const [toggles, setToggles] = useState<Record<string, boolean>>({});
 
-  // inline state picker
-  const [activeStatePicker, setActiveStatePicker] = useState<'loading' | 'unloading' | null>(null);
+  // inline state picker (unloading only)
+  const [activeStatePicker, setActiveStatePicker] = useState<'unloading' | null>(null);
 
-  // vehicle inline registration
+  // vehicle inline registration (type picker step)
   const [vehicleRegistering, setVehicleRegistering] = useState(false);
   const [vehicleRegisterError, setVehicleRegisterError] = useState<string | null>(null);
+  const [pendingRegNum, setPendingRegNum] = useState<string | null>(null);
+  const [pendingRegTypeId, setPendingRegTypeId] = useState<string>('');
 
   // submission
   const [submitting, setSubmitting] = useState(false);
@@ -165,7 +179,6 @@ export default function TripAdminTrips() {
       setHasMore((pg.page ?? nextPage) < (pg.totalPages ?? nextPage));
       setPage(nextPage);
     } catch {
-      // silent fail
     } finally {
       setLoadingMore(false);
     }
@@ -184,10 +197,12 @@ export default function TripAdminTrips() {
     setPricingError(null);
     setPricing(null);
     setStates([]);
+    setVehicleTypes([]);
     try {
-      const [pricingRes, statesRes] = await Promise.all([
+      const [pricingRes, statesRes, vehicleTypesRes] = await Promise.all([
         getActivePricingChart().catch(() => null),
         getStates().catch(() => []),
+        listVehicleTypes().catch(() => null),
       ]);
 
       if (!pricingRes) {
@@ -195,18 +210,16 @@ export default function TripAdminTrips() {
       } else {
         const chart = (pricingRes as any).chart;
         const pd: PricingData = {
-          stakeholderRates: (chart.stakeholder_rates ?? []) as StakeholderRate[],
+          vehicleTypeRates: (chart.vehicleTypeRates ?? []) as VehicleTypeRate[],
         };
         setPricing(pd);
-        const initialToggles: Record<string, boolean> = {};
-        for (const r of pd.stakeholderRates) {
-          initialToggles[r.stakeholder_id] = false;
-        }
-        setToggles(initialToggles);
       }
 
       const rawStates = (statesRes as any)?.states ?? statesRes;
       setStates(Array.isArray(rawStates) ? rawStates as StateItem[] : []);
+
+      const rawTypes = (vehicleTypesRes as any)?.vehicleTypes ?? [];
+      setVehicleTypes(Array.isArray(rawTypes) ? rawTypes as VehicleTypeItem[] : []);
     } finally {
       setFormLoading(false);
     }
@@ -217,18 +230,19 @@ export default function TripAdminTrips() {
     setVehicleInputValue('');
     setSelectedDriver(null);
     setDriverInputValue('');
-    setLoadingStateId('');
+    setLoadingStateId(user?.entityId ?? '');
     setUnloadingStateId('');
     setOriginDescription('');
     setDestinationDescription('');
-    setToggles({});
     setSubmitError(null);
     setActiveStatePicker(null);
     setVehicleRegisterError(null);
     setVehicleRegistering(false);
+    setPendingRegNum(null);
+    setPendingRegTypeId('');
     setModalVisible(true);
     loadFormData();
-  }, [loadFormData]);
+  }, [loadFormData, user]);
 
   // ── header button (web) ─────────────────────────────────────────────────────
 
@@ -255,18 +269,24 @@ export default function TripAdminTrips() {
 
   // ── state picker ────────────────────────────────────────────────────────────
 
-  const openStatePicker = (which: 'loading' | 'unloading') => {
-    setActiveStatePicker((prev) => (prev === which ? null : which));
+  const openStatePicker = () => {
+    setActiveStatePicker((prev) => (prev === 'unloading' ? null : 'unloading'));
   };
 
-  const handleStateSelect = (state: StateItem, which: 'loading' | 'unloading') => {
-    if (which === 'loading') setLoadingStateId(state.id);
-    else setUnloadingStateId(state.id);
+  const handleStateSelect = (state: StateItem) => {
+    setUnloadingStateId(state.id);
     setActiveStatePicker(null);
   };
 
   const loadingStateName  = states.find((s) => s.id === loadingStateId)?.name  ?? '';
   const unloadingStateName = states.find((s) => s.id === unloadingStateId)?.name ?? '';
+
+  // ── fee preview ─────────────────────────────────────────────────────────────
+
+  const selectedTypeRate: VehicleTypeRate | null = (() => {
+    if (!pricing || !selectedVehicle?.vehicleTypeId) return null;
+    return pricing.vehicleTypeRates.find((r) => r.vehicleTypeId === selectedVehicle.vehicleTypeId) ?? null;
+  })();
 
   // ── submit ──────────────────────────────────────────────────────────────────
 
@@ -282,7 +302,7 @@ export default function TripAdminTrips() {
       return;
     }
     if (!loadingStateId) {
-      setSubmitError('Please select a loading state.');
+      setSubmitError('Loading state is not set. Please contact your administrator.');
       return;
     }
     if (!unloadingStateId) {
@@ -294,12 +314,6 @@ export default function TripAdminTrips() {
       return;
     }
 
-    const stakeholders = pricing.stakeholderRates.map((r) => ({
-      stakeholderId: r.stakeholder_id,
-      amount:        r.amount,
-      enabled:       toggles[r.stakeholder_id] ?? false,
-    }));
-
     const body = {
       vehicleId:              selectedVehicle.id,
       driverId:               selectedDriver.id,
@@ -307,9 +321,6 @@ export default function TripAdminTrips() {
       unloadingStateId,
       originDescription:      originDescription.trim() || undefined,
       destinationDescription: destinationDescription.trim() || undefined,
-      fees: {
-        stakeholders,
-      },
     };
 
     setSubmitting(true);
@@ -365,6 +376,9 @@ export default function TripAdminTrips() {
             </Text>
           </View>
         </View>
+        {item.vehicleTypeName ? (
+          <Text style={styles.cardVehicleType}>{item.vehicleTypeName}</Text>
+        ) : null}
         <View style={styles.cardRoute}>
           <MapPin size={14} color={theme.colors.grey1} />
           <Text style={styles.routeText} numberOfLines={1}>
@@ -504,7 +518,7 @@ export default function TripAdminTrips() {
           {formLoading ? (
             <View style={styles.center}>
               <ActivityIndicator size="large" color={theme.colors.primary} />
-              <Text style={styles.formLoadingText}>Loading pricing & states…</Text>
+              <Text style={styles.formLoadingText}>Loading pricing data…</Text>
             </View>
           ) : (
             <ScrollView
@@ -520,67 +534,98 @@ export default function TripAdminTrips() {
                 </View>
               )}
 
-              {/* STAKEHOLDERS */}
-              {pricing && pricing.stakeholderRates.length > 0 && (
-                <>
-                  <Text style={styles.sectionLabel}>STAKEHOLDERS</Text>
-                  {pricing.stakeholderRates.map((rate) => (
-                    <View key={rate.stakeholder_id} style={styles.stakeholderRow}>
-                      <View style={styles.stakeholderLeft}>
-                        <Text style={styles.stakeholderName}>{rate.stakeholder_name}</Text>
-                        <Text style={styles.stakeholderAmount}>{formatNaira(rate.amount)}</Text>
-                      </View>
-                      <Switch
-                        value={toggles[rate.stakeholder_id] ?? false}
-                        onValueChange={(val) =>
-                          setToggles((prev) => ({ ...prev, [rate.stakeholder_id]: val }))
-                        }
-                        trackColor={{ false: theme.colors.inactive, true: theme.colors.primary }}
-                        thumbColor={theme.colors.white}
-                      />
-                    </View>
-                  ))}
-                </>
-              )}
-
               {/* VEHICLE */}
-              <Text style={[styles.sectionLabel, { marginTop: 24 }]}>VEHICLE</Text>
-              <VehicleSearchInput
-                value={vehicleInputValue}
-                onSelect={(v) => {
-                  setSelectedVehicle(v);
-                  setVehicleInputValue(v.registrationNumber);
-                  setVehicleRegisterError(null);
-                }}
-                onRegisterNew={async (regNum) => {
-                  if (!regNum) return;
-                  setVehicleRegisterError(null);
-                  setVehicleRegistering(true);
-                  try {
-                    const created = await createVehicle(regNum);
-                    const v = created as any;
-                    setSelectedVehicle({
-                      id: v.id,
-                      registrationNumber: v.registrationNumber,
-                      createdBy: v.createdBy,
-                      isActive: v.isActive,
-                      createdAt: v.createdAt,
-                    });
-                    setVehicleInputValue(v.registrationNumber);
-                  } catch (err: any) {
-                    if (err?.error === 'CONFLICT') {
-                      setVehicleRegisterError('Already registered — search for it above.');
-                    } else {
-                      setVehicleRegisterError(err?.message ?? 'Failed to register vehicle.');
+              <Text style={styles.sectionLabel}>VEHICLE</Text>
+
+              {/* Inline type picker shown when a reg num is pending */}
+              {pendingRegNum !== null ? (
+                <View style={styles.inlineTypePickerBox}>
+                  <View style={styles.inlineTypePendingRow}>
+                    <View style={styles.plateBadgeSmall}>
+                      <Text style={styles.plateTextSmall}>{pendingRegNum}</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => { setPendingRegNum(null); setPendingRegTypeId(''); setVehicleRegisterError(null); }}
+                      style={styles.changeBtn}
+                    >
+                      <Text style={styles.changeBtnText}>Change</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={[styles.sectionLabel, { marginTop: 14, marginBottom: 8 }]}>SELECT VEHICLE TYPE</Text>
+                  {vehicleTypes.length === 0 ? (
+                    <ActivityIndicator color={theme.colors.primary} />
+                  ) : (
+                    vehicleTypes.map((vt) => {
+                      const sel = vt.id === pendingRegTypeId;
+                      return (
+                        <TouchableOpacity
+                          key={vt.id}
+                          style={[styles.typeRow, sel && styles.typeRowSelected]}
+                          onPress={() => setPendingRegTypeId(vt.id)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.typeRowText, sel && styles.typeRowTextSelected]}>{vt.name}</Text>
+                          {sel && <Check size={16} color={theme.colors.primary} />}
+                        </TouchableOpacity>
+                      );
+                    })
+                  )}
+                  <TouchableOpacity
+                    style={[styles.confirmRegBtn, (!pendingRegTypeId || vehicleRegistering) && styles.confirmRegBtnDisabled]}
+                    onPress={async () => {
+                      if (!pendingRegNum || !pendingRegTypeId) return;
+                      setVehicleRegisterError(null);
+                      setVehicleRegistering(true);
+                      try {
+                        const created = await createVehicle({ registrationNumber: pendingRegNum, vehicleTypeId: pendingRegTypeId });
+                        const v = created as any;
+                        setSelectedVehicle({
+                          id: v.id,
+                          registrationNumber: v.registrationNumber,
+                          vehicleTypeId: v.vehicleTypeId,
+                          vehicleTypeName: v.vehicleTypeName,
+                          createdBy: v.createdBy,
+                          isActive: v.isActive,
+                          createdAt: v.createdAt,
+                        });
+                        setVehicleInputValue(v.registrationNumber);
+                        setPendingRegNum(null);
+                        setPendingRegTypeId('');
+                      } catch (err: any) {
+                        if (err?.error === 'CONFLICT') {
+                          setVehicleRegisterError('Already registered — search for it above.');
+                        } else {
+                          setVehicleRegisterError(err?.message ?? 'Failed to register vehicle.');
+                        }
+                      } finally {
+                        setVehicleRegistering(false);
+                      }
+                    }}
+                    disabled={!pendingRegTypeId || vehicleRegistering}
+                    activeOpacity={0.85}
+                  >
+                    {vehicleRegistering
+                      ? <ActivityIndicator size="small" color={theme.colors.white} />
+                      : <Text style={styles.confirmRegBtnText}>Register Vehicle</Text>
                     }
-                  } finally {
-                    setVehicleRegistering(false);
-                  }
-                }}
-                placeholder="Search registration number…"
-              />
-              {vehicleRegistering && (
-                <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginTop: 8 }} />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <VehicleSearchInput
+                  value={vehicleInputValue}
+                  onSelect={(v) => {
+                    setSelectedVehicle(v);
+                    setVehicleInputValue(v.registrationNumber);
+                    setVehicleRegisterError(null);
+                  }}
+                  onRegisterNew={(regNum) => {
+                    if (!regNum) return;
+                    setVehicleRegisterError(null);
+                    setPendingRegTypeId('');
+                    setPendingRegNum(regNum);
+                  }}
+                  placeholder="Search registration number…"
+                />
               )}
               {vehicleRegisterError && (
                 <View style={styles.errorBox}>
@@ -603,49 +648,18 @@ export default function TripAdminTrips() {
               {/* ROUTE */}
               <Text style={[styles.sectionLabel, { marginTop: 20 }]}>ROUTE</Text>
 
-              <TouchableOpacity
-                style={styles.pickerField}
-                onPress={() => openStatePicker('loading')}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    styles.pickerFieldText,
-                    !loadingStateName && styles.pickerFieldPlaceholder,
-                  ]}
-                >
-                  {loadingStateName || 'Select loading state…'}
+              {/* Loading state — read-only, locked to user's state */}
+              <View style={styles.lockedField}>
+                <Text style={styles.lockedFieldText}>
+                  {loadingStateName || (loadingStateId ? 'Your state (loading)' : 'Loading state not assigned')}
                 </Text>
-                {activeStatePicker === 'loading' ? <ChevronUp size={18}
-                  color={theme.colors.grey1} /> : <ChevronDown size={18}
-                  color={theme.colors.grey1} />}
-              </TouchableOpacity>
-              {activeStatePicker === 'loading' && (
-                <ScrollView
-                  style={styles.inlinePickerList}
-                  nestedScrollEnabled
-                  keyboardShouldPersistTaps="handled"
-                >
-                  {states.map((s) => (
-                    <TouchableOpacity
-                      key={s.id}
-                      style={styles.inlinePickerRow}
-                      onPress={() => handleStateSelect(s, 'loading')}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.stateRowText}>{s.name}</Text>
-                      <Text style={styles.stateRowCode}>{s.code}</Text>
-                    </TouchableOpacity>
-                  ))}
-                  {states.length === 0 && (
-                    <Text style={styles.inlinePickerEmpty}>No states available</Text>
-                  )}
-                </ScrollView>
-              )}
+                <Text style={styles.lockedBadge}>Loading</Text>
+              </View>
 
+              {/* Unloading state picker */}
               <TouchableOpacity
                 style={[styles.pickerField, { marginTop: 10 }]}
-                onPress={() => openStatePicker('unloading')}
+                onPress={openStatePicker}
                 activeOpacity={0.7}
               >
                 <Text
@@ -670,7 +684,7 @@ export default function TripAdminTrips() {
                     <TouchableOpacity
                       key={s.id}
                       style={styles.inlinePickerRow}
-                      onPress={() => handleStateSelect(s, 'unloading')}
+                      onPress={() => handleStateSelect(s)}
                       activeOpacity={0.7}
                     >
                       <Text style={styles.stateRowText}>{s.name}</Text>
@@ -683,30 +697,43 @@ export default function TripAdminTrips() {
                 </ScrollView>
               )}
 
-              {/* FEES (derived from selected state rates) */}
+              {/* FEES — derived from selected vehicle type rate */}
               <Text style={[styles.sectionLabel, { marginTop: 20 }]}>FEES</Text>
-              <View style={styles.feeRow}>
-                <Text style={styles.feeLabel}>Loading Fee</Text>
-                {loadingStateId ? (
-                  <Text style={styles.feeAmount}>
-                    {formatNaira(states.find((s) => s.id === loadingStateId)?.loadingRate ?? 0)}
-                    {loadingStateName ? ` (${loadingStateName} rate)` : ''}
-                  </Text>
-                ) : (
-                  <Text style={[styles.feeAmount, styles.feePlaceholder]}>Select loading state</Text>
-                )}
-              </View>
-              <View style={[styles.feeRow, styles.feeRowLast]}>
-                <Text style={styles.feeLabel}>Unloading Fee</Text>
-                {unloadingStateId ? (
-                  <Text style={styles.feeAmount}>
-                    {formatNaira(states.find((s) => s.id === unloadingStateId)?.unloadingRate ?? 0)}
-                    {unloadingStateName ? ` (${unloadingStateName} rate)` : ''}
-                  </Text>
-                ) : (
-                  <Text style={[styles.feeAmount, styles.feePlaceholder]}>Select unloading state</Text>
-                )}
-              </View>
+              {!selectedVehicle ? (
+                <View style={styles.feePlaceholderBox}>
+                  <Text style={styles.feePlaceholderText}>Select a vehicle to see fee preview</Text>
+                </View>
+              ) : !selectedVehicle.vehicleTypeId ? (
+                <View style={styles.feePlaceholderBox}>
+                  <Text style={styles.feePlaceholderText}>Vehicle has no type assigned</Text>
+                </View>
+              ) : !pricing ? (
+                <View style={styles.feePlaceholderBox}>
+                  <Text style={styles.feePlaceholderText}>No active pricing chart</Text>
+                </View>
+              ) : !selectedTypeRate ? (
+                <View style={styles.feePlaceholderBox}>
+                  <Text style={styles.feePlaceholderText}>No rate configured for this vehicle type</Text>
+                </View>
+              ) : (
+                <View style={styles.feeCard}>
+                  <Text style={styles.feeCardTypeLabel}>{selectedTypeRate.vehicleTypeName}</Text>
+                  <View style={styles.feeRow}>
+                    <Text style={styles.feeLabel}>Loading Fee</Text>
+                    <Text style={styles.feeAmount}>{formatNaira(selectedTypeRate.loadingFee)}</Text>
+                  </View>
+                  <View style={[styles.feeRow, { borderBottomWidth: selectedTypeRate.stakeholderRates.length > 0 ? StyleSheet.hairlineWidth : 0 }]}>
+                    <Text style={styles.feeLabel}>Unloading Fee</Text>
+                    <Text style={styles.feeAmount}>{formatNaira(selectedTypeRate.unloadingFee)}</Text>
+                  </View>
+                  {selectedTypeRate.stakeholderRates.map((sr, idx) => (
+                    <View key={sr.stakeholderId} style={[styles.feeRow, idx === selectedTypeRate.stakeholderRates.length - 1 ? styles.feeRowLast : {}]}>
+                      <Text style={styles.feeLabel}>{sr.stakeholderName}</Text>
+                      <Text style={styles.feeAmount}>{formatNaira(sr.amount)}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
 
               {/* DESCRIPTION (optional) */}
               <Text style={[styles.sectionLabel, { marginTop: 20 }]}>DESCRIPTION (OPTIONAL)</Text>
@@ -890,6 +917,11 @@ const styles = StyleSheet.create({
     color: theme.colors.blueText,
     letterSpacing: 1,
   },
+  cardVehicleType: {
+    fontSize: 12,
+    color: theme.colors.grey1,
+    fontWeight: '500',
+  },
   statusBadge: {
     borderRadius: 6,
     paddingHorizontal: 10,
@@ -1025,66 +1057,162 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
+  // locked field (read-only loading state)
+  lockedField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: theme.colors.grey4,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    height: 52,
+  },
+  lockedFieldText: {
+    fontSize: 15,
+    color: theme.colors.grey2,
+    fontWeight: '500',
+    flex: 1,
+  },
+  lockedBadge: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: theme.colors.grey1,
+    backgroundColor: theme.colors.grey3,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+
   // fee rows
+  feePlaceholderBox: {
+    backgroundColor: theme.colors.white,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    ...theme.shadows.card,
+  },
+  feePlaceholderText: {
+    fontSize: 14,
+    color: theme.colors.grey1,
+    textAlign: 'center',
+  },
+  feeCard: {
+    backgroundColor: theme.colors.white,
+    borderRadius: 12,
+    overflow: 'hidden',
+    ...theme.shadows.card,
+  },
+  feeCardTypeLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    color: theme.colors.grey1,
+    textTransform: 'uppercase',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
   feeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: theme.colors.white,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.colors.separator,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
   },
   feeRowLast: {
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
     borderBottomWidth: 0,
+    paddingBottom: 14,
   },
   feeLabel: {
-    fontSize: 15,
+    fontSize: 14,
     color: theme.colors.black,
     fontWeight: '500',
   },
   feeAmount: {
-    fontSize: 15,
+    fontSize: 14,
     color: theme.colors.grey2,
     fontWeight: '700',
   },
-  feePlaceholder: {
-    color: theme.colors.grey1,
-    fontWeight: '400',
-    fontSize: 14,
-  },
 
-  // stakeholder rows
-  stakeholderRow: {
+  // inline type picker (in trip form)
+  inlineTypePickerBox: {
+    backgroundColor: theme.colors.white,
+    borderRadius: 12,
+    padding: 14,
+    ...theme.shadows.card,
+    gap: 0,
+  },
+  inlineTypePendingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  plateBadgeSmall: {
+    backgroundColor: theme.colors.blueMuted,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  plateTextSmall: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.colors.blueText,
+    letterSpacing: 1,
+  },
+  changeBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.grey3,
+  },
+  changeBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.colors.grey2,
+  },
+  typeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: theme.colors.white,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginBottom: 8,
-    ...theme.shadows.card,
+    backgroundColor: theme.colors.background,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    marginBottom: 6,
+    borderWidth: 1.5,
+    borderColor: theme.colors.grey3,
   },
-  stakeholderLeft: {
-    flex: 1,
-    gap: 2,
+  typeRowSelected: {
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.blueMuted,
   },
-  stakeholderName: {
+  typeRowText: {
     fontSize: 14,
-    fontWeight: '600',
     color: theme.colors.black,
+    fontWeight: '500',
   },
-  stakeholderAmount: {
-    fontSize: 13,
-    color: theme.colors.grey1,
+  typeRowTextSelected: {
+    color: theme.colors.primary,
+    fontWeight: '700',
+  },
+  confirmRegBtn: {
+    backgroundColor: theme.colors.primary,
+    borderRadius: 10,
+    height: 46,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  confirmRegBtnDisabled: {
+    opacity: 0.5,
+  },
+  confirmRegBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: theme.colors.white,
   },
 
   // state picker field
