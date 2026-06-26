@@ -99,6 +99,8 @@ export async function getActivePricingChart(_req: Request, res: Response): Promi
        JOIN vehicle_types  vt ON vt.id = pcsr.vehicle_type_id
        JOIN stakeholders   s  ON s.id  = pcsr.stakeholder_id
        WHERE pcsr.pricing_chart_id = $1
+         AND vt.is_active = true
+         AND s.is_active = true
        ORDER BY vt.loading_fee ASC, s.name ASC`,
       [chart.id],
     );

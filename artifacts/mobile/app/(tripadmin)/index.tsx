@@ -482,16 +482,14 @@ export default function TripAdminTrips() {
       />
       </SlideUpList>
 
-      {Platform.OS !== 'web' && (
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={handleOpenModal}
-          activeOpacity={0.85}
-          accessibilityLabel="New trip"
-        >
-          <Plus size={28} color={theme.colors.white} />
-        </TouchableOpacity>
-      )}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={handleOpenModal}
+        activeOpacity={0.85}
+        accessibilityLabel="New trip"
+      >
+        <Plus size={28} color={theme.colors.white} />
+      </TouchableOpacity>
 
       {/* ── Trip creation modal ── */}
       <Modal
