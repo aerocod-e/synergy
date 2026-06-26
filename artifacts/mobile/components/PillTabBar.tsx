@@ -1,5 +1,5 @@
 import { BlurView } from 'expo-blur';
-import { Car, Circle, List, Receipt, Settings, User, Users } from 'lucide-react-native';
+import { Car, Circle, List, Receipt, Settings, User, Users, Wallet } from 'lucide-react-native';
 import { ComponentType, useEffect, useRef, useState } from 'react';
 import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,12 +14,13 @@ const TAB_ICONS: Record<string, IconComponent> = {
   ledger: Receipt,
   vehicles: Car,
   'trip-admins': User,
+  wallet: Wallet,
 };
 
 const PILL_PADDING = 6;
 const SLIDER_VERTICAL_INSET = 6;
 
-const HIDDEN_ROUTES = new Set(['create-trip', 'trip-detail', 'user-detail']);
+const HIDDEN_ROUTES = new Set(['create-trip', 'trip-detail', 'user-detail', 'ledger-detail']);
 
 export default function PillTabBar(props: any) {
   const { state, descriptors, navigation } = props as {

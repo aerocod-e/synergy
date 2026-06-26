@@ -7,8 +7,10 @@ export default function StateAdminLayout() {
       tabBar={(props) => <PillTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
-      <Tabs.Screen name="index"       options={{ title: 'Requests',   tabBarLabel: 'Requests' }} />
-      <Tabs.Screen name="trip-admins" options={{ title: 'Trip Admins', tabBarLabel: 'Trip Admins' }} />
+      <Tabs.Screen name="index"        options={{ title: 'Requests',    tabBarLabel: 'Requests' }} />
+      <Tabs.Screen name="trip-admins"  options={{ title: 'Trip Admins', tabBarLabel: 'Trip Admins' }} />
+      <Tabs.Screen name="wallet"       options={{ title: 'Wallet',      tabBarLabel: 'Wallet' }} />
+      <Tabs.Screen name="ledger-detail" options={{ href: null }} />
     </Tabs>
   );
 }

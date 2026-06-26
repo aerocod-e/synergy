@@ -1,0 +1,101 @@
+This task builds the State Admin wallet and ledger screen, and adds transaction detail views for both State Admin and Stakeholder. Follow all steps in order.
+Critical testing setup:
+
+App URL: https://2f2a3156-e178-45fc-95e3-f3726442355f-00-2f9hl4ag0p8j2.expo.kirk.replit.dev
+Viewport: 390x844px for all browser tests
+
+Step 1 -- State Admin wallet and ledger screen
+Create artifacts/mobile/app/(stateadmin)/wallet.tsx. This screen mirrors the Stakeholder wallet screen ((stakeholder)/index.tsx) closely but with a few differences:
+
+On mount fetch GET /api/wallets/my and GET /api/wallets/my/ledger
+Show the wallet balance card at the top with the state's total collected
+Show summary row (Credits, Reversals, Net Total) same as stakeholder screen
+Show ledger list with load-more pagination (PAGE_LIMIT = 20, same pattern as stakeholder)
+Each ledger entry shows: vehicle type name, trip route (loading state → unloading state), amount (green for credit, red for reversal), date
+Include date range filter chips (Last 7 days, Last 30 days, All time)
+Pull to refresh
+Empty state and error state with retry button (same patterns as other screens)
+Each ledger entry is tappable -- tapping navigates to the ledger detail screen (Step 2)
+Include PILL_NAV_BOTTOM_PADDING spacer at the bottom
+
+Register the wallet tab in (stateadmin)/_layout.tsx:
+
+Add a third tab "Wallet" alongside "Requests" and "Trip Admins"
+Add wallet as a Tabs.Screen
+Add 'wallet' to HIDDEN_ROUTES in PillTabBar.tsx? No -- it should be a visible tab
+Add ledger-detail as a hidden screen with href: null
+
+Add getStateWallet() and getStateLedger(params) helpers to services/api.ts -- these can reuse the existing getMyWallet() and getMyLedger() helpers since the endpoint is the same (/api/wallets/my), just called with the State Admin token.
+Step 2 -- Ledger detail screen (shared)
+Create artifacts/mobile/components/LedgerDetailView.tsx -- a shared presentational component used by both State Admin and Stakeholder detail screens.
+It accepts a ledgerEntry prop containing:
+
+The ledger entry fields (amount, entryType, vehicleTypeName, createdAt)
+The tripFees array (full breakdown of all fee recipients for this trip -- already returned by the updated getMyLedger from Prompt 2 Step 7)
+Trip details (loading state name, unloading state name, vehicle registration, trip code, trip status)
+The viewerId and viewerType (so the component knows which entry to highlight as "your share")
+
+The component renders:
+Header section:
+
+Trip code and status badge
+Vehicle registration and vehicle type
+Route: loading state → unloading state
+Date
+
+Full fee breakdown section (titled "Payment Breakdown"):
+
+A row for each fee in tripFees showing:
+
+Recipient label (e.g. "Lagos State (Loading)", "Abuja State (Unloading)", "Consultant", "Vendor", "Integrator")
+Amount in Naira
+A subtle "Your share" badge on the row that matches the viewer's own wallet credit
+
+
+Total amount at the bottom
+
+Your credit section:
+
+Clearly highlighted card showing "You received: ₦X,XXX.XX" for this transaction
+If it's a reversal, show "Reversed: -₦X,XXX.XX" in red
+
+Step 3 -- State Admin ledger detail screen
+Create artifacts/mobile/app/(stateadmin)/ledger-detail.tsx:
+
+Reads entryId from route params
+Fetches the full ledger entry details -- since getMyLedger already returns tripFees, pass the entry data via route params or re-fetch if needed
+Renders <LedgerDetailView> with the correct viewerId and viewerType
+
+Register as a hidden screen in (stateadmin)/_layout.tsx with href: null. Add 'ledger-detail' to HIDDEN_ROUTES in PillTabBar.tsx.
+Step 4 -- Stakeholder ledger detail screen
+Create artifacts/mobile/app/(stakeholder)/ledger-detail.tsx -- identical pattern to the State Admin detail screen but in the stakeholder route group.
+Make the existing ledger entries in (stakeholder)/index.tsx tappable -- wrap each entry in a TouchableOpacity that navigates to /(stakeholder)/ledger-detail passing the entry data.
+Register as a hidden screen in (stakeholder)/_layout.tsx with href: null. Add 'ledger-detail' to HIDDEN_ROUTES in PillTabBar.tsx (if multiple route groups use ledger-detail, the HIDDEN_ROUTES entry covers all of them since it matches by screen name).
+Step 5 -- Pass ledger entry data to detail screen
+The ledger entries returned by getMyLedger already include tripFees (added in Prompt 2 Step 7). Pass the full entry object as a JSON-encoded route param when navigating to the detail screen:
+tsxrouter.push({
+  pathname: '/(stateadmin)/ledger-detail',
+  params: { entry: JSON.stringify(ledgerEntry) }
+});
+In the detail screen, parse it back:
+tsxconst { entry } = useLocalSearchParams();
+const ledgerEntry = JSON.parse(entry as string);
+Step 6 -- TopBar on new screens
+Add <TopBar /> at the top of (stateadmin)/wallet.tsx and both detail screens, consistent with all other screens.
+Step 7 -- TypeScript check
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Must return zero errors.
+
+PART 2 -- Testing
+Frontend App Tests (390x844px, tap only):
+Test 1 -- Login as lagos.admin@synergy.com. Confirm a "Wallet" tab is now visible in the State Admin tab bar alongside Requests and Trip Admins.
+Test 2 -- Tap the Wallet tab. Confirm the balance card shows the Lagos state's total collected. Confirm the summary row shows Credits, Reversals, Net Total.
+Test 3 -- Confirm the ledger list loads with entries. Each entry shows vehicle type name, route, amount with correct color, and date.
+Test 4 -- Tap a ledger entry. Confirm it navigates to the detail screen showing the full fee breakdown with all recipients listed and a "Your share" badge on the Lagos loading fee row.
+Test 5 -- Login as alpha.admin@synergy.com (Consultant stakeholder). Go to the wallet screen. Tap a ledger entry. Confirm the detail screen shows the full breakdown with "Your share" on the Consultant row.
+Test 6 -- Confirm tapping Back from the detail screen returns to the ledger list correctly.
+Test 7 -- Confirm the date filter works on the State Admin wallet screen.
+Test 8 -- Pull to refresh on the State Admin wallet screen works correctly.
+Test 9 -- Console is clean throughout.
+
+Report every file created or modified, every test result, and flag anything needing physical iPhone re-verification.

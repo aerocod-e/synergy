@@ -19,10 +19,20 @@ import { formatNaira, formatNairaWithSign } from '@/utils/formatCurrency';
 
 type FilterKey = '7d' | '30d' | 'all';
 
+interface TripFee {
+  id: string;
+  feeType: string;
+  recipientType: string;
+  recipientId: string;
+  recipientName: string;
+  amount: number;
+}
+
 interface LedgerEntry {
   ledgerId: string;
   tripId: string;
   vehicleNumber: string;
+  vehicleTypeName: string;
   feeType: string;
   amount: number;
   amountNaira: string;
@@ -32,6 +42,7 @@ interface LedgerEntry {
   cleared: boolean;
   clearedAt: string | null;
   createdAt: string;
+  tripFees: TripFee[];
 }
 
 interface WalletData {
@@ -177,7 +188,16 @@ export default function StakeholderHome() {
   // ── render helpers ───────────────────────────────────────────────────────
 
   const renderEntry = ({ item }: { item: LedgerEntry }) => (
-    <View style={styles.card}>
+    <TouchableOpacity
+      style={styles.card}
+      activeOpacity={0.75}
+      onPress={() =>
+        router.push({
+          pathname: '/(stakeholder)/ledger-detail',
+          params: { entry: JSON.stringify(item) },
+        })
+      }
+    >
       <View style={styles.cardMain}>
         <View style={styles.routeRow}>
           <Navigation size={14} color={theme.colors.grey1} />
@@ -197,7 +217,7 @@ export default function StakeholderHome() {
       ]}>
         {formatNairaWithSign(item.amount, item.entryType)}
       </Text>
-    </View>
+    </TouchableOpacity>
   );
 
   const renderFooter = () => (
