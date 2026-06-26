@@ -176,6 +176,15 @@ export const activatePricingChart = (id: string) =>
 export const listVehicleTypes = () =>
   apiRequest('/api/vehicle-types', {}, false);
 
+export const createVehicleType = (body: { name: string; loadingFee: number; unloadingFee: number }) =>
+  apiRequest('/api/vehicle-types', { method: 'POST', body: JSON.stringify(body) });
+
+export const updateVehicleType = (id: string, body: { loadingFee?: number; unloadingFee?: number }) =>
+  apiRequest(`/api/vehicle-types/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+
+export const updateStakeholderRate = (chartId: string, body: { stakeholderId: string; vehicleTypeId: string; amount: number }) =>
+  apiRequest(`/api/pricing/${chartId}/stakeholder-rates`, { method: 'PATCH', body: JSON.stringify(body) });
+
 // ── Vehicles (Trip Admin) ─────────────────────────────────────────────────────
 export const listVehicles = (params?: Record<string, string>) =>
   apiRequest('/api/vehicles' + (params ? '?' + new URLSearchParams(params).toString() : ''));

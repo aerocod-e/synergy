@@ -1,0 +1,68 @@
+Fix multiple issues found during iPhone testing. Follow all steps in order.
+Fix 1 -- Critical: remove dropped columns from states controller
+Open artifacts/api-server/src/routes/states.ts and its controller. Remove all references to loading_rate and unloading_rate from:
+
+The SELECT query in listStates -- remove those two columns entirely
+The PATCH handler's UPDATE statement if it references them -- remove those fields
+Any TypeScript interface or type that includes these fields
+
+This is the root cause of the broken trip creation form -- fixing this restores the states endpoint and unblocks loading state display, unloading state dropdown, and the entire trip creation flow.
+Run a quick backend TypeScript check after this fix:
+pnpm --filter @workspace/api-server exec tsc --noEmit
+Fix 2 -- State Admin: make Wallet the first/landing tab
+In artifacts/mobile/app/(stateadmin)/_layout.tsx, reorder the Tabs.Screen declarations so wallet comes first, followed by index (Requests), then trip-admins. The first declared screen is the landing tab in Expo Router's Tabs navigator.
+Fix 3 -- State Admin Trip Admins FAB bottom offset
+In artifacts/mobile/app/(stateadmin)/trip-admins.tsx, find the FAB (the "Add Trip Admin" button). Update its bottom style value to 120 to match the same offset used on all other screens.
+Fix 4 -- Vehicle registration modal missing vehicle type picker
+In artifacts/mobile/app/(tripadmin)/vehicles.tsx, the agent previously built a two-step vehicle registration flow. Confirm whether the vehicle type picker actually exists in the registration modal. If it is missing or broken:
+
+Add a vehicle type picker as the second step of the registration flow
+Fetch vehicle types from GET /api/vehicle-types (no auth required)
+Required field -- show validation error if not selected
+Pass vehicleTypeId in the createVehicle API call body
+
+Also confirm whether the edit vehicle modal (handleEdit flow) includes a vehicle type picker. If not, add one -- pre-filled with the current vehicle type and allowing the user to change it.
+Fix 5 -- Super Admin dashboard pricing section update
+In artifacts/mobile/app/(superadmin)/index.tsx, find the pricing chart summary card on the dashboard. It currently shows global loading/unloading fees which no longer exist. Replace it with a summary showing:
+
+"Active Pricing Chart" label
+Number of vehicle types configured (e.g. "7 vehicle types")
+Number of stakeholders with rates (e.g. "3 stakeholders")
+A note "Tap Config to manage rates"
+
+Read these from the GET /api/pricing/active response which is already fetched on mount.
+Fix 6 -- Super Admin config: editable vehicle type rates
+In artifacts/mobile/app/(superadmin)/config.tsx, the vehicle type cards currently show rates as read-only. Add edit capability:
+
+Each vehicle type card should have an edit icon (pencil)
+Tapping it opens a modal with two inputs: Loading Fee (₦) and Unloading Fee (₦) pre-filled with current values
+On submit, call PATCH /api/vehicle-types/:id with the new amounts in kobo
+On success, refresh the pricing chart display
+
+Fix 7 -- Super Admin config: editable stakeholder rates per vehicle type
+In the same config screen, when a vehicle type card is expanded showing stakeholder rates, each stakeholder rate row should be editable:
+
+Add an edit icon next to each stakeholder's rate
+Tapping opens a small modal with a single amount input pre-filled with the current rate
+On submit, call PATCH /api/pricing/:chartId/stakeholders/:stakeholderId/vehicle-type/:vehicleTypeId -- wait, this endpoint doesn't exist yet
+
+Add a new backend endpoint first:
+PATCH /pricing/:chartId/stakeholder-rates   authenticateToken + requireRole("super_admin") → updateStakeholderRate
+Accepts { stakeholderId, vehicleTypeId, amount }. Updates the existing pricing_chart_stakeholder_rates row. Returns the updated row.
+Register in pricing.ts and add updateStakeholderRate(chartId, body) helper to services/api.ts.
+Fix 8 -- Super Admin config: add new vehicle type
+In the config screen, add an "Add Vehicle Type" button at the bottom of the vehicle types section. Tapping it opens a modal with:
+
+Vehicle type name (text input, required)
+Loading Fee in Naira (required)
+Unloading Fee in Naira (required)
+
+On submit, call POST /api/vehicle-types -- add this endpoint:
+POST /vehicle-types   authenticateToken + requireRole("super_admin") → createVehicleType
+Accepts { name, loadingFee, unloadingFee } in kobo. Returns 409 if name already exists. After creating the vehicle type, automatically insert a rate of 0 for every existing stakeholder on the active pricing chart for this new type. This ensures new vehicle types immediately appear in the stakeholder rate matrix.
+Register in vehicleTypes.ts and add createVehicleType(body) helper to services/api.ts.
+When a new vehicle type is created, it should also appear in the stakeholder rates section with ₦0.00 rates for each stakeholder -- Super Admin then edits those rates to set the correct amounts.
+TypeScript check (both packages):
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.

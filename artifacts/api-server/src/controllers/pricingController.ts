@@ -282,5 +282,55 @@ export async function deleteStakeholderRate(req: Request, res: Response): Promis
   }
 }
 
+export async function updateStakeholderRate(req: Request, res: Response): Promise<void> {
+  try {
+    const { chartId } = req.params as { chartId: string };
+    const { stakeholderId, vehicleTypeId, amount } = req.body as {
+      stakeholderId?: unknown;
+      vehicleTypeId?: unknown;
+      amount?: unknown;
+    };
+
+    if (!stakeholderId || typeof stakeholderId !== "string" || !UUID_RE.test(stakeholderId)) {
+      res.status(400).json({ error: "BAD_REQUEST", message: "stakeholderId is required and must be a valid UUID" });
+      return;
+    }
+    if (!vehicleTypeId || typeof vehicleTypeId !== "string" || !UUID_RE.test(vehicleTypeId)) {
+      res.status(400).json({ error: "BAD_REQUEST", message: "vehicleTypeId is required and must be a valid UUID" });
+      return;
+    }
+    if (typeof amount !== "number" || !Number.isInteger(amount) || amount < 0) {
+      res.status(400).json({ error: "BAD_REQUEST", message: "amount must be a non-negative integer (kobo)" });
+      return;
+    }
+
+    const chartCheck = await pool.query<{ id: string }>(
+      `SELECT id FROM pricing_charts WHERE id = $1`,
+      [chartId],
+    );
+    if (chartCheck.rows.length === 0) {
+      res.status(404).json({ error: "NOT_FOUND", message: "Pricing chart not found" });
+      return;
+    }
+
+    const result = await pool.query<{ id: string; stakeholder_id: string; vehicle_type_id: string; amount: number }>(
+      `INSERT INTO pricing_chart_stakeholder_rates (pricing_chart_id, stakeholder_id, vehicle_type_id, amount)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT ON CONSTRAINT pricing_chart_stakeholder_rates_unique
+       DO UPDATE SET amount = EXCLUDED.amount, updated_at = NOW()
+       RETURNING id, stakeholder_id, vehicle_type_id, amount`,
+      [chartId, stakeholderId, vehicleTypeId, amount],
+    );
+
+    res.json({
+      data: { rate: result.rows[0] },
+      message: "Stakeholder rate updated",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to update stakeholder rate" });
+  }
+}
+
 // Keep isPositiveInt exported for any future use
 export { isPositiveInt };

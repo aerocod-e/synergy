@@ -36,9 +36,8 @@ interface DashboardData {
   stakeholdersCount: number;
   grandTotal: number;
   pricing: {
-    loadingFee: number;
-    unloadingFee: number;
-    rateCount: number;
+    vehicleTypeCount: number;
+    stakeholderCount: number;
   } | null;
 }
 
@@ -136,9 +135,14 @@ export default function SuperAdminDashboard() {
       grandTotal:        walletSummary?.grandTotal ?? 0,
       pricing: chart
         ? {
-            loadingFee:  chart.loading_fee as number,
-            unloadingFee: chart.unloading_fee as number,
-            rateCount:   (chart.stakeholder_rates as any[])?.length ?? 0,
+            vehicleTypeCount: (chart.vehicleTypeRates as any[])?.length ?? 0,
+            stakeholderCount: (() => {
+              const ids = new Set<string>();
+              ((chart.vehicleTypeRates as any[]) ?? []).forEach((vtr: any) => {
+                (vtr.stakeholderRates ?? []).forEach((sr: any) => ids.add(sr.stakeholderId));
+              });
+              return ids.size;
+            })(),
           }
         : null,
     });
@@ -262,21 +266,21 @@ export default function SuperAdminDashboard() {
           <View style={styles.grid}>
             <SummaryCard
               icon={ArrowUpCircle}
-              value={formatNaira(data.pricing.loadingFee)}
-              label="Loading Fee"
+              value={`${data.pricing.vehicleTypeCount}`}
+              label="Vehicle Types"
             />
             <SummaryCard
-              icon={ArrowDownCircle}
-              iconColor="#2a8a4a"
-              value={formatNaira(data.pricing.unloadingFee)}
-              label="Unloading Fee"
+              icon={Users}
+              iconColor="#d97706"
+              value={`${data.pricing.stakeholderCount}`}
+              label="Stakeholders with Rates"
             />
           </View>
           <SummaryCard
-            icon={Users}
-            iconColor="#d97706"
-            value={String(data.pricing.rateCount)}
-            label="Stakeholder Rates Configured"
+            icon={ArrowDownCircle}
+            iconColor="#6b7280"
+            value="Tap Config to manage rates"
+            label="Fees &amp; stakeholder rates are set per vehicle type"
             wide
           />
         </>

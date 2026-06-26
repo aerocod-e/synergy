@@ -36,6 +36,89 @@ export async function listVehicleTypes(_req: Request, res: Response): Promise<vo
   }
 }
 
+export async function createVehicleType(req: Request, res: Response): Promise<void> {
+  const { name, loadingFee, unloadingFee } = req.body as {
+    name?: unknown;
+    loadingFee?: unknown;
+    unloadingFee?: unknown;
+  };
+
+  if (!name || typeof name !== "string" || !name.trim()) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "name is required" });
+    return;
+  }
+  if (!isPositiveInt(loadingFee)) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "loadingFee must be a positive integer (kobo)" });
+    return;
+  }
+  if (!isPositiveInt(unloadingFee)) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "unloadingFee must be a positive integer (kobo)" });
+    return;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const existing = await client.query<{ id: string }>(
+      `SELECT id FROM vehicle_types WHERE LOWER(name) = LOWER($1) LIMIT 1`,
+      [name.trim()]
+    );
+    if (existing.rows.length > 0) {
+      await client.query("ROLLBACK");
+      res.status(409).json({ error: "CONFLICT", message: "A vehicle type with this name already exists" });
+      return;
+    }
+
+    const { rows: [newType] } = await client.query<{
+      id: string;
+      name: string;
+      loading_fee: number;
+      unloading_fee: number;
+      is_active: boolean;
+      created_at: Date;
+    }>(
+      `INSERT INTO vehicle_types (name, loading_fee, unloading_fee, is_active)
+       VALUES ($1, $2, $3, true)
+       RETURNING id, name, loading_fee, unloading_fee, is_active, created_at`,
+      [name.trim(), loadingFee, unloadingFee]
+    );
+
+    // Auto-insert ₦0 rates for all active stakeholders on the active pricing chart
+    await client.query(
+      `INSERT INTO pricing_chart_stakeholder_rates (pricing_chart_id, stakeholder_id, vehicle_type_id, amount)
+       SELECT pc.id, s.id, $1, 0
+       FROM pricing_charts pc
+       CROSS JOIN stakeholders s
+       WHERE pc.is_active = true AND s.is_active = true
+       ON CONFLICT ON CONSTRAINT pricing_chart_stakeholder_rates_unique DO NOTHING`,
+      [newType!.id]
+    );
+
+    await client.query("COMMIT");
+
+    res.status(201).json({
+      data: {
+        vehicleType: {
+          id:           newType!.id,
+          name:         newType!.name,
+          loadingFee:   newType!.loading_fee,
+          unloadingFee: newType!.unloading_fee,
+          isActive:     newType!.is_active,
+          createdAt:    newType!.created_at,
+        },
+      },
+      message: "Vehicle type created",
+    });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to create vehicle type" });
+  } finally {
+    client.release();
+  }
+}
+
 export async function updateVehicleType(req: Request, res: Response): Promise<void> {
   const { id } = req.params as { id: string };
   const { loadingFee, unloadingFee } = req.body as { loadingFee?: unknown; unloadingFee?: unknown };

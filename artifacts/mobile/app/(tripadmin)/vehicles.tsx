@@ -49,6 +49,7 @@ export default function TripAdminVehicles() {
   const [editingVehicle, setEditingVehicle] = useState<VehicleWithCount | null>(null);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editRegNumber, setEditRegNumber] = useState('');
+  const [editTypeId, setEditTypeId] = useState<string>('');
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -71,6 +72,7 @@ export default function TripAdminVehicles() {
   const openEditVehicle = useCallback((vehicle: VehicleWithCount) => {
     setEditingVehicle(vehicle);
     setEditRegNumber(vehicle.registrationNumber);
+    setEditTypeId((vehicle as any).vehicleTypeId ?? '');
     setEditError(null);
     setEditModalVisible(true);
   }, []);
@@ -82,14 +84,20 @@ export default function TripAdminVehicles() {
       setEditError('Registration number cannot be empty.');
       return;
     }
-    if (trimmed === editingVehicle.registrationNumber.toUpperCase()) {
+    const regChanged = trimmed !== editingVehicle.registrationNumber.toUpperCase();
+    const typeChanged = editTypeId !== ((editingVehicle as any).vehicleTypeId ?? '');
+    if (!regChanged && !typeChanged) {
+      setEditModalVisible(false);
       setEditingVehicle(null);
       return;
     }
     setEditSubmitting(true);
     setEditError(null);
     try {
-      await updateVehicle(editingVehicle.id, { registrationNumber: trimmed });
+      await updateVehicle(editingVehicle.id, {
+        registrationNumber: trimmed,
+        ...(typeChanged && editTypeId ? { vehicleTypeId: editTypeId } : {}),
+      });
       setEditModalVisible(false);
       setEditingVehicle(null);
       fetchVehicles(true);
@@ -380,7 +388,7 @@ export default function TripAdminVehicles() {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.modalBody}>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
             <Text style={styles.fieldLabel}>REGISTRATION NUMBER</Text>
             <TextInput
               style={styles.textField}
@@ -391,6 +399,28 @@ export default function TripAdminVehicles() {
               autoCapitalize="characters"
               autoCorrect={false}
             />
+
+            <Text style={[styles.fieldLabel, { marginTop: 20 }]}>VEHICLE TYPE</Text>
+            {vehicleTypes.length === 0 ? (
+              <ActivityIndicator color={theme.colors.primary} style={{ marginTop: 12 }} />
+            ) : (
+              vehicleTypes.map((vt) => {
+                const selected = vt.id === editTypeId;
+                return (
+                  <TouchableOpacity
+                    key={vt.id}
+                    style={[styles.typeRow, selected && styles.typeRowSelected]}
+                    onPress={() => setEditTypeId(vt.id)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.typeRowText, selected && styles.typeRowTextSelected]}>
+                      {vt.name}
+                    </Text>
+                    {selected && <Check size={18} color={theme.colors.primary} />}
+                  </TouchableOpacity>
+                );
+              })
+            )}
 
             {editError && (
               <View style={styles.errorBox}>
@@ -411,7 +441,7 @@ export default function TripAdminVehicles() {
                 <Text style={styles.submitButtonText}>Save Changes</Text>
               )}
             </TouchableOpacity>
-          </View>
+          </ScrollView>
         </View>
       </Modal>
 
