@@ -105,9 +105,18 @@ async function migrate(): Promise<void> {
         DROP CONSTRAINT IF EXISTS pricing_chart_stakeholder_rat_pricing_chart_id_stakeholder__key
     `);
     await client.query(`
-      ALTER TABLE pricing_chart_stakeholder_rates
-        ADD CONSTRAINT pricing_chart_stakeholder_rates_unique
-        UNIQUE (pricing_chart_id, stakeholder_id, vehicle_type_id)
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'pricing_chart_stakeholder_rates_unique'
+        ) THEN
+          ALTER TABLE pricing_chart_stakeholder_rates
+            ADD CONSTRAINT pricing_chart_stakeholder_rates_unique
+            UNIQUE (pricing_chart_id, stakeholder_id, vehicle_type_id);
+        END IF;
+      END;
+      $$
     `);
     console.log('✓ pricing_chart_stakeholder_rates: unique constraint updated to (chart, stakeholder, vehicle_type)');
 
@@ -336,7 +345,13 @@ async function migrate(): Promise<void> {
     `);
     console.log('✓ pricing_charts: loading_fee / unloading_fee set DEFAULT 0 (deprecated)');
 
-    console.log('\n✅ Migration complete: 14 tables + vehicle_type_id columns + vehicle-type-based pricing.');
+    // wallets.is_clearing_enabled — Super Admin opt-in flag for EOD clearing
+    await client.query(`
+      ALTER TABLE wallets ADD COLUMN IF NOT EXISTS is_clearing_enabled BOOLEAN NOT NULL DEFAULT false
+    `);
+    console.log('✓ wallets: is_clearing_enabled column added (default false)');
+
+    console.log('\n✅ Migration complete: 14 tables + vehicle_type_id columns + vehicle-type-based pricing + clearing flag.');
   } finally {
     client.release();
     await pool.end();

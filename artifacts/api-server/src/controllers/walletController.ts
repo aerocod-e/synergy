@@ -259,18 +259,20 @@ export async function getMyLedger(req: Request, res: Response): Promise<void> {
 export async function getAllWallets(_req: Request, res: Response): Promise<void> {
   try {
     const { rows } = await pool.query<{
-      id:              string;
-      owner_type:      string;
-      owner_id:        string;
-      owner_name:      string;
-      total_collected: number;
+      id:                  string;
+      owner_type:          string;
+      owner_id:            string;
+      owner_name:          string;
+      total_collected:     number;
+      is_clearing_enabled: boolean;
     }>(
       `SELECT
          w.id,
          w.owner_type,
          w.owner_id,
          COALESCE(s.name, sh.name) AS owner_name,
-         w.total_collected
+         w.total_collected,
+         w.is_clearing_enabled
        FROM wallets w
        LEFT JOIN states       s  ON w.owner_type = 'state'       AND w.owner_id = s.id
        LEFT JOIN stakeholders sh ON w.owner_type = 'stakeholder' AND w.owner_id = sh.id
@@ -290,6 +292,7 @@ export async function getAllWallets(_req: Request, res: Response): Promise<void>
           ownerName:           r.owner_name,
           totalCollected:      r.total_collected,
           totalCollectedNaira: toNaira(r.total_collected),
+          isClearingEnabled:   r.is_clearing_enabled,
         })),
         summary: {
           totalStates,
@@ -303,5 +306,56 @@ export async function getAllWallets(_req: Request, res: Response): Promise<void>
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to retrieve wallets" });
+  }
+}
+
+export async function toggleClearingEnabled(req: Request, res: Response): Promise<void> {
+  const { walletId } = req.params as { walletId: string };
+  const { isEnabled } = req.body as { isEnabled?: unknown };
+
+  if (typeof isEnabled !== "boolean") {
+    res.status(400).json({ error: "BAD_REQUEST", message: "isEnabled must be a boolean" });
+    return;
+  }
+
+  try {
+    const { rows } = await pool.query<{
+      id:                  string;
+      owner_type:          string;
+      owner_id:            string;
+      total_collected:     number;
+      is_clearing_enabled: boolean;
+    }>(
+      `UPDATE wallets
+       SET is_clearing_enabled = $1, updated_at = NOW()
+       WHERE id = $2
+       RETURNING id, owner_type, owner_id, total_collected, is_clearing_enabled`,
+      [isEnabled, walletId]
+    );
+
+    if (rows.length === 0) {
+      res.status(404).json({ error: "NOT_FOUND", message: "Wallet not found" });
+      return;
+    }
+
+    const w = rows[0]!;
+    res.json({
+      data: {
+        wallet: {
+          id:                  w.id,
+          ownerType:           w.owner_type,
+          ownerId:             w.owner_id,
+          totalCollected:      w.total_collected,
+          totalCollectedNaira: toNaira(w.total_collected),
+          isClearingEnabled:   w.is_clearing_enabled,
+        },
+      },
+      message: isEnabled
+        ? "Clearing enabled for this wallet"
+        : "Clearing disabled for this wallet",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to update clearing status" });
   }
 }

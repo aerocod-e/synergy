@@ -1,4 +1,24 @@
 /**
+ * EOD CLEARING ARCHITECTURE NOTE
+ *
+ * Each wallet has an `is_clearing_enabled` flag (default: false).
+ * Super Admin enables this per wallet (state or stakeholder) when that entity
+ * has agreed to receive cleared payments.
+ *
+ * When EOD clearing runs (future: triggered by payment processor or scheduled job):
+ * 1. Only wallets where `is_clearing_enabled = true` are processed
+ * 2. All `wallet_ledger` entries where `cleared = false` for that wallet are settled
+ * 3. `cleared = true` and `cleared_at = NOW()` are set on each entry
+ * 4. The actual payment disbursement happens via the payment processor
+ * 5. Wallets that were not yet enabled when EOD runs keep accumulating -- their
+ *    backlog will be cleared in the first EOD run after they are enabled
+ *
+ * The `getFeePaymentStatus` function below currently treats "fee row exists" as "paid"
+ * because no real payment processor is connected. When the processor is connected,
+ * replace this function's logic with a check on `wallet_ledger.cleared`.
+ */
+
+/**
  * ============================================================
  * PAYMENT STATUS SERVICE — PLACEHOLDER IMPLEMENTATION
  * ============================================================
