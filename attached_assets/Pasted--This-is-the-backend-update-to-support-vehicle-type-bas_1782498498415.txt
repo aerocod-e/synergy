@@ -1,0 +1,85 @@
+
+This is the backend update to support vehicle-type-based pricing in trip creation and pricing management. Follow all steps in order. No frontend changes in this task.
+Step 1 -- New vehicle types endpoints
+Create artifacts/api-server/src/controllers/vehicleTypeController.ts with these functions:
+listVehicleTypes -- GET handler. No auth required (Trip Admins need this during trip creation, public read is fine). Returns all active vehicle types ordered by loading_fee ASC. Each row returns: id, name, loadingFee, unloadingFee.
+updateVehicleType -- PATCH handler for /vehicle-types/:id. Super Admin only. Accepts loadingFee and unloadingFee in kobo (both must be positive integers). Updates the vehicle type. Returns the updated row.
+Create artifacts/api-server/src/routes/vehicleTypes.ts:
+GET  /vehicle-types        (no auth) → listVehicleTypes
+PATCH /vehicle-types/:id   authenticateToken + requireRole("super_admin") → updateVehicleType
+Register in app.ts under /api/vehicle-types.
+Step 2 -- Update vehicle endpoints to include vehicle type
+In vehicleController.ts, update listVehicles and searchVehicles to JOIN vehicle_types and return vehicleTypeId and vehicleTypeName for each vehicle. Trip Admins need this during trip creation to know the type of the selected vehicle.
+Also update createVehicle -- the request body should now accept vehicleTypeId (required, UUID, must exist in vehicle_types). Store it on the vehicle row.
+Update the PATCH /vehicles/:id endpoint (updateVehicle) to also accept vehicleTypeId as an optional updatable field.
+Step 3 -- Update trip creation fee logic
+In artifacts/api-server/src/controllers/tripController.ts, find createTrip. Replace the current fee logic entirely:
+Remove:
+
+The state loading_rate/unloading_rate lookup (these columns no longer exist)
+The fees.loadingFee and fees.unloadingFee from the request body
+The fees.stakeholders[] array from the request body (stakeholder fees are now fully server-side from the pricing chart)
+
+Add:
+
+Look up the vehicle's vehicle_type_id from the vehicles table using vehicleId
+If the vehicle has no vehicle_type_id, return 422 "Vehicle has no type assigned. Please contact your administrator."
+Fetch the vehicle type's loading_fee and unloading_fee
+Fetch the active pricing chart. If none exists, return 422 "No active pricing chart. Please contact your Super Admin."
+Fetch all stakeholder rates for this vehicle type from pricing_chart_stakeholder_rates where vehicle_type_id = vehicleType.id and pricing_chart_id = activeChart.id
+For each stakeholder rate where amount > 0, allocate that fee
+For stakeholder rates where amount = 0, skip entirely (no fee row, no wallet credit)
+
+Fee allocation (same tables as before):
+
+Loading fee → trip_fees row with recipient_type='state', recipient_id=loadingStateId, fee_type='loading', amount=vehicleType.loadingFee
+Unloading fee → trip_fees row with recipient_type='state', recipient_id=unloadingStateId, fee_type='unloading', amount=vehicleType.unloadingFee
+Each non-zero stakeholder → trip_fees row with recipient_type='stakeholder', recipient_id=stakeholderId, fee_type='stakeholder_fee', amount=rate.amount
+Wallet credits and ledger entries for each fee row as before
+
+Add vehicleTypeId and vehicleTypeName to the trip creation response.
+Step 4 -- Update getActivePricingChart response
+In pricingController.ts, update getActivePricingChart to return rates grouped by vehicle type:
+json{
+  "chart": {
+    "id": "...",
+    "isActive": true,
+    "vehicleTypeRates": [
+      {
+        "vehicleTypeId": "...",
+        "vehicleTypeName": "Heavy Duty 6/8 Tyres",
+        "loadingFee": 280000,
+        "unloadingFee": 280000,
+        "stakeholderRates": [
+          { "stakeholderId": "...", "stakeholderName": "Consultant", "amount": 40000 },
+          { "stakeholderId": "...", "stakeholderName": "Vendor", "amount": 50000 },
+          { "stakeholderId": "...", "stakeholderName": "Integrator", "amount": 150000 }
+        ]
+      }
+    ],
+    "unassignedStakeholders": []
+  }
+}
+This is the shape the Super Admin pricing UI and the Trip Admin trip creation form will read.
+Step 5 -- Update addStakeholderRate endpoint
+POST /pricing/:chartId/stakeholders currently accepts { stakeholderId, amount }. Update it to also require vehicleTypeId. Update the insert accordingly.
+Step 6 -- Update State Admin wallet endpoint
+Currently GET /api/wallets/my only works for trip_admin and stakeholder roles. Add state_admin to the role guard. The wallet lookup uses entityType and entityId from the JWT -- State Admins have entityType='state' and entityId=stateId, which maps directly to the state wallet. No controller logic change needed, just the role guard.
+Same for GET /api/wallets/my/ledger -- add state_admin to the role guard.
+Step 7 -- Update ledger response to include vehicle type info
+In walletController.ts, find getMyLedger. The current response includes vehicleNumber from the trips join. Add a join to vehicles and vehicle_types to also return vehicleTypeName for each ledger entry. This will be needed for the detail view.
+Also add to each ledger entry: all fee rows for that trip (a tripFees array showing every recipient and amount for the full trip breakdown). This is needed for the detail view where State Admins and Stakeholders see the full breakdown of who received what.
+Step 8 -- TypeScript check
+pnpm --filter @workspace/api-server exec tsc --noEmit
+Must return zero errors.
+
+PART 2 -- Testing
+Test 1 -- GET /api/vehicle-types returns all 7 types with correct fees. No auth needed.
+Test 2 -- Super Admin can update a vehicle type fee: PATCH /api/vehicle-types/:id with new amounts. Confirm 200. Reset after.
+Test 3 -- Create a trip using the new logic: Login as lagos.ta1@synergy.com. Create a trip selecting a vehicle that has vehicle_type_id set to Heavy Duty. Confirm the response includes vehicleTypeName. Confirm trip_fees has: loading fee = 280000, unloading fee = 280000, Consultant = 40000, Vendor = 50000, Integrator = 150000. Confirm Consultant (₦0 for this type? check) -- actually Consultant for Heavy Duty is 40000 per PDF so all three should have rows.
+Test 4 -- Confirm ₦0 stakeholder rates are skipped: For "Pickup Vans and Equivalent (4 Tyres)", Consultant rate = 0. Create a trip with that vehicle type. Confirm no trip_fees row exists for Consultant on that trip.
+Test 5 -- No vehicle type on vehicle returns 422: Temporarily set a vehicle's vehicle_type_id to NULL. Try to create a trip with it. Confirm 422. Reset after.
+Test 6 -- State Admin can access wallet: Login as lagos.admin@synergy.com. Call GET /api/wallets/my. Confirm 200 with the Lagos state wallet balance.
+Test 7 -- State Admin can access ledger: Call GET /api/wallets/my/ledger. Confirm 200 with ledger entries including vehicleTypeName and tripFees breakdown.
+Test 8 -- GET /api/pricing/active returns rates grouped by vehicle type with the new shape.
+Report every file changed and every test result

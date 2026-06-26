@@ -269,7 +269,8 @@ async function seed(): Promise<void> {
         `INSERT INTO users (email, password_hash, role, entity_type, entity_id, first_name, last_name)
          VALUES ($1, $2, 'state_admin', 'state', $3, $4, $5)
          ON CONFLICT (email) DO UPDATE
-           SET first_name = EXCLUDED.first_name, last_name = EXCLUDED.last_name`,
+           SET password_hash = EXCLUDED.password_hash,
+               first_name = EXCLUDED.first_name, last_name = EXCLUDED.last_name`,
         [sa.email, adminHash, stateId, sa.firstName, sa.lastName],
       );
       stateAdminsInserted += res.rowCount ?? 0;

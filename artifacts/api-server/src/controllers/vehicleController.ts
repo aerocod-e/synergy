@@ -1,24 +1,42 @@
 import { type Request, type Response } from "express";
 import pool from "../db/connection.js";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function createVehicle(req: Request, res: Response): Promise<void> {
-  const { registrationNumber } = req.body as { registrationNumber?: unknown };
+  const { registrationNumber, vehicleTypeId } = req.body as {
+    registrationNumber?: unknown;
+    vehicleTypeId?: unknown;
+  };
 
   if (!registrationNumber || typeof registrationNumber !== "string" || registrationNumber.trim() === "") {
     res.status(400).json({ error: "BAD_REQUEST", message: "registrationNumber is required" });
     return;
   }
-
   const regNum = registrationNumber.trim().toUpperCase();
-
   if (regNum.length > 50) {
     res.status(400).json({ error: "BAD_REQUEST", message: "registrationNumber must be 50 characters or fewer" });
+    return;
+  }
+
+  if (!vehicleTypeId || typeof vehicleTypeId !== "string" || !UUID_RE.test(vehicleTypeId)) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "vehicleTypeId is required and must be a valid UUID" });
     return;
   }
 
   const createdBy = req.user!.userId;
 
   try {
+    // Validate vehicleTypeId exists
+    const vtCheck = await pool.query<{ id: string }>(
+      `SELECT id FROM vehicle_types WHERE id = $1 AND is_active = true LIMIT 1`,
+      [vehicleTypeId]
+    );
+    if (vtCheck.rows.length === 0) {
+      res.status(400).json({ error: "BAD_REQUEST", message: "vehicleTypeId does not reference an active vehicle type" });
+      return;
+    }
+
     // Check if a vehicle with this plate already exists (including soft-deleted)
     const existing = await pool.query<{
       id: string;
@@ -39,25 +57,31 @@ export async function createVehicle(req: Request, res: Response): Promise<void> 
       const { rows: [reactivated] } = await pool.query<{
         id: string;
         registration_number: string;
+        vehicle_type_id: string | null;
+        vehicle_type_name: string | null;
         created_by: string;
         is_active: boolean;
         created_at: Date;
         updated_at: Date;
       }>(
         `UPDATE vehicles
-         SET is_active = true, deleted_at = NULL, created_by = $2, updated_at = NOW()
+         SET is_active = true, deleted_at = NULL, created_by = $2, vehicle_type_id = $3, updated_at = NOW()
          WHERE id = $1
-         RETURNING *`,
-        [v.id, createdBy]
+         RETURNING
+           id, registration_number, vehicle_type_id, created_by, is_active, created_at, updated_at,
+           (SELECT name FROM vehicle_types WHERE id = $3) AS vehicle_type_name`,
+        [v.id, createdBy, vehicleTypeId]
       );
       res.status(201).json({
         data: {
-          id: reactivated!.id,
+          id:                 reactivated!.id,
           registrationNumber: reactivated!.registration_number,
-          createdBy: reactivated!.created_by,
-          isActive: reactivated!.is_active,
-          createdAt: reactivated!.created_at,
-          updatedAt: reactivated!.updated_at,
+          vehicleTypeId:      reactivated!.vehicle_type_id,
+          vehicleTypeName:    reactivated!.vehicle_type_name,
+          createdBy:          reactivated!.created_by,
+          isActive:           reactivated!.is_active,
+          createdAt:          reactivated!.created_at,
+          updatedAt:          reactivated!.updated_at,
         },
         message: "Vehicle registered",
       });
@@ -67,25 +91,31 @@ export async function createVehicle(req: Request, res: Response): Promise<void> 
     const { rows: [vehicle] } = await pool.query<{
       id: string;
       registration_number: string;
+      vehicle_type_id: string | null;
+      vehicle_type_name: string | null;
       created_by: string;
       is_active: boolean;
       created_at: Date;
       updated_at: Date;
     }>(
-      `INSERT INTO vehicles (registration_number, created_by, is_active)
-       VALUES ($1, $2, true)
-       RETURNING *`,
-      [regNum, createdBy]
+      `INSERT INTO vehicles (registration_number, vehicle_type_id, created_by, is_active)
+       VALUES ($1, $2, $3, true)
+       RETURNING
+         id, registration_number, vehicle_type_id, created_by, is_active, created_at, updated_at,
+         (SELECT name FROM vehicle_types WHERE id = $2) AS vehicle_type_name`,
+      [regNum, vehicleTypeId, createdBy]
     );
 
     res.status(201).json({
       data: {
-        id: vehicle!.id,
+        id:                 vehicle!.id,
         registrationNumber: vehicle!.registration_number,
-        createdBy: vehicle!.created_by,
-        isActive: vehicle!.is_active,
-        createdAt: vehicle!.created_at,
-        updatedAt: vehicle!.updated_at,
+        vehicleTypeId:      vehicle!.vehicle_type_id,
+        vehicleTypeName:    vehicle!.vehicle_type_name,
+        createdBy:          vehicle!.created_by,
+        isActive:           vehicle!.is_active,
+        createdAt:          vehicle!.created_at,
+        updatedAt:          vehicle!.updated_at,
       },
       message: "Vehicle registered",
     });
@@ -105,31 +135,43 @@ export async function searchVehicles(req: Request, res: Response): Promise<void>
 
   try {
     const { rows } = await pool.query<{
-      id: string;
+      id:               string;
       registration_number: string;
-      created_by: string;
-      is_active: boolean;
-      created_at: Date;
+      vehicle_type_id:  string | null;
+      vehicle_type_name: string | null;
+      created_by:       string;
+      is_active:        boolean;
+      created_at:       Date;
     }>(
-      `SELECT id, registration_number, created_by, is_active, created_at
-       FROM   vehicles
-       WHERE  registration_number ILIKE $1
-         AND  is_active = true
-         AND  deleted_at IS NULL
+      `SELECT
+         v.id,
+         v.registration_number,
+         v.vehicle_type_id,
+         vt.name AS vehicle_type_name,
+         v.created_by,
+         v.is_active,
+         v.created_at
+       FROM   vehicles v
+       LEFT   JOIN vehicle_types vt ON vt.id = v.vehicle_type_id
+       WHERE  v.registration_number ILIKE $1
+         AND  v.is_active = true
+         AND  v.deleted_at IS NULL
        ORDER  BY
-         CASE WHEN registration_number ILIKE $2 THEN 0 ELSE 1 END,
-         registration_number
+         CASE WHEN v.registration_number ILIKE $2 THEN 0 ELSE 1 END,
+         v.registration_number
        LIMIT  10`,
       [`%${q}%`, `${q}%`]
     );
 
     res.json({
       data: rows.map((v) => ({
-        id: v.id,
+        id:                 v.id,
         registrationNumber: v.registration_number,
-        createdBy: v.created_by,
-        isActive: v.is_active,
-        createdAt: v.created_at,
+        vehicleTypeId:      v.vehicle_type_id,
+        vehicleTypeName:    v.vehicle_type_name,
+        createdBy:          v.created_by,
+        isActive:           v.is_active,
+        createdAt:          v.created_at,
       })),
     });
   } catch (err) {
@@ -158,25 +200,31 @@ export async function listVehicles(req: Request, res: Response): Promise<void> {
         [ownerId]
       ),
       pool.query<{
-        id: string;
+        id:               string;
         registration_number: string;
-        is_active: boolean;
-        created_at: Date;
-        updated_at: Date;
-        trip_count: string;
+        vehicle_type_id:  string | null;
+        vehicle_type_name: string | null;
+        is_active:        boolean;
+        created_at:       Date;
+        updated_at:       Date;
+        trip_count:       string;
       }>(
-        `SELECT v.id,
-                v.registration_number,
-                v.is_active,
-                v.created_at,
-                v.updated_at,
-                COUNT(t.id) AS trip_count
+        `SELECT
+           v.id,
+           v.registration_number,
+           v.vehicle_type_id,
+           vt.name AS vehicle_type_name,
+           v.is_active,
+           v.created_at,
+           v.updated_at,
+           COUNT(t.id) AS trip_count
          FROM   vehicles v
+         LEFT   JOIN vehicle_types vt ON vt.id = v.vehicle_type_id
          LEFT   JOIN trips t ON t.vehicle_id = v.id AND t.deleted_at IS NULL
          WHERE  v.created_by = $1
            AND  v.is_active = true
            AND  v.deleted_at IS NULL
-         GROUP  BY v.id
+         GROUP  BY v.id, vt.name
          ORDER  BY v.created_at DESC
          LIMIT  $2 OFFSET $3`,
         [ownerId, limit, offset]
@@ -191,6 +239,8 @@ export async function listVehicles(req: Request, res: Response): Promise<void> {
         vehicles: rowsRes.rows.map((v) => ({
           id:                 v.id,
           registrationNumber: v.registration_number,
+          vehicleTypeId:      v.vehicle_type_id,
+          vehicleTypeName:    v.vehicle_type_name,
           isActive:           v.is_active,
           createdAt:          v.created_at,
           updatedAt:          v.updated_at,
@@ -209,7 +259,10 @@ export async function updateVehicle(req: Request, res: Response): Promise<void> 
   const { id } = req.params as { id: string };
   const ownerId = req.user!.userId;
 
-  const { registrationNumber } = req.body as { registrationNumber?: unknown };
+  const { registrationNumber, vehicleTypeId } = req.body as {
+    registrationNumber?: unknown;
+    vehicleTypeId?: unknown;
+  };
 
   if (!registrationNumber || typeof registrationNumber !== "string" || registrationNumber.trim() === "") {
     res.status(400).json({ error: "BAD_REQUEST", message: "registrationNumber is required" });
@@ -221,7 +274,26 @@ export async function updateVehicle(req: Request, res: Response): Promise<void> 
     return;
   }
 
+  // vehicleTypeId is optional on update — if provided, validate it
+  if (vehicleTypeId !== undefined) {
+    if (typeof vehicleTypeId !== "string" || !UUID_RE.test(vehicleTypeId)) {
+      res.status(400).json({ error: "BAD_REQUEST", message: "vehicleTypeId must be a valid UUID" });
+      return;
+    }
+  }
+
   try {
+    if (vehicleTypeId !== undefined) {
+      const vtCheck = await pool.query<{ id: string }>(
+        `SELECT id FROM vehicle_types WHERE id = $1 AND is_active = true LIMIT 1`,
+        [vehicleTypeId]
+      );
+      if (vtCheck.rows.length === 0) {
+        res.status(400).json({ error: "BAD_REQUEST", message: "vehicleTypeId does not reference an active vehicle type" });
+        return;
+      }
+    }
+
     const vehicleRes = await pool.query<{
       id: string;
       created_by: string;
@@ -269,25 +341,37 @@ export async function updateVehicle(req: Request, res: Response): Promise<void> 
       return;
     }
 
+    const setParts = ["registration_number = $2", "updated_at = NOW()"];
+    const params: unknown[] = [id, regNum];
+    let idx = 3;
+    if (vehicleTypeId !== undefined) {
+      setParts.push(`vehicle_type_id = $${idx++}`);
+      params.push(vehicleTypeId);
+    }
+
     const { rows: [updated] } = await pool.query<{
-      id: string;
+      id:               string;
       registration_number: string;
-      created_by: string;
-      is_active: boolean;
-      created_at: Date;
-      updated_at: Date;
+      vehicle_type_id:  string | null;
+      vehicle_type_name: string | null;
+      created_by:       string;
+      is_active:        boolean;
+      created_at:       Date;
+      updated_at:       Date;
     }>(
-      `UPDATE vehicles
-       SET registration_number = $2, updated_at = NOW()
-       WHERE id = $1
-       RETURNING id, registration_number, created_by, is_active, created_at, updated_at`,
-      [id, regNum]
+      `UPDATE vehicles SET ${setParts.join(", ")} WHERE id = $1
+       RETURNING
+         id, registration_number, vehicle_type_id, created_by, is_active, created_at, updated_at,
+         (SELECT name FROM vehicle_types WHERE id = vehicle_type_id) AS vehicle_type_name`,
+      params
     );
 
     res.json({
       data: {
         id:                 updated!.id,
         registrationNumber: updated!.registration_number,
+        vehicleTypeId:      updated!.vehicle_type_id,
+        vehicleTypeName:    updated!.vehicle_type_name,
         createdBy:          updated!.created_by,
         isActive:           updated!.is_active,
         createdAt:          updated!.created_at,
@@ -326,7 +410,6 @@ export async function deleteVehicle(req: Request, res: Response): Promise<void> 
       return;
     }
 
-    // Block delete if vehicle has an active trip
     const activeTrip = await pool.query<{ id: string }>(
       `SELECT id FROM trips
        WHERE  vehicle_id = $1

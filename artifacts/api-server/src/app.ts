@@ -12,6 +12,7 @@ import pricingRouter      from "./routes/pricing.js";
 import vehiclesRouter     from "./routes/vehicles.js";
 import driversRouter              from "./routes/drivers.js";
 import cancellationRequestsRouter from "./routes/cancellationRequests.js";
+import vehicleTypesRouter        from "./routes/vehicleTypes.js";
 
 const app: Express = express();
 
@@ -35,5 +36,6 @@ app.use("/api/pricing",      pricingRouter);
 app.use("/api/vehicles",     vehiclesRouter);
 app.use("/api/drivers",               driversRouter);
 app.use("/api/cancellation-requests", cancellationRequestsRouter);
+app.use("/api/vehicle-types",         vehicleTypesRouter);
 
 export default app;

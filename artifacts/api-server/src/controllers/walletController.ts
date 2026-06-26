@@ -104,11 +104,12 @@ export async function getMyLedger(req: Request, res: Response): Promise<void> {
 
     const baseQuery = `
       FROM wallet_ledger wl
-      JOIN trip_fees tf ON wl.trip_fee_id    = tf.id
-      JOIN trips t      ON wl.trip_id        = t.id
-      JOIN vehicles v   ON t.vehicle_id      = v.id
-      LEFT JOIN states sl    ON sl.id             = t.loading_state_id
-      LEFT JOIN states su    ON su.id             = t.unloading_state_id
+      JOIN trip_fees tf   ON wl.trip_fee_id    = tf.id
+      JOIN trips t        ON wl.trip_id        = t.id
+      JOIN vehicles v     ON t.vehicle_id      = v.id
+      LEFT JOIN vehicle_types vt ON vt.id      = v.vehicle_type_id
+      LEFT JOIN states sl ON sl.id             = t.loading_state_id
+      LEFT JOIN states su ON su.id             = t.unloading_state_id
       WHERE wl.wallet_id = $1 ${whereClause}`;
 
     const [summaryRes, countRes] = await Promise.all([
@@ -132,6 +133,7 @@ export async function getMyLedger(req: Request, res: Response): Promise<void> {
       ledger_id:            string;
       trip_id:              string;
       vehicle_number:       string;
+      vehicle_type_name:    string | null;
       fee_type:             string;
       amount:               number;
       entry_type:           string;
@@ -145,6 +147,7 @@ export async function getMyLedger(req: Request, res: Response): Promise<void> {
          wl.id          AS ledger_id,
          wl.trip_id,
          v.registration_number AS vehicle_number,
+         vt.name               AS vehicle_type_name,
          tf.fee_type,
          wl.amount,
          wl.entry_type,
@@ -159,6 +162,59 @@ export async function getMyLedger(req: Request, res: Response): Promise<void> {
       [...params, limit, offset]
     );
 
+    // Fetch all trip_fees for every trip on this page (for the detail breakdown)
+    const tripIds = [...new Set(entriesRes.rows.map((r) => r.trip_id))];
+
+    let tripFeesMap: Map<string, Array<{
+      id: string;
+      feeType: string;
+      recipientType: string;
+      recipientId: string;
+      recipientName: string | null;
+      amount: number;
+    }>> = new Map();
+
+    if (tripIds.length > 0) {
+      const allFeesRes = await pool.query<{
+        trip_id:        string;
+        id:             string;
+        fee_type:       string;
+        recipient_type: string;
+        recipient_id:   string;
+        recipient_name: string | null;
+        amount:         number;
+      }>(
+        `SELECT
+           tf.trip_id,
+           tf.id,
+           tf.fee_type,
+           tf.recipient_type,
+           tf.recipient_id,
+           COALESCE(s.name, sh.name) AS recipient_name,
+           tf.amount
+         FROM trip_fees tf
+         LEFT JOIN states       s  ON tf.recipient_type = 'state'       AND s.id  = tf.recipient_id
+         LEFT JOIN stakeholders sh ON tf.recipient_type = 'stakeholder' AND sh.id = tf.recipient_id
+         WHERE tf.trip_id = ANY($1::uuid[])
+         ORDER BY tf.fee_type`,
+        [tripIds]
+      );
+
+      for (const fee of allFeesRes.rows) {
+        if (!tripFeesMap.has(fee.trip_id)) {
+          tripFeesMap.set(fee.trip_id, []);
+        }
+        tripFeesMap.get(fee.trip_id)!.push({
+          id:            fee.id,
+          feeType:       fee.fee_type,
+          recipientType: fee.recipient_type,
+          recipientId:   fee.recipient_id,
+          recipientName: fee.recipient_name,
+          amount:        fee.amount,
+        });
+      }
+    }
+
     const totalCredits   = parseInt(summaryRes.rows[0]!.total_credits,   10);
     const totalReversals = parseInt(summaryRes.rows[0]!.total_reversals, 10);
 
@@ -168,6 +224,7 @@ export async function getMyLedger(req: Request, res: Response): Promise<void> {
           ledgerId:            r.ledger_id,
           tripId:              r.trip_id,
           vehicleNumber:       r.vehicle_number,
+          vehicleTypeName:     r.vehicle_type_name,
           feeType:             r.fee_type,
           amount:              r.amount,
           amountNaira:         toNaira(r.amount),
@@ -177,6 +234,7 @@ export async function getMyLedger(req: Request, res: Response): Promise<void> {
           createdAt:           r.created_at,
           loadingStateName:    r.loading_state_name,
           unloadingStateName:  r.unloading_state_name,
+          tripFees:            tripFeesMap.get(r.trip_id) ?? [],
         })),
         pagination: {
           page,

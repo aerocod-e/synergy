@@ -1,68 +1,14 @@
 import { type Request, type Response } from "express";
 import pool from "../db/connection.js";
 
-interface StakeholderRateInput {
-  stakeholder_id: string;
-  amount: number;
-}
-
-interface PricingChartBody {
-  loading_fee?: unknown;
-  unloading_fee?: unknown;
-  stakeholder_rates?: unknown;
-}
-
 function isPositiveInt(v: unknown): v is number {
   return typeof v === "number" && Number.isInteger(v) && v > 0;
 }
 
-function validateBody(
-  body: PricingChartBody,
-  res: Response,
-): { loading_fee: number; unloading_fee: number; stakeholder_rates: StakeholderRateInput[] } | null {
-  // loading_fee and unloading_fee are deprecated — per-state rates are now used for loading/unloading.
-  // Accept positive int if provided; otherwise default to 0.
-  let loading_fee = 0;
-  let unloading_fee = 0;
-  if (body.loading_fee !== undefined) {
-    if (!isPositiveInt(body.loading_fee) && body.loading_fee !== 0) {
-      res.status(400).json({ error: "BAD_REQUEST", message: "loading_fee must be a positive integer (kobo) if provided" });
-      return null;
-    }
-    loading_fee = (body.loading_fee as number) || 0;
-  }
-  if (body.unloading_fee !== undefined) {
-    if (!isPositiveInt(body.unloading_fee) && body.unloading_fee !== 0) {
-      res.status(400).json({ error: "BAD_REQUEST", message: "unloading_fee must be a positive integer (kobo) if provided" });
-      return null;
-    }
-    unloading_fee = (body.unloading_fee as number) || 0;
-  }
-
-  const stakeholder_rates = Array.isArray(body.stakeholder_rates) ? body.stakeholder_rates : [];
-  for (const r of stakeholder_rates as StakeholderRateInput[]) {
-    if (!r.stakeholder_id || typeof r.stakeholder_id !== "string") {
-      res.status(400).json({ error: "BAD_REQUEST", message: "Each rate must have a valid stakeholder_id" });
-      return null;
-    }
-    if (!isPositiveInt(r.amount)) {
-      res.status(400).json({ error: "BAD_REQUEST", message: `Rate for stakeholder ${r.stakeholder_id} must be a positive integer (kobo)` });
-      return null;
-    }
-  }
-  return {
-    loading_fee,
-    unloading_fee,
-    stakeholder_rates: stakeholder_rates as StakeholderRateInput[],
-  };
-}
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function createPricingChart(req: Request, res: Response): Promise<void> {
-  const validated = validateBody(req.body as PricingChartBody, res);
-  if (!validated) return;
-
-  const { loading_fee, unloading_fee, stakeholder_rates } = validated;
-  const userId = (req as any).userId as string | undefined;
+  const userId = req.user?.userId ?? null;
 
   const client = await pool.connect();
   try {
@@ -72,28 +18,18 @@ export async function createPricingChart(req: Request, res: Response): Promise<v
       id: string; loading_fee: number; unloading_fee: number; is_active: boolean; created_at: string;
     }>(
       `INSERT INTO pricing_charts (loading_fee, unloading_fee, is_active, created_by)
-       VALUES ($1, $2, false, $3)
+       VALUES (0, 0, false, $1)
        RETURNING id, loading_fee, unloading_fee, is_active, created_at`,
-      [loading_fee, unloading_fee, userId ?? null],
+      [userId],
     );
     const chart = chartRes.rows[0]!;
-    const rates: { id: string; stakeholder_id: string; amount: number }[] = [];
-
-    for (const r of stakeholder_rates) {
-      const rateRes = await client.query<{ id: string; stakeholder_id: string; amount: number }>(
-        `INSERT INTO pricing_chart_stakeholder_rates (pricing_chart_id, stakeholder_id, amount)
-         VALUES ($1, $2, $3)
-         RETURNING id, stakeholder_id, amount`,
-        [chart.id, r.stakeholder_id, r.amount],
-      );
-      rates.push(rateRes.rows[0]!);
-    }
 
     await client.query("COMMIT");
-    res.status(201).json({ data: { chart: { ...chart, stakeholder_rates: rates } } });
+    res.status(201).json({ data: { chart: { ...chart, vehicleTypeRates: [], unassignedStakeholders: [] } } });
   } catch (err) {
     await client.query("ROLLBACK");
-    throw err;
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to create pricing chart" });
   } finally {
     client.release();
   }
@@ -101,10 +37,6 @@ export async function createPricingChart(req: Request, res: Response): Promise<v
 
 export async function updatePricingChart(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
-  const validated = validateBody(req.body as PricingChartBody, res);
-  if (!validated) return;
-
-  const { loading_fee, unloading_fee, stakeholder_rates } = validated;
 
   const client = await pool.connect();
   try {
@@ -121,102 +53,131 @@ export async function updatePricingChart(req: Request, res: Response): Promise<v
       return;
     }
 
-    await client.query("BEGIN");
-
-    const chartRes = await client.query<{
-      id: string; loading_fee: number; unloading_fee: number; is_active: boolean; created_at: string;
-    }>(
-      `UPDATE pricing_charts
-       SET loading_fee = $1, unloading_fee = $2, updated_at = NOW()
-       WHERE id = $3
-       RETURNING id, loading_fee, unloading_fee, is_active, created_at`,
-      [loading_fee, unloading_fee, id],
-    );
-
-    for (const r of stakeholder_rates) {
-      await client.query(
-        `INSERT INTO pricing_chart_stakeholder_rates (pricing_chart_id, stakeholder_id, amount)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (pricing_chart_id, stakeholder_id)
-         DO UPDATE SET amount = EXCLUDED.amount, updated_at = NOW()`,
-        [id, r.stakeholder_id, r.amount],
-      );
-    }
-
-    const ratesRes = await client.query<{ id: string; stakeholder_id: string; amount: number }>(
-      `SELECT id, stakeholder_id, amount FROM pricing_chart_stakeholder_rates WHERE pricing_chart_id = $1`,
-      [id],
-    );
-
-    await client.query("COMMIT");
-    res.json({ data: { chart: { ...chartRes.rows[0], stakeholder_rates: ratesRes.rows } } });
+    res.json({ data: { chart: existingRes.rows[0] } });
   } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to update pricing chart" });
   } finally {
     client.release();
   }
 }
 
 export async function getActivePricingChart(_req: Request, res: Response): Promise<void> {
-  const chartRes = await pool.query<{
-    id: string; loading_fee: number; unloading_fee: number; is_active: boolean; created_at: string;
-  }>(
-    `SELECT id, loading_fee, unloading_fee, is_active, created_at
-     FROM pricing_charts WHERE is_active = true LIMIT 1`,
-  );
+  try {
+    const chartRes = await pool.query<{
+      id: string; is_active: boolean; created_at: string;
+    }>(
+      `SELECT id, is_active, created_at FROM pricing_charts WHERE is_active = true LIMIT 1`,
+    );
 
-  if (chartRes.rows.length === 0) {
-    res.json({ data: { chart: null, unassignedStakeholders: [] } });
-    return;
-  }
+    if (chartRes.rows.length === 0) {
+      res.json({ data: { chart: null } });
+      return;
+    }
 
-  const chart = chartRes.rows[0]!;
+    const chart = chartRes.rows[0]!;
 
-  const ratesRes = await pool.query<{
-    id: string; stakeholder_id: string; amount: number; stakeholder_name: string;
-  }>(
-    `SELECT r.id, r.stakeholder_id, r.amount, s.name AS stakeholder_name
-     FROM pricing_chart_stakeholder_rates r
-     JOIN stakeholders s ON s.id = r.stakeholder_id
-     WHERE r.pricing_chart_id = $1`,
-    [chart.id],
-  );
+    // Fetch all rates with vehicle type and stakeholder info
+    const ratesRes = await pool.query<{
+      vehicle_type_id:   string;
+      vehicle_type_name: string;
+      loading_fee:       number;
+      unloading_fee:     number;
+      stakeholder_id:    string;
+      stakeholder_name:  string;
+      amount:            number;
+    }>(
+      `SELECT
+         vt.id   AS vehicle_type_id,
+         vt.name AS vehicle_type_name,
+         vt.loading_fee,
+         vt.unloading_fee,
+         s.id    AS stakeholder_id,
+         s.name  AS stakeholder_name,
+         pcsr.amount
+       FROM pricing_chart_stakeholder_rates pcsr
+       JOIN vehicle_types  vt ON vt.id = pcsr.vehicle_type_id
+       JOIN stakeholders   s  ON s.id  = pcsr.stakeholder_id
+       WHERE pcsr.pricing_chart_id = $1
+       ORDER BY vt.loading_fee ASC, s.name ASC`,
+      [chart.id],
+    );
 
-  const unassignedRes = await pool.query<{ id: string; name: string }>(
-    `SELECT s.id, s.name
-     FROM stakeholders s
-     WHERE s.is_active = true
-       AND NOT EXISTS (
-         SELECT 1 FROM pricing_chart_stakeholder_rates r
-         WHERE r.pricing_chart_id = $1 AND r.stakeholder_id = s.id
-       )
-     ORDER BY s.name ASC`,
-    [chart.id],
-  );
+    // Group rates by vehicle type
+    const vehicleTypeMap = new Map<string, {
+      vehicleTypeId:   string;
+      vehicleTypeName: string;
+      loadingFee:      number;
+      unloadingFee:    number;
+      stakeholderRates: Array<{ stakeholderId: string; stakeholderName: string; amount: number }>;
+    }>();
 
-  res.json({
-    data: {
-      chart: {
-        ...chart,
-        stakeholder_rates: ratesRes.rows,
-        unassignedStakeholders: unassignedRes.rows,
+    for (const row of ratesRes.rows) {
+      if (!vehicleTypeMap.has(row.vehicle_type_id)) {
+        vehicleTypeMap.set(row.vehicle_type_id, {
+          vehicleTypeId:   row.vehicle_type_id,
+          vehicleTypeName: row.vehicle_type_name,
+          loadingFee:      row.loading_fee,
+          unloadingFee:    row.unloading_fee,
+          stakeholderRates: [],
+        });
+      }
+      vehicleTypeMap.get(row.vehicle_type_id)!.stakeholderRates.push({
+        stakeholderId:   row.stakeholder_id,
+        stakeholderName: row.stakeholder_name,
+        amount:          row.amount,
+      });
+    }
+
+    // Find stakeholders that have no rate on any vehicle type for this chart
+    const unassignedRes = await pool.query<{ id: string; name: string }>(
+      `SELECT s.id, s.name
+       FROM stakeholders s
+       WHERE s.is_active = true
+         AND NOT EXISTS (
+           SELECT 1 FROM pricing_chart_stakeholder_rates pcsr
+           WHERE pcsr.pricing_chart_id = $1 AND pcsr.stakeholder_id = s.id
+         )
+       ORDER BY s.name ASC`,
+      [chart.id],
+    );
+
+    res.json({
+      data: {
+        chart: {
+          id:               chart.id,
+          isActive:         chart.is_active,
+          createdAt:        chart.created_at,
+          vehicleTypeRates: Array.from(vehicleTypeMap.values()),
+          unassignedStakeholders: unassignedRes.rows,
+        },
       },
-    },
-  });
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to retrieve active pricing chart" });
+  }
 }
 
 export async function addStakeholderRate(req: Request, res: Response): Promise<void> {
   try {
     const { chartId } = req.params as { chartId: string };
-    const { stakeholderId, amount } = req.body as { stakeholderId?: unknown; amount?: unknown };
+    const { stakeholderId, vehicleTypeId, amount } = req.body as {
+      stakeholderId?: unknown;
+      vehicleTypeId?: unknown;
+      amount?: unknown;
+    };
 
-    if (!stakeholderId || typeof stakeholderId !== "string") {
-      res.status(400).json({ error: "BAD_REQUEST", message: "stakeholderId is required" });
+    if (!stakeholderId || typeof stakeholderId !== "string" || !UUID_RE.test(stakeholderId)) {
+      res.status(400).json({ error: "BAD_REQUEST", message: "stakeholderId is required and must be a valid UUID" });
       return;
     }
-    if (typeof amount !== "number" || !Number.isInteger(amount) || amount <= 0) {
-      res.status(400).json({ error: "BAD_REQUEST", message: "amount must be a positive integer (kobo)" });
+    if (!vehicleTypeId || typeof vehicleTypeId !== "string" || !UUID_RE.test(vehicleTypeId)) {
+      res.status(400).json({ error: "BAD_REQUEST", message: "vehicleTypeId is required and must be a valid UUID" });
+      return;
+    }
+    if (typeof amount !== "number" || !Number.isInteger(amount) || amount < 0) {
+      res.status(400).json({ error: "BAD_REQUEST", message: "amount must be a non-negative integer (kobo)" });
       return;
     }
 
@@ -238,19 +199,31 @@ export async function addStakeholderRate(req: Request, res: Response): Promise<v
       return;
     }
 
-    const result = await pool.query<{ id: string; stakeholder_id: string; amount: number }>(
-      `INSERT INTO pricing_chart_stakeholder_rates (pricing_chart_id, stakeholder_id, amount)
-       VALUES ($1, $2, $3)
-       RETURNING id, stakeholder_id, amount`,
-      [chartId, stakeholderId, amount],
+    const vtCheck = await pool.query<{ id: string }>(
+      `SELECT id FROM vehicle_types WHERE id = $1`,
+      [vehicleTypeId],
     );
-    res.status(201).json({ data: { rate: result.rows[0] } });
-  } catch (err: any) {
-    if (err.code === "23505") {
-      res.status(409).json({ error: "CONFLICT", message: "Stakeholder already has a rate on this chart" });
+    if (vtCheck.rows.length === 0) {
+      res.status(404).json({ error: "NOT_FOUND", message: "Vehicle type not found" });
       return;
     }
-    throw err;
+
+    const result = await pool.query<{ id: string; stakeholder_id: string; vehicle_type_id: string; amount: number }>(
+      `INSERT INTO pricing_chart_stakeholder_rates (pricing_chart_id, stakeholder_id, vehicle_type_id, amount)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT ON CONSTRAINT pricing_chart_stakeholder_rates_unique
+       DO UPDATE SET amount = EXCLUDED.amount, updated_at = NOW()
+       RETURNING id, stakeholder_id, vehicle_type_id, amount`,
+      [chartId, stakeholderId, vehicleTypeId, amount],
+    );
+    res.status(201).json({ data: { rate: result.rows[0] } });
+  } catch (err: unknown) {
+    if (typeof err === "object" && err !== null && (err as { code?: string }).code === "23505") {
+      res.status(409).json({ error: "CONFLICT", message: "Rate already exists for this stakeholder and vehicle type" });
+      return;
+    }
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to add stakeholder rate" });
   }
 }
 
@@ -279,22 +252,35 @@ export async function activatePricingChart(req: Request, res: Response): Promise
       [id],
     );
 
-    const ratesRes = await client.query<{
-      id: string; stakeholder_id: string; amount: number; stakeholder_name: string;
-    }>(
-      `SELECT r.id, r.stakeholder_id, r.amount, s.name AS stakeholder_name
-       FROM pricing_chart_stakeholder_rates r
-       JOIN stakeholders s ON s.id = r.stakeholder_id
-       WHERE r.pricing_chart_id = $1`,
-      [id],
-    );
-
     await client.query("COMMIT");
-    res.json({ data: { chart: { ...chartRes.rows[0], stakeholder_rates: ratesRes.rows } } });
+    res.json({ data: { chart: chartRes.rows[0] } });
   } catch (err) {
     await client.query("ROLLBACK");
-    throw err;
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to activate pricing chart" });
   } finally {
     client.release();
   }
 }
+
+export async function deleteStakeholderRate(req: Request, res: Response): Promise<void> {
+  const { chartId, rateId } = req.params as { chartId: string; rateId: string };
+
+  try {
+    const result = await pool.query(
+      `DELETE FROM pricing_chart_stakeholder_rates WHERE id = $1 AND pricing_chart_id = $2`,
+      [rateId, chartId],
+    );
+    if ((result.rowCount ?? 0) === 0) {
+      res.status(404).json({ error: "NOT_FOUND", message: "Rate not found" });
+      return;
+    }
+    res.json({ data: { id: rateId }, message: "Rate deleted" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to delete rate" });
+  }
+}
+
+// Keep isPositiveInt exported for any future use
+export { isPositiveInt };

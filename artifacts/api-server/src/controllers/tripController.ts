@@ -1,16 +1,6 @@
 import { type Request, type Response } from "express";
 import pool from "../db/connection.js";
 
-interface StakeholderInput {
-  stakeholderId: string;
-  amount: number;
-  enabled: boolean;
-}
-
-interface FeesInput {
-  stakeholders: StakeholderInput[];
-}
-
 interface CreateTripBody {
   vehicleId?: unknown;
   driverId?: unknown;
@@ -18,11 +8,6 @@ interface CreateTripBody {
   unloadingStateId?: unknown;
   originDescription?: unknown;
   destinationDescription?: unknown;
-  fees?: unknown;
-}
-
-function isPositiveInt(v: unknown): v is number {
-  return typeof v === "number" && Number.isInteger(v) && v > 0;
 }
 
 const UUID_RE =
@@ -38,14 +23,11 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
   const unloadingStateId = body.unloadingStateId;
   const originDescription = body.originDescription;
   const destinationDescription = body.destinationDescription;
-  const fees = body.fees as FeesInput | undefined;
 
   if (!vehicleId || typeof vehicleId !== "string" || vehicleId.trim() === "") {
     res.status(400).json({ error: "BAD_REQUEST", message: "vehicleId is required" });
     return;
   }
-  // BUG-04: Validate UUID format early so PostgreSQL never receives a malformed
-  // UUID string (which would throw a DB-level error and surface as a confusing 500).
   if (!UUID_RE.test(vehicleId)) {
     res.status(400).json({ error: "BAD_REQUEST", message: "vehicleId must be a valid UUID" });
     return;
@@ -74,77 +56,71 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
     res.status(400).json({ error: "BAD_REQUEST", message: "unloadingStateId must be a valid UUID" });
     return;
   }
-  if (!fees || typeof fees !== "object") {
-    res.status(400).json({ error: "BAD_REQUEST", message: "fees object is required" });
-    return;
-  }
-  if (!Array.isArray(fees.stakeholders)) {
-    res.status(400).json({ error: "BAD_REQUEST", message: "fees.stakeholders must be an array" });
-    return;
-  }
-  const enabledStakeholders = fees.stakeholders.filter((s) => s.enabled);
-  for (const s of enabledStakeholders) {
-    if (!s.stakeholderId || typeof s.stakeholderId !== "string") {
-      res.status(400).json({ error: "BAD_REQUEST", message: "Each enabled stakeholder must have a valid stakeholderId" });
-      return;
-    }
-    if (!isPositiveInt(s.amount)) {
-      res.status(400).json({ error: "BAD_REQUEST", message: `Stakeholder ${s.stakeholderId}: amount must be a positive integer (kobo)` });
-      return;
-    }
-  }
 
-  // ── 2. DB existence checks (run in parallel before opening transaction) ────
+  // ── 2. DB existence checks ──────────────────────────────────────────────────
   const client = await pool.connect();
   try {
-    // BUG-05: Fail fast with a clear 422 if no active pricing chart exists.
-    // The mobile app sends fees from the chart it loaded when opening the form,
-    // but the chart may have been deactivated between form-open and submission.
-    const { rows: chartRows } = await client.query<{ id: string }>(
-      `SELECT id FROM pricing_charts WHERE is_active = true LIMIT 1`
+    // Look up vehicle and its type in one query
+    const vehicleRes = await client.query<{
+      id: string;
+      registration_number: string;
+      vehicle_type_id: string | null;
+      loading_fee: number | null;
+      unloading_fee: number | null;
+      vehicle_type_name: string | null;
+    }>(
+      `SELECT
+         v.id,
+         v.registration_number,
+         v.vehicle_type_id,
+         vt.loading_fee,
+         vt.unloading_fee,
+         vt.name AS vehicle_type_name
+       FROM vehicles v
+       LEFT JOIN vehicle_types vt ON vt.id = v.vehicle_type_id
+       WHERE v.id = $1 AND v.is_active = true AND v.deleted_at IS NULL
+       LIMIT 1`,
+      [vehicleId]
     );
-    if (chartRows.length === 0) {
-      res.status(422).json({
-        error: "UNPROCESSABLE",
-        message: "No active pricing chart. Contact your administrator before creating a trip.",
-      });
-      return;
-    }
-
-    const [vehicleRes, driverRes, loadingRes, unloadingRes, ...stakeholderResults] =
-      await Promise.all([
-        client.query<{ id: string; registration_number: string }>(
-          `SELECT id, registration_number FROM vehicles WHERE id = $1 AND is_active = true AND deleted_at IS NULL LIMIT 1`,
-          [vehicleId]
-        ),
-        client.query<{ id: string }>(
-          `SELECT id FROM drivers WHERE id = $1 AND is_active = true AND deleted_at IS NULL LIMIT 1`,
-          [driverId]
-        ),
-        client.query<{ id: string; loading_rate: number }>(
-          `SELECT id, loading_rate FROM states WHERE id = $1 LIMIT 1`,
-          [loadingStateId]
-        ),
-        client.query<{ id: string; unloading_rate: number }>(
-          `SELECT id, unloading_rate FROM states WHERE id = $1 LIMIT 1`,
-          [unloadingStateId]
-        ),
-        ...enabledStakeholders.map((s) =>
-          client.query<{ id: string }>(
-            `SELECT id FROM stakeholders WHERE id = $1 AND is_active = true LIMIT 1`,
-            [s.stakeholderId]
-          )
-        ),
-      ]);
 
     if (vehicleRes.rows.length === 0) {
       res.status(400).json({ error: "BAD_REQUEST", message: "vehicleId does not reference an active vehicle" });
       return;
     }
+
     const vehicle = vehicleRes.rows[0]!;
 
+    if (!vehicle.vehicle_type_id || vehicle.loading_fee === null || vehicle.unloading_fee === null) {
+      res.status(422).json({
+        error: "UNPROCESSABLE",
+        message: "Vehicle has no type assigned. Please contact your administrator.",
+      });
+      return;
+    }
+
+    const loadingFeeAmount   = vehicle.loading_fee;
+    const unloadingFeeAmount = vehicle.unloading_fee;
+    const vehicleTypeId      = vehicle.vehicle_type_id;
+    const vehicleTypeName    = vehicle.vehicle_type_name!;
+
+    // Run remaining existence checks in parallel
+    const [driverRes, loadingRes, unloadingRes] = await Promise.all([
+      client.query<{ id: string }>(
+        `SELECT id FROM drivers WHERE id = $1 AND is_active = true AND deleted_at IS NULL LIMIT 1`,
+        [driverId]
+      ),
+      client.query<{ id: string }>(
+        `SELECT id FROM states WHERE id = $1 LIMIT 1`,
+        [loadingStateId]
+      ),
+      client.query<{ id: string }>(
+        `SELECT id FROM states WHERE id = $1 LIMIT 1`,
+        [unloadingStateId]
+      ),
+    ]);
+
     if (driverRes.rows.length === 0) {
-      res.status(400).json({ error: "BAD_REQUEST", message: "driverId does not reference an active driver user" });
+      res.status(400).json({ error: "BAD_REQUEST", message: "driverId does not reference an active driver" });
       return;
     }
     if (loadingRes.rows.length === 0) {
@@ -156,30 +132,29 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const loadingFeeAmount  = loadingRes.rows[0]!.loading_rate;
-    const unloadingFeeAmount = unloadingRes.rows[0]!.unloading_rate;
-
-    if (loadingFeeAmount <= 0) {
+    // Fetch active pricing chart
+    const chartRes = await client.query<{ id: string }>(
+      `SELECT id FROM pricing_charts WHERE is_active = true LIMIT 1`
+    );
+    if (chartRes.rows.length === 0) {
       res.status(422).json({
         error: "UNPROCESSABLE",
-        message: "Loading state has no rate configured. Contact your administrator.",
+        message: "No active pricing chart. Please contact your Super Admin.",
       });
       return;
     }
-    if (unloadingFeeAmount <= 0) {
-      res.status(422).json({
-        error: "UNPROCESSABLE",
-        message: "Unloading state has no rate configured. Contact your administrator.",
-      });
-      return;
-    }
+    const chartId = chartRes.rows[0]!.id;
 
-    for (let i = 0; i < enabledStakeholders.length; i++) {
-      if (stakeholderResults[i]!.rows.length === 0) {
-        res.status(400).json({ error: "BAD_REQUEST", message: `stakeholderId ${enabledStakeholders[i]!.stakeholderId} does not reference an existing active stakeholder` });
-        return;
-      }
-    }
+    // Fetch stakeholder rates for this vehicle type from the active chart
+    const ratesRes = await client.query<{
+      stakeholder_id: string;
+      amount: number;
+    }>(
+      `SELECT stakeholder_id, amount
+       FROM pricing_chart_stakeholder_rates
+       WHERE pricing_chart_id = $1 AND vehicle_type_id = $2`,
+      [chartId, vehicleTypeId]
+    );
 
     // ── 3. Duplicate active vehicle check ──────────────────────────────────
     const dupRes = await client.query<{ id: string }>(
@@ -195,15 +170,14 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    // ── 4–7. Transaction: insert trip, fees, wallets, event ───────────────
+    // ── 4. Transaction: insert trip, fees, wallets, event ─────────────────
     await client.query("BEGIN");
 
-    // Generate a human-readable trip code atomically using the sequence
     const { rows: [seqRow] } = await client.query<{ nextval: string }>(
       `SELECT nextval('trip_code_seq') AS nextval`
     );
     const tripCodeYear = new Date().getFullYear();
-    const tripCode = `SYN-${tripCodeYear}-${String(seqRow.nextval).padStart(6, "0")}`;
+    const tripCode = `SYN-${tripCodeYear}-${String(seqRow!.nextval).padStart(6, "0")}`;
 
     const createdById = req.user!.userId;
 
@@ -239,7 +213,7 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
       ]
     );
 
-    // STEP B: Build fee entries — always TWO state rows even when same state
+    // STEP B: Build fee entries
     type FeeRow = {
       recipientType: "state" | "stakeholder";
       recipientId: string;
@@ -250,13 +224,19 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
     const feeEntries: FeeRow[] = [
       { recipientType: "state", recipientId: loadingStateId, feeType: "loading", amount: loadingFeeAmount },
       { recipientType: "state", recipientId: unloadingStateId, feeType: "unloading", amount: unloadingFeeAmount },
-      ...enabledStakeholders.map((s): FeeRow => ({
-        recipientType: "stakeholder",
-        recipientId: s.stakeholderId,
-        feeType: "stakeholder_fee",
-        amount: s.amount,
-      })),
     ];
+
+    // Only include stakeholder fees where amount > 0
+    for (const rate of ratesRes.rows) {
+      if (rate.amount > 0) {
+        feeEntries.push({
+          recipientType: "stakeholder",
+          recipientId: rate.stakeholder_id,
+          feeType: "stakeholder_fee",
+          amount: rate.amount,
+        });
+      }
+    }
 
     const feesAllocated: Array<{
       id: string;
@@ -282,20 +262,20 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
         `INSERT INTO trip_fees (trip_id, recipient_type, recipient_id, fee_type, amount)
          VALUES ($1, $2, $3, $4, $5)
          RETURNING *`,
-        [trip.id, entry.recipientType, entry.recipientId, entry.feeType, entry.amount]
+        [trip!.id, entry.recipientType, entry.recipientId, entry.feeType, entry.amount]
       );
 
       feesAllocated.push({
-        id: fee.id,
-        recipientType: fee.recipient_type,
-        recipientId: fee.recipient_id,
-        feeType: fee.fee_type,
-        amount: fee.amount,
+        id: fee!.id,
+        recipientType: fee!.recipient_type,
+        recipientId: fee!.recipient_id,
+        feeType: fee!.fee_type,
+        amount: fee!.amount,
       });
 
       totalFees += entry.amount;
 
-      // STEP C: Credit wallet + ledger entry — both must match exactly 1 row
+      // Credit wallet
       const walletUpdate = await client.query(
         `UPDATE wallets
          SET total_collected = total_collected + $1,
@@ -309,13 +289,14 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
         );
       }
 
+      // Ledger entry
       const ledgerInsert = await client.query(
         `INSERT INTO wallet_ledger
            (wallet_id, trip_id, trip_fee_id, amount, entry_type, cleared)
          SELECT w.id, $1, $2, $3, 'credit', false
          FROM wallets w
          WHERE w.owner_type = $4 AND w.owner_id = $5`,
-        [trip.id, fee.id, entry.amount, entry.recipientType, entry.recipientId]
+        [trip!.id, fee!.id, entry.amount, entry.recipientType, entry.recipientId]
       );
       if ((ledgerInsert.rowCount ?? 0) !== 1) {
         throw new Error(
@@ -326,16 +307,18 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
       walletsUpdated += walletUpdate.rowCount ?? 0;
     }
 
-    // STEP D: Trip event
+    // STEP C: Trip event
     await client.query(
       `INSERT INTO trip_events (trip_id, event_type, performed_by, metadata)
        VALUES ($1, 'created', $2, $3::jsonb)`,
       [
-        trip.id,
+        trip!.id,
         createdById,
         JSON.stringify({
           vehicleNumber: vehicle.registration_number,
           vehicleId,
+          vehicleTypeId,
+          vehicleTypeName,
           loadingStateId,
           unloadingStateId,
           totalFees,
@@ -348,13 +331,15 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
     res.status(201).json({
       data: {
         trip: {
-          id: trip.id,
-          tripCode: trip.trip_code,
-          vehicleNumber: vehicle.registration_number,
-          status: trip.status,
-          loadingStateId: trip.loading_state_id,
-          unloadingStateId: trip.unloading_state_id,
-          createdAt: trip.created_at,
+          id:              trip!.id,
+          tripCode:        trip!.trip_code,
+          vehicleNumber:   vehicle.registration_number,
+          vehicleTypeId,
+          vehicleTypeName,
+          status:          trip!.status,
+          loadingStateId:  trip!.loading_state_id,
+          unloadingStateId: trip!.unloading_state_id,
+          createdAt:       trip!.created_at,
         },
         feesAllocated,
         walletsUpdated,
@@ -525,6 +510,7 @@ export async function listTrips(req: Request, res: Response): Promise<void> {
     const baseFrom = `
       FROM trips t
       JOIN vehicles v ON t.vehicle_id = v.id
+      LEFT JOIN vehicle_types vt ON vt.id = v.vehicle_type_id
       JOIN states ls ON t.loading_state_id   = ls.id
       JOIN states us ON t.unloading_state_id = us.id
       LEFT JOIN users d ON t.driver_id = d.id
@@ -546,6 +532,8 @@ export async function listTrips(req: Request, res: Response): Promise<void> {
       pool.query<{
         id:                    string;
         vehicle_number:        string;
+        vehicle_type_id:       string | null;
+        vehicle_type_name:     string | null;
         status:                string;
         origin_description:    string | null;
         destination_description: string | null;
@@ -564,6 +552,8 @@ export async function listTrips(req: Request, res: Response): Promise<void> {
         `SELECT
            t.id,
            v.registration_number AS vehicle_number,
+           v.vehicle_type_id,
+           vt.name AS vehicle_type_name,
            t.status,
            t.origin_description,
            t.destination_description,
@@ -599,6 +589,8 @@ export async function listTrips(req: Request, res: Response): Promise<void> {
         trips: rowsRes.rows.map((r) => ({
           id:              r.id,
           vehicleNumber:   r.vehicle_number,
+          vehicleTypeId:   r.vehicle_type_id,
+          vehicleTypeName: r.vehicle_type_name,
           status:          r.status,
           loadingState:    { id: r.loading_state_id,   name: r.loading_state_name,   code: r.loading_state_code   },
           unloadingState:  { id: r.unloading_state_id, name: r.unloading_state_name, code: r.unloading_state_code },
@@ -631,6 +623,8 @@ export async function getTripById(req: Request, res: Response): Promise<void> {
       id:                    string;
       trip_code:             string | null;
       vehicle_number:        string;
+      vehicle_type_id:       string | null;
+      vehicle_type_name:     string | null;
       status:                string;
       origin_description:    string | null;
       destination_description: string | null;
@@ -650,6 +644,8 @@ export async function getTripById(req: Request, res: Response): Promise<void> {
          t.id,
          t.trip_code,
          v.registration_number AS vehicle_number,
+         v.vehicle_type_id,
+         vt.name AS vehicle_type_name,
          t.status,
          t.origin_description,
          t.destination_description,
@@ -666,10 +662,11 @@ export async function getTripById(req: Request, res: Response): Promise<void> {
          (t.status = 'created' AND t.created_at < NOW() - INTERVAL '2 hours') AS unstarted_flag
        FROM trips t
        JOIN vehicles v ON t.vehicle_id = v.id
+       LEFT JOIN vehicle_types vt ON vt.id = v.vehicle_type_id
        JOIN states ls ON t.loading_state_id   = ls.id
        JOIN states us ON t.unloading_state_id = us.id
        LEFT JOIN users d ON t.driver_id = d.id
-       WHERE t.id = $1
+       WHERE t.id = $1 AND t.deleted_at IS NULL
        LIMIT 1`,
       [tripId]
     );
@@ -681,35 +678,57 @@ export async function getTripById(req: Request, res: Response): Promise<void> {
 
     const trip = rows[0]!;
 
-    const [feesRes, eventsRes] = await Promise.all([
-      pool.query<{
-        id:             string;
-        recipient_type: string;
-        recipient_id:   string;
-        fee_type:       string;
-        amount:         number;
-      }>(
-        `SELECT id, recipient_type, recipient_id, fee_type, amount
-         FROM trip_fees
-         WHERE trip_id = $1
-         ORDER BY fee_type`,
+    // Role-based access: drivers see only their own trips; trip_admins see only trips they created
+    if (role === "trip_admin" && trip.driver_id !== userId) {
+      // trip_admin can see any trip they created — check created_by via separate query
+      const creatorCheck = await pool.query<{ created_by: string }>(
+        `SELECT created_by FROM trips WHERE id = $1`,
         [tripId]
-      ),
-      pool.query<{
-        id:                  string;
-        event_type:          string;
-        performed_by_email:  string | null;
-        metadata:            Record<string, unknown>;
-        created_at:          Date;
-      }>(
-        `SELECT te.id, te.event_type, u.email AS performed_by_email, te.metadata, te.created_at
-         FROM trip_events te
-         LEFT JOIN users u ON te.performed_by = u.id
-         WHERE te.trip_id = $1
-         ORDER BY te.created_at ASC`,
-        [tripId]
-      ),
-    ]);
+      );
+      if (creatorCheck.rows[0]?.created_by !== userId) {
+        res.status(403).json({ error: "FORBIDDEN", message: "Access denied" });
+        return;
+      }
+    }
+
+    // Fetch fees for this trip
+    const feesRes = await pool.query<{
+      id:             string;
+      recipient_type: string;
+      recipient_id:   string;
+      fee_type:       string;
+      amount:         number;
+      recipient_name: string | null;
+    }>(
+      `SELECT
+         tf.id,
+         tf.recipient_type,
+         tf.recipient_id,
+         tf.fee_type,
+         tf.amount,
+         COALESCE(s.name, sh.name) AS recipient_name
+       FROM trip_fees tf
+       LEFT JOIN states       s  ON tf.recipient_type = 'state'       AND s.id  = tf.recipient_id
+       LEFT JOIN stakeholders sh ON tf.recipient_type = 'stakeholder' AND sh.id = tf.recipient_id
+       WHERE tf.trip_id = $1
+       ORDER BY tf.fee_type`,
+      [tripId]
+    );
+
+    // Fetch events for this trip
+    const eventsRes = await pool.query<{
+      id:           string;
+      event_type:   string;
+      performed_by: string | null;
+      metadata:     Record<string, unknown> | null;
+      created_at:   Date;
+    }>(
+      `SELECT id, event_type, performed_by, metadata, created_at
+       FROM trip_events
+       WHERE trip_id = $1
+       ORDER BY created_at ASC`,
+      [tripId]
+    );
 
     res.json({
       data: {
@@ -717,27 +736,29 @@ export async function getTripById(req: Request, res: Response): Promise<void> {
           id:              trip.id,
           tripCode:        trip.trip_code,
           vehicleNumber:   trip.vehicle_number,
+          vehicleTypeId:   trip.vehicle_type_id,
+          vehicleTypeName: trip.vehicle_type_name,
           status:          trip.status,
           loadingState:    { id: trip.loading_state_id,   name: trip.loading_state_name,   code: trip.loading_state_code   },
           unloadingState:  { id: trip.unloading_state_id, name: trip.unloading_state_name, code: trip.unloading_state_code },
           driver:          trip.driver_id ? { id: trip.driver_id, email: trip.driver_email } : null,
           originDescription:      trip.origin_description,
           destinationDescription: trip.destination_description,
-          unstartedFlag:   role === "super_admin" ? trip.unstarted_flag : null,
+          unstartedFlag:   trip.unstarted_flag,
           createdAt:       trip.created_at,
           updatedAt:       trip.updated_at,
-          fees: feesRes.rows.map((f) => ({
+          fees:            feesRes.rows.map((f) => ({
             id:            f.id,
             recipientType: f.recipient_type,
             recipientId:   f.recipient_id,
+            recipientName: f.recipient_name,
             feeType:       f.fee_type,
             amount:        f.amount,
-            amountNaira:   (f.amount / 100).toFixed(2),
           })),
-          events: eventsRes.rows.map((e) => ({
+          events:          eventsRes.rows.map((e) => ({
             id:          e.id,
             eventType:   e.event_type,
-            performedBy: e.performed_by_email,
+            performedBy: e.performed_by,
             metadata:    e.metadata,
             createdAt:   e.created_at,
           })),
