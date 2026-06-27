@@ -32,6 +32,7 @@ export default function VehicleSearchInput({ value, onSelect, onRegisterNew, pla
   const [results, setResults] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -40,6 +41,7 @@ export default function VehicleSearchInput({ value, onSelect, onRegisterNew, pla
 
   const handleChange = (text: string) => {
     setQuery(text);
+    setSearchError(null);
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     if (text.trim().length === 0) {
@@ -53,8 +55,11 @@ export default function VehicleSearchInput({ value, onSelect, onRegisterNew, pla
       try {
         const data = await searchVehicles(text.trim());
         setResults(data as Vehicle[]);
+        setSearchError(null);
         setShowDropdown(true);
-      } catch {
+      } catch (err: any) {
+        console.error('[VehicleSearchInput] searchVehicles failed:', err);
+        setSearchError(err?.message ?? 'Search failed — type to try again');
         setResults([]);
         setShowDropdown(true);
       } finally {
@@ -67,18 +72,15 @@ export default function VehicleSearchInput({ value, onSelect, onRegisterNew, pla
     setQuery(vehicle.registrationNumber);
     setShowDropdown(false);
     setResults([]);
+    setSearchError(null);
     onSelect(vehicle);
   };
 
   const handleRegisterNew = () => {
-    // BUG-06: Cancel any pending debounce search and clear results immediately.
-    // Without this, the 300 ms debounce fires after the registration attempt,
-    // finds the (now-existing) vehicle in search results, and re-opens the
-    // dropdown — which, when tapped, calls onSelect and silently closes the modal
-    // before the parent can show the error message.
     if (debounceRef.current) clearTimeout(debounceRef.current);
     setResults([]);
     setShowDropdown(false);
+    setSearchError(null);
     onRegisterNew(query.trim().toUpperCase());
   };
 
@@ -98,8 +100,17 @@ export default function VehicleSearchInput({ value, onSelect, onRegisterNew, pla
         {loading && <ActivityIndicator size="small" color={theme.colors.primary} style={styles.spinner} />}
       </View>
 
+      {searchError && !showDropdown && (
+        <Text style={styles.errorText}>{searchError}</Text>
+      )}
+
       {showDropdown && (
         <View style={styles.dropdown}>
+          {searchError && (
+            <View style={styles.errorRow}>
+              <Text style={styles.errorRowText}>{searchError}</Text>
+            </View>
+          )}
           {results.map((vehicle) => (
             <TouchableOpacity
               key={vehicle.id}
@@ -154,12 +165,29 @@ const styles = StyleSheet.create({
   spinner: {
     marginLeft: 8,
   },
+  errorText: {
+    fontSize: 12,
+    color: theme.colors.error,
+    marginTop: 6,
+    marginLeft: 4,
+  },
   dropdown: {
     marginTop: 4,
     borderRadius: 12,
     backgroundColor: theme.colors.white,
     overflow: 'hidden',
     ...theme.shadows.card,
+  },
+  errorRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#fff5f5',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.grey3,
+  },
+  errorRowText: {
+    fontSize: 13,
+    color: theme.colors.error,
   },
   dropdownRow: {
     paddingHorizontal: 16,

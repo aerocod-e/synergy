@@ -4,6 +4,7 @@ import PillTabBar from '@/components/PillTabBar';
 export default function StateAdminLayout() {
   return (
     <Tabs
+      initialRouteName="wallet"
       tabBar={(props) => <PillTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >

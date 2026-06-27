@@ -647,6 +647,7 @@ export default function TripAdminTrips() {
               <Text style={[styles.sectionLabel, { marginTop: 20 }]}>ROUTE</Text>
 
               {/* Loading state — read-only, locked to user's state */}
+              <Text style={styles.fieldSubLabel}>Loading State (Origin)</Text>
               <View style={styles.lockedField}>
                 <Text style={styles.lockedFieldText}>
                   {loadingStateName || (loadingStateId ? 'Your state (loading)' : 'Loading state not assigned')}
@@ -655,8 +656,9 @@ export default function TripAdminTrips() {
               </View>
 
               {/* Unloading state picker */}
+              <Text style={[styles.fieldSubLabel, { marginTop: 14 }]}>Unloading State (Destination)</Text>
               <TouchableOpacity
-                style={[styles.pickerField, { marginTop: 10 }]}
+                style={styles.pickerField}
                 onPress={openStatePicker}
                 activeOpacity={0.7}
               >
@@ -1053,6 +1055,12 @@ const styles = StyleSheet.create({
   sectionLabel: {
     ...theme.typography.sectionLabel,
     marginBottom: 10,
+  },
+  fieldSubLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.colors.grey2,
+    marginBottom: 6,
   },
 
   // locked field (read-only loading state)

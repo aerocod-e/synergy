@@ -15,7 +15,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
   getActivePricingChart,
-  addStakeholderRate,
   listVehicleTypes,
   updateVehicleType,
   updateStakeholderRate,
@@ -41,16 +40,10 @@ interface VehicleTypeRate {
   stakeholderRates: VehicleTypeStakeholderRate[];
 }
 
-interface UnassignedStakeholder {
-  id: string;
-  name: string;
-}
-
 interface PricingChart {
   id: string;
   isActive: boolean;
   vehicleTypeRates: VehicleTypeRate[];
-  unassignedStakeholders: UnassignedStakeholder[];
 }
 
 interface VehicleTypeItem {
@@ -74,12 +67,10 @@ function isValidAmount(val: string): boolean {
 
 function ActiveChartCard({
   chart,
-  onEditVehicleType,
-  onEditStakeholderRate,
+  onEdit,
 }: {
   chart: PricingChart;
-  onEditVehicleType: (vtr: VehicleTypeRate) => void;
-  onEditStakeholderRate: (vtr: VehicleTypeRate, sr: VehicleTypeStakeholderRate) => void;
+  onEdit: (vtr: VehicleTypeRate) => void;
 }) {
   const [expandedTypeId, setExpandedTypeId] = useState<string | null>(null);
 
@@ -111,7 +102,7 @@ function ActiveChartCard({
                     : <ChevronDown size={16} color={theme.colors.grey1} />}
                 </TouchableOpacity>
                 <TouchableOpacity
-                  onPress={() => onEditVehicleType(vtr)}
+                  onPress={() => onEdit(vtr)}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   style={styles.editIconBtn}
                 >
@@ -135,15 +126,7 @@ function ActiveChartCard({
                       {vtr.stakeholderRates.map((sr) => (
                         <View key={sr.stakeholderId} style={styles.feeRow}>
                           <Text style={styles.feeLabel}>{sr.stakeholderName}</Text>
-                          <View style={styles.srValueRow}>
-                            <Text style={styles.feeValue}>{formatNaira(sr.amount)}</Text>
-                            <TouchableOpacity
-                              onPress={() => onEditStakeholderRate(vtr, sr)}
-                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                            >
-                              <Pencil size={13} color={theme.colors.grey1} />
-                            </TouchableOpacity>
-                          </View>
+                          <Text style={styles.feeValue}>{formatNaira(sr.amount)}</Text>
                         </View>
                       ))}
                     </>
@@ -165,41 +148,23 @@ export default function ConfigScreen() {
   const [activeChart, setActiveChart] = useState<PricingChart | null>(null);
   const [vehicleTypes, setVehicleTypes] = useState<VehicleTypeItem[]>([]);
 
-  // Existing: set rate for unassigned stakeholder
-  const [setRateModalVisible, setSetRateModalVisible] = useState(false);
-  const [setRateStakeholder, setSetRateStakeholder] = useState<UnassignedStakeholder | null>(null);
-  const [setRateVehicleTypeId, setSetRateVehicleTypeId] = useState<string>('');
-  const [setRateAmount, setSetRateAmount] = useState('');
-  const [setRateSubmitting, setSetRateSubmitting] = useState(false);
-  const [setRateError, setSetRateError] = useState<string | null>(null);
+  type EditSrEntry = { stakeholderId: string; stakeholderName: string; amount: string };
 
-  // Fix 6: edit vehicle type fees modal
-  const [editVtData, setEditVtData] = useState<{
+  const [editVtModal, setEditVtModal] = useState<{
     vehicleTypeId: string;
     vehicleTypeName: string;
     loadingFee: string;
     unloadingFee: string;
+    stakeholderRates: EditSrEntry[];
   } | null>(null);
   const [editVtSubmitting, setEditVtSubmitting] = useState(false);
   const [editVtError, setEditVtError] = useState<string | null>(null);
 
-  // Fix 7: edit stakeholder rate modal
-  const [editSrData, setEditSrData] = useState<{
-    chartId: string;
-    stakeholderId: string;
-    stakeholderName: string;
-    vehicleTypeId: string;
-    vehicleTypeName: string;
-    amount: string;
-  } | null>(null);
-  const [editSrSubmitting, setEditSrSubmitting] = useState(false);
-  const [editSrError, setEditSrError] = useState<string | null>(null);
-
-  // Fix 8: add vehicle type modal
   const [addVtVisible, setAddVtVisible] = useState(false);
   const [addVtName, setAddVtName] = useState('');
   const [addVtLoadingFee, setAddVtLoadingFee] = useState('');
   const [addVtUnloadingFee, setAddVtUnloadingFee] = useState('');
+  const [addVtStakeholderRates, setAddVtStakeholderRates] = useState<EditSrEntry[]>([]);
   const [addVtSubmitting, setAddVtSubmitting] = useState(false);
   const [addVtError, setAddVtError] = useState<string | null>(null);
 
@@ -232,123 +197,78 @@ export default function ConfigScreen() {
     loadData();
   }, [loadData]);
 
-  const openSetRateModal = (sh: UnassignedStakeholder) => {
-    setSetRateStakeholder(sh);
-    setSetRateVehicleTypeId('');
-    setSetRateAmount('');
-    setSetRateError(null);
-    setSetRateModalVisible(true);
-  };
-
-  const handleSetRate = async () => {
-    if (!setRateStakeholder || !activeChart) return;
-    if (!setRateVehicleTypeId) {
-      setSetRateError('Please select a vehicle type.');
-      return;
-    }
-    if (!isValidNaira(setRateAmount)) {
-      setSetRateError('Please enter a valid amount greater than zero.');
-      return;
-    }
-    setSetRateSubmitting(true);
-    setSetRateError(null);
-    try {
-      await addStakeholderRate(activeChart.id, {
-        stakeholderId: setRateStakeholder.id,
-        vehicleTypeId: setRateVehicleTypeId,
-        amount: nairaToKobo(setRateAmount),
-      });
-      setSetRateModalVisible(false);
-      setPageLoading(true);
-      await loadData();
-    } catch (e: any) {
-      setSetRateError(e?.message ?? 'Failed to set rate.');
-    } finally {
-      setSetRateSubmitting(false);
-    }
-  };
-
-  // Fix 6: edit vehicle type fees
   const handleOpenEditVt = (vtr: VehicleTypeRate) => {
-    setEditVtData({
+    setEditVtModal({
       vehicleTypeId: vtr.vehicleTypeId,
       vehicleTypeName: vtr.vehicleTypeName,
       loadingFee: (vtr.loadingFee / 100).toFixed(2),
       unloadingFee: (vtr.unloadingFee / 100).toFixed(2),
+      stakeholderRates: vtr.stakeholderRates.map((sr) => ({
+        stakeholderId: sr.stakeholderId,
+        stakeholderName: sr.stakeholderName,
+        amount: (sr.amount / 100).toFixed(2),
+      })),
     });
     setEditVtError(null);
   };
 
   const handleSubmitEditVt = async () => {
-    if (!editVtData) return;
-    if (!isValidNaira(editVtData.loadingFee)) {
+    if (!editVtModal || !activeChart) return;
+    if (!isValidNaira(editVtModal.loadingFee)) {
       setEditVtError('Enter a valid loading fee greater than zero.');
       return;
     }
-    if (!isValidNaira(editVtData.unloadingFee)) {
+    if (!isValidNaira(editVtModal.unloadingFee)) {
       setEditVtError('Enter a valid unloading fee greater than zero.');
       return;
+    }
+    for (const sr of editVtModal.stakeholderRates) {
+      if (!isValidAmount(sr.amount)) {
+        setEditVtError(`Enter a valid amount (₦0 or more) for ${sr.stakeholderName}.`);
+        return;
+      }
     }
     setEditVtSubmitting(true);
     setEditVtError(null);
     try {
-      await updateVehicleType(editVtData.vehicleTypeId, {
-        loadingFee: nairaToKobo(editVtData.loadingFee),
-        unloadingFee: nairaToKobo(editVtData.unloadingFee),
-      });
-      setEditVtData(null);
+      await Promise.all([
+        updateVehicleType(editVtModal.vehicleTypeId, {
+          loadingFee: nairaToKobo(editVtModal.loadingFee),
+          unloadingFee: nairaToKobo(editVtModal.unloadingFee),
+        }),
+        ...editVtModal.stakeholderRates.map((sr) =>
+          updateStakeholderRate(activeChart.id, {
+            stakeholderId: sr.stakeholderId,
+            vehicleTypeId: editVtModal.vehicleTypeId,
+            amount: nairaToKobo(sr.amount),
+          })
+        ),
+      ]);
+      setEditVtModal(null);
       setPageLoading(true);
       await loadData();
     } catch (e: any) {
-      setEditVtError(e?.message ?? 'Failed to update fees.');
+      setEditVtError(e?.message ?? 'Failed to save changes.');
     } finally {
       setEditVtSubmitting(false);
     }
   };
 
-  // Fix 7: edit stakeholder rate
-  const handleOpenEditSr = (vtr: VehicleTypeRate, sr: VehicleTypeStakeholderRate) => {
-    if (!activeChart) return;
-    setEditSrData({
-      chartId: activeChart.id,
-      stakeholderId: sr.stakeholderId,
-      stakeholderName: sr.stakeholderName,
-      vehicleTypeId: vtr.vehicleTypeId,
-      vehicleTypeName: vtr.vehicleTypeName,
-      amount: (sr.amount / 100).toFixed(2),
-    });
-    setEditSrError(null);
-  };
-
-  const handleSubmitEditSr = async () => {
-    if (!editSrData) return;
-    if (!isValidAmount(editSrData.amount)) {
-      setEditSrError('Enter a valid amount (₦0 or more).');
-      return;
-    }
-    setEditSrSubmitting(true);
-    setEditSrError(null);
-    try {
-      await updateStakeholderRate(editSrData.chartId, {
-        stakeholderId: editSrData.stakeholderId,
-        vehicleTypeId: editSrData.vehicleTypeId,
-        amount: nairaToKobo(editSrData.amount),
-      });
-      setEditSrData(null);
-      setPageLoading(true);
-      await loadData();
-    } catch (e: any) {
-      setEditSrError(e?.message ?? 'Failed to update rate.');
-    } finally {
-      setEditSrSubmitting(false);
-    }
-  };
-
-  // Fix 8: add vehicle type
   const handleOpenAddVt = () => {
     setAddVtName('');
     setAddVtLoadingFee('');
     setAddVtUnloadingFee('');
+    const seen = new Set<string>();
+    const rates: EditSrEntry[] = [];
+    (activeChart?.vehicleTypeRates ?? []).forEach((vtr) => {
+      vtr.stakeholderRates.forEach((sr) => {
+        if (!seen.has(sr.stakeholderId)) {
+          seen.add(sr.stakeholderId);
+          rates.push({ stakeholderId: sr.stakeholderId, stakeholderName: sr.stakeholderName, amount: '0' });
+        }
+      });
+    });
+    setAddVtStakeholderRates(rates);
     setAddVtError(null);
     setAddVtVisible(true);
   };
@@ -366,14 +286,32 @@ export default function ConfigScreen() {
       setAddVtError('Enter a valid unloading fee greater than zero.');
       return;
     }
+    for (const sr of addVtStakeholderRates) {
+      if (!isValidAmount(sr.amount)) {
+        setAddVtError(`Enter a valid amount (₦0 or more) for ${sr.stakeholderName}.`);
+        return;
+      }
+    }
     setAddVtSubmitting(true);
     setAddVtError(null);
     try {
-      await createVehicleType({
+      const created = await createVehicleType({
         name: addVtName.trim(),
         loadingFee: nairaToKobo(addVtLoadingFee),
         unloadingFee: nairaToKobo(addVtUnloadingFee),
-      });
+      }) as any;
+      const newVehicleTypeId: string | undefined = created?.vehicleType?.id ?? created?.id;
+      if (newVehicleTypeId && activeChart && addVtStakeholderRates.length > 0) {
+        await Promise.all(
+          addVtStakeholderRates.map((sr) =>
+            updateStakeholderRate(activeChart.id, {
+              stakeholderId: sr.stakeholderId,
+              vehicleTypeId: newVehicleTypeId,
+              amount: nairaToKobo(sr.amount),
+            })
+          )
+        );
+      }
       setAddVtVisible(false);
       setPageLoading(true);
       await loadData();
@@ -417,13 +355,11 @@ export default function ConfigScreen() {
       <SlideUpList style={{ flex: 1 }}>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
 
-        {/* ── Active chart ── */}
         <Text style={styles.sectionLabel}>Pricing Chart</Text>
         {activeChart ? (
           <ActiveChartCard
             chart={activeChart}
-            onEditVehicleType={handleOpenEditVt}
-            onEditStakeholderRate={handleOpenEditSr}
+            onEdit={handleOpenEditVt}
           />
         ) : (
           <View style={styles.emptyCard}>
@@ -431,7 +367,6 @@ export default function ConfigScreen() {
           </View>
         )}
 
-        {/* Fix 8: Add Vehicle Type button */}
         <TouchableOpacity
           style={styles.addVtRow}
           onPress={handleOpenAddVt}
@@ -441,31 +376,6 @@ export default function ConfigScreen() {
           <Text style={styles.addVtText}>Add Vehicle Type</Text>
         </TouchableOpacity>
 
-        {/* ── Stakeholders Pending Rate ── */}
-        {activeChart && (activeChart.unassignedStakeholders ?? []).length > 0 && (
-          <>
-            <Text style={[styles.sectionLabel, styles.sectionLabelSpaced]}>Stakeholders Pending Rate</Text>
-            <View style={styles.card}>
-              {(activeChart.unassignedStakeholders ?? []).map((sh, idx) => (
-                <View key={sh.id}>
-                  {idx > 0 && <View style={styles.divider} />}
-                  <View style={styles.pendingRateRow}>
-                    <Text style={styles.pendingRateName} numberOfLines={1}>{sh.name}</Text>
-                    <TouchableOpacity
-                      style={styles.setRateBtn}
-                      onPress={() => openSetRateModal(sh)}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.setRateBtnText}>Set Rate</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))}
-            </View>
-          </>
-        )}
-
-        {/* ── Verify Trip Payment ── */}
         <TouchableOpacity
           style={styles.verifyRow}
           onPress={() => router.push('/(public)/lookup')}
@@ -480,98 +390,34 @@ export default function ConfigScreen() {
       </ScrollView>
       </SlideUpList>
 
-      {/* ── Set Rate Modal (unassigned stakeholder) ── */}
+      {/* ── Unified Edit Vehicle Type Modal ── */}
       <Modal
-        visible={setRateModalVisible}
+        visible={editVtModal !== null}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setSetRateModalVisible(false)}
+        onRequestClose={() => setEditVtModal(null)}
       >
         <KeyboardAvoidingView
           style={styles.modalRoot}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Set Rate</Text>
-            <TouchableOpacity onPress={() => setSetRateModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Text style={styles.modalTitle} numberOfLines={1}>
+              {editVtModal ? `Edit ${editVtModal.vehicleTypeName}` : 'Edit Vehicle Type'}
+            </Text>
+            <TouchableOpacity onPress={() => setEditVtModal(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <X size={24} color={theme.colors.grey2} />
             </TouchableOpacity>
           </View>
           <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="handled">
-            {setRateStakeholder && (
-              <Text style={styles.modalSubtitle}>{setRateStakeholder.name}</Text>
-            )}
-            <Text style={styles.fieldLabel}>Vehicle Type</Text>
-            {vehicleTypes.map((vt) => {
-              const selected = vt.id === setRateVehicleTypeId;
-              return (
-                <TouchableOpacity
-                  key={vt.id}
-                  style={[styles.typeRow, selected && styles.typeRowSelected]}
-                  onPress={() => setSetRateVehicleTypeId(vt.id)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.typeRowText, selected && styles.typeRowTextSelected]}>{vt.name}</Text>
-                </TouchableOpacity>
-              );
-            })}
-            <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Amount (₦)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. 500.00"
-              placeholderTextColor={theme.colors.placeholder}
-              keyboardType="decimal-pad"
-              value={setRateAmount}
-              onChangeText={setSetRateAmount}
-            />
-            {setRateError && (
-              <Text style={styles.errorText}>{setRateError}</Text>
-            )}
-            <TouchableOpacity
-              style={[styles.submitButton, setRateSubmitting && styles.buttonDisabled]}
-              onPress={handleSetRate}
-              disabled={setRateSubmitting}
-              activeOpacity={0.85}
-            >
-              {setRateSubmitting ? (
-                <ActivityIndicator color={theme.colors.white} />
-              ) : (
-                <Text style={styles.submitButtonText}>Confirm Rate</Text>
-              )}
-            </TouchableOpacity>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      {/* ── Fix 6: Edit Vehicle Type Fees Modal ── */}
-      <Modal
-        visible={editVtData !== null}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setEditVtData(null)}
-      >
-        <KeyboardAvoidingView
-          style={styles.modalRoot}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Edit Fees</Text>
-            <TouchableOpacity onPress={() => setEditVtData(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <X size={24} color={theme.colors.grey2} />
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="handled">
-            {editVtData && (
-              <Text style={styles.modalSubtitle}>{editVtData.vehicleTypeName}</Text>
-            )}
             <Text style={styles.fieldLabel}>Loading Fee (₦)</Text>
             <TextInput
               style={styles.input}
               placeholder="e.g. 2800.00"
               placeholderTextColor={theme.colors.placeholder}
               keyboardType="decimal-pad"
-              value={editVtData?.loadingFee ?? ''}
-              onChangeText={(v) => setEditVtData((prev) => prev ? { ...prev, loadingFee: v } : null)}
+              value={editVtModal?.loadingFee ?? ''}
+              onChangeText={(v) => setEditVtModal((prev) => prev ? { ...prev, loadingFee: v } : null)}
             />
             <Text style={[styles.fieldLabel, { marginTop: 14 }]}>Unloading Fee (₦)</Text>
             <TextInput
@@ -579,83 +425,50 @@ export default function ConfigScreen() {
               placeholder="e.g. 2800.00"
               placeholderTextColor={theme.colors.placeholder}
               keyboardType="decimal-pad"
-              value={editVtData?.unloadingFee ?? ''}
-              onChangeText={(v) => setEditVtData((prev) => prev ? { ...prev, unloadingFee: v } : null)}
+              value={editVtModal?.unloadingFee ?? ''}
+              onChangeText={(v) => setEditVtModal((prev) => prev ? { ...prev, unloadingFee: v } : null)}
             />
-            {editVtError && (
-              <Text style={styles.errorText}>{editVtError}</Text>
+            {(editVtModal?.stakeholderRates ?? []).length > 0 && (
+              <>
+                <Text style={styles.modalSectionLabel}>Stakeholder Rates</Text>
+                {(editVtModal?.stakeholderRates ?? []).map((sr, idx) => (
+                  <View key={sr.stakeholderId}>
+                    <Text style={styles.fieldLabel}>{sr.stakeholderName} (₦)</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="0.00"
+                      placeholderTextColor={theme.colors.placeholder}
+                      keyboardType="decimal-pad"
+                      value={sr.amount}
+                      onChangeText={(v) =>
+                        setEditVtModal((prev) => {
+                          if (!prev) return null;
+                          const updated = [...prev.stakeholderRates];
+                          updated[idx] = { ...updated[idx]!, amount: v };
+                          return { ...prev, stakeholderRates: updated };
+                        })
+                      }
+                    />
+                  </View>
+                ))}
+              </>
             )}
+            {editVtError && <Text style={styles.errorText}>{editVtError}</Text>}
             <TouchableOpacity
               style={[styles.submitButton, editVtSubmitting && styles.buttonDisabled]}
               onPress={handleSubmitEditVt}
               disabled={editVtSubmitting}
               activeOpacity={0.85}
             >
-              {editVtSubmitting ? (
-                <ActivityIndicator color={theme.colors.white} />
-              ) : (
-                <Text style={styles.submitButtonText}>Save Fees</Text>
-              )}
+              {editVtSubmitting
+                ? <ActivityIndicator color={theme.colors.white} />
+                : <Text style={styles.submitButtonText}>Save Changes</Text>}
             </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* ── Fix 7: Edit Stakeholder Rate Modal ── */}
-      <Modal
-        visible={editSrData !== null}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setEditSrData(null)}
-      >
-        <KeyboardAvoidingView
-          style={styles.modalRoot}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Edit Rate</Text>
-            <TouchableOpacity onPress={() => setEditSrData(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <X size={24} color={theme.colors.grey2} />
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="handled">
-            {editSrData && (
-              <>
-                <Text style={styles.modalSubtitle}>{editSrData.stakeholderName}</Text>
-                <Text style={[styles.fieldLabel, { marginBottom: 14 }]}>
-                  Vehicle Type: {editSrData.vehicleTypeName}
-                </Text>
-              </>
-            )}
-            <Text style={styles.fieldLabel}>Amount (₦)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. 500.00"
-              placeholderTextColor={theme.colors.placeholder}
-              keyboardType="decimal-pad"
-              value={editSrData?.amount ?? ''}
-              onChangeText={(v) => setEditSrData((prev) => prev ? { ...prev, amount: v } : null)}
-            />
-            {editSrError && (
-              <Text style={styles.errorText}>{editSrError}</Text>
-            )}
-            <TouchableOpacity
-              style={[styles.submitButton, editSrSubmitting && styles.buttonDisabled]}
-              onPress={handleSubmitEditSr}
-              disabled={editSrSubmitting}
-              activeOpacity={0.85}
-            >
-              {editSrSubmitting ? (
-                <ActivityIndicator color={theme.colors.white} />
-              ) : (
-                <Text style={styles.submitButtonText}>Save Rate</Text>
-              )}
-            </TouchableOpacity>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      {/* ── Fix 8: Add Vehicle Type Modal ── */}
+      {/* ── Add Vehicle Type Modal ── */}
       <Modal
         visible={addVtVisible}
         animationType="slide"
@@ -700,20 +513,38 @@ export default function ConfigScreen() {
               value={addVtUnloadingFee}
               onChangeText={setAddVtUnloadingFee}
             />
-            {addVtError && (
-              <Text style={styles.errorText}>{addVtError}</Text>
+            {addVtStakeholderRates.length > 0 && (
+              <>
+                <Text style={styles.modalSectionLabel}>Stakeholder Rates</Text>
+                {addVtStakeholderRates.map((sr, idx) => (
+                  <View key={sr.stakeholderId}>
+                    <Text style={styles.fieldLabel}>{sr.stakeholderName} (₦)</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="0.00"
+                      placeholderTextColor={theme.colors.placeholder}
+                      keyboardType="decimal-pad"
+                      value={sr.amount}
+                      onChangeText={(v) => {
+                        const updated = [...addVtStakeholderRates];
+                        updated[idx] = { ...updated[idx]!, amount: v };
+                        setAddVtStakeholderRates(updated);
+                      }}
+                    />
+                  </View>
+                ))}
+              </>
             )}
+            {addVtError && <Text style={styles.errorText}>{addVtError}</Text>}
             <TouchableOpacity
               style={[styles.submitButton, addVtSubmitting && styles.buttonDisabled]}
               onPress={handleSubmitAddVt}
               disabled={addVtSubmitting}
               activeOpacity={0.85}
             >
-              {addVtSubmitting ? (
-                <ActivityIndicator color={theme.colors.white} />
-              ) : (
-                <Text style={styles.submitButtonText}>Create Vehicle Type</Text>
-              )}
+              {addVtSubmitting
+                ? <ActivityIndicator color={theme.colors.white} />
+                : <Text style={styles.submitButtonText}>Create Vehicle Type</Text>}
             </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -724,7 +555,6 @@ export default function ConfigScreen() {
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: theme.colors.background },
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: theme.PILL_NAV_BOTTOM_PADDING },
   centered: {
@@ -740,7 +570,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginBottom: 12,
   },
-  sectionLabelSpaced: { marginTop: 28 },
   card: {
     backgroundColor: theme.colors.white,
     marginHorizontal: 20,
@@ -814,11 +643,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: theme.colors.black,
   },
-  srValueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
   divider: {
     height: 1,
     backgroundColor: theme.colors.separator,
@@ -872,12 +696,20 @@ const styles = StyleSheet.create({
     color: theme.colors.grey2,
     marginBottom: 6,
   },
+  modalSectionLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.colors.black,
+    marginTop: 20,
+    marginBottom: 12,
+  },
   input: {
-    backgroundColor: theme.colors.grey4,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    fontSize: 15,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    padding: 14,
+    fontSize: 16,
     color: theme.colors.black,
     marginBottom: 4,
   },
@@ -927,29 +759,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: theme.colors.black,
   },
-  pendingRateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  pendingRateName: {
-    flex: 1,
-    fontSize: 14,
-    color: theme.colors.black,
-    fontWeight: '500',
-    marginRight: 12,
-  },
-  setRateBtn: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-  },
-  setRateBtnText: {
-    color: theme.colors.white,
-    fontSize: 13,
-    fontWeight: '700',
-  },
   modalRoot: {
     flex: 1,
     backgroundColor: theme.colors.background,
@@ -969,39 +778,9 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     color: theme.colors.black,
-  },
-  modalSubtitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: theme.colors.grey2,
-    marginBottom: 20,
-  },
-  modalScroll: {
     flex: 1,
+    marginRight: 12,
   },
-  modalScrollContent: {
-    padding: 20,
-  },
-  typeRow: {
-    backgroundColor: theme.colors.grey4,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    marginBottom: 8,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-  },
-  typeRowSelected: {
-    borderColor: theme.colors.primary,
-    backgroundColor: theme.colors.blueMuted,
-  },
-  typeRowText: {
-    fontSize: 14,
-    color: theme.colors.black,
-    fontWeight: '500',
-  },
-  typeRowTextSelected: {
-    color: theme.colors.primary,
-    fontWeight: '700',
-  },
+  modalScroll: { flex: 1 },
+  modalScrollContent: { padding: 20 },
 });

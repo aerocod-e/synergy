@@ -1,0 +1,97 @@
+Multiple frontend fixes based on physical iPhone testing feedback. Follow all steps in order.
+Critical testing setup:
+
+App URL: https://2f2a3156-e178-45fc-95e3-f3726442355f-00-2f9hl4ag0p8j2.expo.kirk.replit.dev
+Viewport: 390x844px
+Navigate by tapping real UI elements only
+
+Fix 1 -- State Admin landing tab
+The State Admin currently opens the Requests tab on login even though Wallet is declared first in the layout. Open artifacts/mobile/app/(stateadmin)/_layout.tsx. Confirm the exact order of Tabs.Screen declarations. The first declared screen must be wallet. If index (Requests) appears before wallet, swap them. Also confirm the initial route is not being explicitly overridden anywhere in _layout.tsx or the root _layout.tsx.
+Fix 2 -- Dashboard "Tap Config" tile made tappable
+In artifacts/mobile/app/(superadmin)/index.tsx, find the "Tap Config to manage rates" card or tile. Wrap it in a TouchableOpacity that calls:
+tsxrouter.push('/(superadmin)/config');
+Import useRouter from expo-router if not already imported. The tile should navigate directly to the Config tab when tapped.
+Fix 3 -- Consolidated single edit modal per vehicle type
+In artifacts/mobile/app/(superadmin)/config.tsx, replace the current two-level editing approach (separate pencil for loading/unloading fees AND separate pencil per stakeholder rate) with a single unified edit modal per vehicle type.
+Remove:
+
+The pencil icon on the vehicle type row header that only edits loading/unloading fees
+The individual pencil icons next to each stakeholder rate row
+
+Add:
+
+A single pencil icon on the vehicle type row header
+Tapping it opens one modal titled "Edit [Vehicle Type Name]" containing:
+
+Loading Fee (₦) input, pre-filled
+Unloading Fee (₦) input, pre-filled
+A section "Stakeholder Rates" with one input row per stakeholder, each pre-filled with their current rate for this vehicle type
+A single "Save Changes" button at the bottom
+
+
+On submit:
+
+Call PATCH /api/vehicle-types/:id for the loading/unloading fees
+Call PATCH /api/pricing/:chartId/stakeholder-rates for each stakeholder rate (one call per stakeholder)
+Both calls run in parallel using Promise.all
+On success, refresh the pricing chart and close the modal
+Show a single error message if any call fails
+
+
+
+Fix 4 -- Add Vehicle Type modal: add stakeholder rate fields and fix invisible fields
+In the Add Vehicle Type modal in config.tsx:
+Add stakeholder rate inputs below the loading/unloading fee fields -- one input per active stakeholder showing their name and a rate field (defaults to 0). These get submitted as the initial rates when the vehicle type is created.
+Fix the invisible field issue: the TextInput fields in this modal (and anywhere else they appear with invisible borders) need either:
+
+A visible border: borderWidth: 1, borderColor: theme.colors.separator or similar
+OR a white card wrapper with a contrasting field background (same fix as the profile screen password fields)
+
+Apply the same fix to ANY other modal that has invisible form fields. Check these modals specifically:
+
+Add Vehicle Type modal
+Edit Vehicle Type modal (from Fix 3)
+Create User modal
+Register Vehicle modal
+Register Driver modal
+Any other modal with TextInput fields
+
+The standard field style across all modals should be:
+tsxbackgroundColor: '#ffffff',
+borderWidth: 1,
+borderColor: '#e0e0e0',
+borderRadius: 8,
+padding: 14,
+fontSize: 16,
+color: theme.colors.text,
+Fix 5 -- Trip creation form fixes
+In artifacts/mobile/app/(tripadmin)/index.tsx, fix two issues in the trip creation form:
+5a -- Loading/unloading label confusion:
+
+The route section currently shows the loading state with an "Unloading" label or no clear label. Fix so:
+
+The locked loading state field is clearly labeled "Loading State (Origin)" above it
+The unloading state picker is clearly labeled "Unloading State (Destination)" above it
+Both labels use the same style as other form section labels
+
+5b -- Vehicle selection broken on native:
+
+The vehicle search and fee preview are reportedly not working on native despite working in web testing. The most likely cause is a timing or rendering issue with the VehicleSearchInput component on native. Investigate:
+
+Check whether VehicleSearchInput uses any web-only APIs or styles
+Check whether the searchVehicles API call succeeds on native (add error logging if not already present)
+Check whether the fee preview section renders after vehicle selection or if there is a state update issue
+
+Fix whatever the root cause is. If you cannot reproduce the issue in the web environment, add explicit error display to VehicleSearchInput so any failure is visible rather than silent, and add a fallback manual vehicle type picker that appears if the search returns no results.
+Fix 6 -- Remove unassignedStakeholders from frontend
+In config.tsx, find and remove:
+
+The unassignedStakeholders state variable
+The "Stakeholders Pending Rate" section render
+The setRateModal and related state for setting pending rates
+The addStakeholderRate API call from this screen (it is now only used internally)
+
+Clean up any unused imports.
+TypeScript check:
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Must return zero errors.

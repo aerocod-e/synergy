@@ -589,11 +589,12 @@ const styles = StyleSheet.create({
   },
   fieldLabelSpaced: { marginTop: 20 },
   input: {
-    backgroundColor: theme.colors.grey4,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    padding: 14,
+    fontSize: 16,
     color: theme.colors.black,
   },
 

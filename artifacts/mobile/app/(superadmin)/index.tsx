@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import {
   AlertTriangle,
   ArrowDownCircle,
@@ -82,6 +83,7 @@ function SummaryCard({ icon: Icon, iconColor, value, label, wide = false, valueC
 }
 
 export default function SuperAdminDashboard() {
+  const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -276,13 +278,15 @@ export default function SuperAdminDashboard() {
               label="Stakeholders with Rates"
             />
           </View>
-          <SummaryCard
-            icon={ArrowDownCircle}
-            iconColor="#6b7280"
-            value="Tap Config to manage rates"
-            label="Fees &amp; stakeholder rates are set per vehicle type"
-            wide
-          />
+          <TouchableOpacity onPress={() => router.push('/(superadmin)/config')} activeOpacity={0.8}>
+            <SummaryCard
+              icon={ArrowDownCircle}
+              iconColor="#6b7280"
+              value="Tap Config to manage rates"
+              label="Fees & stakeholder rates are set per vehicle type"
+              wide
+            />
+          </TouchableOpacity>
         </>
       )}
     </ScrollView>
