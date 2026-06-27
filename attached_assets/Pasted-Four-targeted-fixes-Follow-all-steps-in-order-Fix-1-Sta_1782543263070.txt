@@ -1,0 +1,92 @@
+Four targeted fixes. Follow all steps in order.
+Fix 1 -- State Admin native landing tab
+The unstable_settings approach works on web but not on physical iOS. Use a different approach.
+In artifacts/mobile/app/(stateadmin)/_layout.tsx, add a useEffect that runs once on mount and redirects to the wallet tab if the current route is not already wallet:
+tsximport { useEffect } from 'react';
+import { useRouter, useSegments } from 'expo-router';
+
+// Inside the layout component:
+const router = useRouter();
+const segments = useSegments();
+
+useEffect(() => {
+  const currentRoute = segments[segments.length - 1];
+  if (currentRoute !== 'wallet') {
+    router.replace('/(stateadmin)/wallet');
+  }
+}, []);
+Keep the unstable_settings export as well since it helps on web. The useEffect redirect handles native.
+Fix 2 -- Loading state origin field visual treatment
+In artifacts/mobile/app/(tripadmin)/index.tsx, find the locked loading state display in the trip creation form. Currently it shows as plain text. Replace it with a styled non-editable container that matches the other form fields visually:
+tsx<View style={styles.disabledField}>
+  <Text style={styles.disabledFieldText}>{loadingStateName || 'Loading...'}</Text>
+</View>
+Add these styles:
+tsxdisabledField: {
+  backgroundColor: '#f0f0f0',
+  borderWidth: 1,
+  borderColor: '#e0e0e0',
+  borderRadius: 8,
+  padding: 14,
+},
+disabledFieldText: {
+  fontSize: 16,
+  color: '#666666',
+},
+This makes the locked loading state look like a disabled text field -- same shape and border as the editable fields but clearly grayed out to indicate it cannot be changed.
+Fix 3 -- Total fee row on trip creation form
+In (tripadmin)/index.tsx, find the fee preview section that shows after a vehicle is selected. After the last stakeholder rate row, add a divider and a total row:
+tsx{/* Divider */}
+<View style={styles.totalDivider} />
+
+{/* Total */}
+<View style={styles.totalRow}>
+  <Text style={styles.totalLabel}>Total</Text>
+  <Text style={styles.totalAmount}>
+    {formatNaira(
+      (selectedTypeRate?.loadingFee ?? 0) +
+      (selectedTypeRate?.unloadingFee ?? 0) +
+      (selectedTypeRate?.stakeholderRates ?? []).reduce((sum, r) => sum + r.amount, 0)
+    )}
+  </Text>
+</View>
+Add styles:
+tsxtotalDivider: {
+  height: 1,
+  backgroundColor: '#e0e0e0',
+  marginVertical: 8,
+},
+totalRow: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  paddingTop: 4,
+},
+totalLabel: {
+  fontSize: 16,
+  fontWeight: '700',
+  color: theme.colors.text,
+},
+totalAmount: {
+  fontSize: 16,
+  fontWeight: '700',
+  color: theme.colors.primary,
+},
+Fix 4 -- Total fee shown on vehicle type card header in config
+In artifacts/mobile/app/(superadmin)/config.tsx, find where each vehicle type card header is rendered (the row showing the vehicle type name, chevron, and pencil icon).
+Calculate the total for each vehicle type rate:
+tsxconst total = rate.loadingFee + rate.unloadingFee + 
+  rate.stakeholderRates.reduce((sum, sr) => sum + sr.amount, 0);
+Display it between the vehicle type name and the chevron/pencil icons:
+tsx<Text style={styles.vehicleTypeTotal}>{formatNaira(total)}</Text>
+Add style:
+tsxvehicleTypeTotal: {
+  fontSize: 14,
+  fontWeight: '600',
+  color: theme.colors.primary,
+  marginRight: 8,
+},
+The header row should now read: [Vehicle Type Name]    [₦Total]  [chevron]  [pencil]
+TypeScript check:
+pnpm --filter @expo/mobile exec tsc --noEmit
+Must return zero errors.

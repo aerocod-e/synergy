@@ -648,11 +648,8 @@ export default function TripAdminTrips() {
 
               {/* Loading state — read-only, locked to user's state */}
               <Text style={styles.fieldSubLabel}>Loading State (Origin)</Text>
-              <View style={styles.lockedField}>
-                <Text style={styles.lockedFieldText}>
-                  {loadingStateName || (loadingStateId ? 'Your state (loading)' : 'Loading state not assigned')}
-                </Text>
-                <Text style={styles.lockedBadge}>Loading</Text>
+              <View style={styles.disabledField}>
+                <Text style={styles.disabledFieldText}>{loadingStateName || 'Loading...'}</Text>
               </View>
 
               {/* Unloading state picker */}
@@ -732,6 +729,18 @@ export default function TripAdminTrips() {
                       <Text style={styles.feeAmount}>{formatNaira(sr.amount)}</Text>
                     </View>
                   ))}
+                  {/* Total */}
+                  <View style={styles.totalDivider} />
+                  <View style={styles.totalRow}>
+                    <Text style={styles.totalLabel}>Total</Text>
+                    <Text style={styles.totalAmount}>
+                      {formatNaira(
+                        (selectedTypeRate?.loadingFee ?? 0) +
+                        (selectedTypeRate?.unloadingFee ?? 0) +
+                        (selectedTypeRate?.stakeholderRates ?? []).reduce((sum, r) => sum + r.amount, 0)
+                      )}
+                    </Text>
+                  </View>
                 </View>
               )}
 
@@ -1140,6 +1149,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: theme.colors.grey2,
     fontWeight: '700',
+  },
+  disabledField: {
+    backgroundColor: '#f0f0f0',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    padding: 14,
+  },
+  disabledFieldText: {
+    fontSize: 16,
+    color: '#666666',
+  },
+  totalDivider: {
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    marginVertical: 8,
+  },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 4,
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.colors.black,
+  },
+  totalAmount: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.colors.primary,
   },
 
   // inline type picker (in trip form)

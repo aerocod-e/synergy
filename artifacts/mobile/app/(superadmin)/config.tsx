@@ -97,6 +97,10 @@ function ActiveChartCard({
                   activeOpacity={0.7}
                 >
                   <Text style={styles.typeRateName}>{vtr.vehicleTypeName}</Text>
+                  <Text style={styles.vehicleTypeTotal}>{formatNaira(
+                    vtr.loadingFee + vtr.unloadingFee +
+                    vtr.stakeholderRates.reduce((sum, sr) => sum + sr.amount, 0)
+                  )}</Text>
                   {expanded
                     ? <ChevronUp size={16} color={theme.colors.grey1} />
                     : <ChevronDown size={16} color={theme.colors.grey1} />}
@@ -622,6 +626,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: theme.colors.black,
     flex: 1,
+  },
+  vehicleTypeTotal: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.primary,
+    marginRight: 8,
   },
   typeRateBody: {
     paddingBottom: 8,

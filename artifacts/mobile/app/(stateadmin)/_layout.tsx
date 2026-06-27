@@ -1,4 +1,5 @@
-import { Tabs } from 'expo-router';
+import { useEffect } from 'react';
+import { Tabs, useRouter, useSegments } from 'expo-router';
 import PillTabBar from '@/components/PillTabBar';
 
 export const unstable_settings = {
@@ -6,6 +7,16 @@ export const unstable_settings = {
 };
 
 export default function StateAdminLayout() {
+  const router = useRouter();
+  const segments = useSegments();
+
+  useEffect(() => {
+    const currentRoute = segments[segments.length - 1];
+    if (currentRoute !== 'wallet') {
+      router.replace('/(stateadmin)/wallet');
+    }
+  }, []);
+
   return (
     <Tabs
       tabBar={(props) => <PillTabBar {...props} />}
