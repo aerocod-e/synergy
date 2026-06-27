@@ -1,10 +1,13 @@
 import { Tabs } from 'expo-router';
 import PillTabBar from '@/components/PillTabBar';
 
+export const unstable_settings = {
+  initialRouteName: 'wallet',
+};
+
 export default function StateAdminLayout() {
   return (
     <Tabs
-      initialRouteName="wallet"
       tabBar={(props) => <PillTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
