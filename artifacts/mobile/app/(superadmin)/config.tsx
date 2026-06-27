@@ -1,6 +1,7 @@
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  LayoutAnimation,
   Modal,
   Platform,
   ScrollView,
@@ -8,8 +9,10 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  UIManager,
   View,
 } from 'react-native';
+
 import { ChevronDown, ChevronRight, ChevronUp, Pencil, Plus, Search, X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
@@ -25,6 +28,10 @@ import TopBar from '@/components/TopBar';
 import ScreenTransition from '@/components/ScreenTransition';
 import SlideUpList from '@/components/SlideUpList';
 import { formatNaira } from '@/utils/formatCurrency';
+
+if (Platform.OS === 'android') {
+  UIManager.setLayoutAnimationEnabledExperimental?.(true);
+}
 
 interface VehicleTypeStakeholderRate {
   stakeholderId: string;
@@ -93,7 +100,10 @@ function ActiveChartCard({
               <View style={styles.typeRateHeaderRow}>
                 <TouchableOpacity
                   style={styles.typeRateHeaderMain}
-                  onPress={() => setExpandedTypeId(expanded ? null : vtr.vehicleTypeId)}
+                  onPress={() => {
+                    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                    setExpandedTypeId(expanded ? null : vtr.vehicleTypeId);
+                  }}
                   activeOpacity={0.7}
                 >
                   <Text style={styles.typeRateName}>{vtr.vehicleTypeName}</Text>

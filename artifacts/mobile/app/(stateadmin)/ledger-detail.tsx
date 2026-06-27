@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
 import LedgerDetailView, { type LedgerEntry } from '@/components/LedgerDetailView';
 import { useAuthContext } from '@/app/_layout';
+import ScreenTransition from '@/components/ScreenTransition';
 
 export default function StateAdminLedgerDetail() {
   const { entry: entryParam } = useLocalSearchParams<{ entry: string }>();
@@ -16,7 +17,7 @@ export default function StateAdminLedgerDetail() {
   const entry: LedgerEntry = JSON.parse(entryParam ?? '{}');
 
   return (
-    <View style={styles.container}>
+    <ScreenTransition style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity
           onPress={() => router.navigate('/(stateadmin)/wallet')}
@@ -33,7 +34,7 @@ export default function StateAdminLedgerDetail() {
         viewerId={user?.entityId ?? ''}
         viewerType={user?.entityType ?? 'state'}
       />
-    </View>
+    </ScreenTransition>
   );
 }
 

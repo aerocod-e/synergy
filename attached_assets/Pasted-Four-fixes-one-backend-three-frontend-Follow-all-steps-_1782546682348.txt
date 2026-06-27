@@ -1,0 +1,22 @@
+Four fixes -- one backend, three frontend. Follow all steps in order.Fix 1 -- Backend: filter inactive stakeholders from trip creation fee previewIn artifacts/api-server/src/controllers/tripController.ts, find where stakeholder rates are fetched from the pricing chart during trip creation. The query currently fetches rates for all stakeholders. Add a filter to exclude inactive stakeholders:sqlJOIN stakeholders s ON s.id = pcsr.stakeholder_id AND s.is_active = trueAlso update pricingController.ts in getActivePricingChart to apply the same s.is_active = true filter on stakeholder rates returned in the response -- so inactive stakeholders don't appear in the fee preview on the trip creation form either.Fix 2 -- Frontend: padding below Total row in trip creation formIn artifacts/mobile/app/(tripadmin)/index.tsx, find the Total row in the fee preview section. Add marginBottom: 16 to the totalRow style so there is comfortable spacing between the Total and the "DESCRIPTION (OPTIONAL)" section below it.Fix 3 -- Frontend: entrance animation on ledger detail screensBoth artifacts/mobile/app/(stateadmin)/ledger-detail.tsx and artifacts/mobile/app/(stakeholder)/ledger-detail.tsx open with no animation -- content just appears instantly.Add a subtle slide-up entrance animation using the existing ScreenTransition component already built in components/ScreenTransition.tsx. Wrap the main content ScrollView or View in <ScreenTransition> the same way it is used on the main role screens.If ScreenTransition does not provide enough of a "detail reveal" feel, alternatively wrap the content in a custom animation:
+tsxconst translateY = useRef(new Animated.Value(30)).current;
+const opacity = useRef(new Animated.Value(0)).current;
+
+useEffect(() => {
+  Animated.parallel([
+    Animated.timing(opacity, { toValue: 1, duration: 300, useNativeDriver: true }),
+    Animated.spring(translateY, { toValue: 0, tension: 60, friction: 10, useNativeDriver: true }),
+  ]).start();
+}, []);Apply to both ledger detail screens consistently.Fix 4 -- Frontend: animated expand/collapse on vehicle type cards in ConfigIn artifacts/mobile/app/(superadmin)/config.tsx, the vehicle type cards currently expand and collapse instantly when tapping the chevron. Add a smooth animation:Use Animated.Value for the height or use LayoutAnimation from React Native for the simplest approach:tsximport { LayoutAnimation, Platform, UIManager } from 'react-native';
+
+// Enable on Android
+if (Platform.OS === 'android') {
+  UIManager.setLayoutAnimationEnabledExperimental?.(true);
+}
+
+// Before toggling expanded state:
+LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+setExpandedId(expandedId === item.vehicleTypeId ? null : item.vehicleTypeId);LayoutAnimation automatically animates any layout change that follows it, including the card expanding to show stakeholder rates and collapsing to hide them. It works on both iOS and Android with minimal code.TypeScript check:
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.

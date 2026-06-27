@@ -145,14 +145,15 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
     }
     const chartId = chartRes.rows[0]!.id;
 
-    // Fetch stakeholder rates for this vehicle type from the active chart
+    // Fetch stakeholder rates for this vehicle type from the active chart (active stakeholders only)
     const ratesRes = await client.query<{
       stakeholder_id: string;
       amount: number;
     }>(
-      `SELECT stakeholder_id, amount
-       FROM pricing_chart_stakeholder_rates
-       WHERE pricing_chart_id = $1 AND vehicle_type_id = $2`,
+      `SELECT pcsr.stakeholder_id, pcsr.amount
+       FROM pricing_chart_stakeholder_rates pcsr
+       JOIN stakeholders s ON s.id = pcsr.stakeholder_id AND s.is_active = true
+       WHERE pcsr.pricing_chart_id = $1 AND pcsr.vehicle_type_id = $2`,
       [chartId, vehicleTypeId]
     );
 
