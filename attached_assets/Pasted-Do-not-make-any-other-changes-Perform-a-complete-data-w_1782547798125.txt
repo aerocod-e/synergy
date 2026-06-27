@@ -1,0 +1,56 @@
+Do not make any other changes. Perform a complete data wipe and reseed following these exact steps.
+Step 1 -- Wipe all non-state data
+Run these SQL deletes in order (order matters due to foreign keys):
+sql-- Clear all ledger and wallet data
+DELETE FROM wallet_ledger;
+DELETE FROM cancellation_requests;
+DELETE FROM trip_events;
+DELETE FROM trip_fees;
+
+-- Reset wallet totals
+UPDATE wallets SET total_collected = 0;
+
+-- Clear trips
+DELETE FROM trips;
+
+-- Clear vehicles and drivers
+DELETE FROM vehicles;
+DELETE FROM drivers;
+
+-- Clear pricing chart rates
+DELETE FROM pricing_chart_stakeholder_rates;
+
+-- Clear pricing charts
+DELETE FROM pricing_charts;
+
+-- Clear stakeholders (keep none -- seed will recreate Consultant, Vendor, Integrator)
+DELETE FROM stakeholders;
+
+-- Clear all users except the 5 core state admins and super admin
+-- Keep: superadmin@synergy.com, lagos.admin@synergy.com, kano.admin@synergy.com, 
+--        rivers.admin@synergy.com, fct.admin@synergy.com, ogun.admin@synergy.com
+DELETE FROM users WHERE email NOT IN (
+  'superadmin@synergy.com',
+  'lagos.admin@synergy.com', 
+  'kano.admin@synergy.com',
+  'rivers.admin@synergy.com',
+  'fct.admin@synergy.com',
+  'ogun.admin@synergy.com'
+);
+
+-- Reset trip code sequence
+ALTER SEQUENCE trip_code_seq RESTART WITH 1;
+Step 2 -- Run the seed script
+pnpm --filter @workspace/api-server run seed
+Step 3 -- Verify clean state
+Run these queries and report results:
+
+SELECT COUNT(*) FROM users WHERE deleted_at IS NULL -- should be 15 (1 super admin + 5 state admins + 6 trip admins + 3 stakeholder users)
+SELECT name FROM stakeholders WHERE is_active = true ORDER BY name -- should show exactly: Consultant, Integrator, Vendor
+SELECT COUNT(*) FROM pricing_chart_stakeholder_rates -- should be 21 (3 stakeholders × 7 vehicle types)
+SELECT COUNT(*) FROM vehicles WHERE deleted_at IS NULL -- should be 8
+SELECT COUNT(*) FROM drivers WHERE deleted_at IS NULL -- should be 5
+SELECT COUNT(*) FROM trips -- should be 9 demo trips
+SELECT COUNT(*) FROM wallets -- should be 44 (37 states + 3 stakeholders + wallets for new entities)
+
+Report all counts.
