@@ -285,6 +285,15 @@ export default function UsersScreen() {
       <TouchableOpacity style={styles.fab} onPress={openModal} activeOpacity={0.85}>
         <UserPlus size={22} color={theme.colors.white} />
       </TouchableOpacity>
+      {Platform.OS === 'web' && (
+        <TouchableOpacity
+          testID="add-user-web-btn"
+          accessibilityLabel="Add User"
+          style={styles.fab}
+          onPress={openModal}
+          activeOpacity={0.85}
+        />
+      )}
 
       {/* Create User Modal */}
       <Modal
