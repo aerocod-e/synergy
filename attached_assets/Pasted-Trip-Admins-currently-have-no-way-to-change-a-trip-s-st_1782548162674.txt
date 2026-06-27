@@ -1,0 +1,18 @@
+Trip Admins currently have no way to change a trip's status after creation. They need to be able to mark a trip as In Transit and then as Completed, on behalf of the driver based on physical confirmation. This needs to be added to the Trip Admin trip detail screen.Step 1 -- Confirm existing backend endpointsCheck artifacts/api-server/src/routes/trips.ts. There should be existing endpoints for:
+
+PATCH /trips/:id/start -- changes status from created to in_transit
+PATCH /trips/:id/complete -- changes status from in_transit to completed
+Report what role guard these endpoints currently have. If they are still restricted to driver role from the old pre-pivot implementation, update them to requireRole("trip_admin") instead. Also confirm the controller logic for each -- it should check that the calling user created the trip (trips.created_by = req.user.userId).Step 2 -- Add status action buttons to Trip Admin trip detail screenIn artifacts/mobile/app/(tripadmin)/trip-detail.tsx, add action buttons below the TripDetailView component based on the trip's current status:
+If status is created: show a green "Mark as In Transit" button
+If status is in_transit: show a green "Mark as Completed" button and the existing "Request Cancellation" option (if not already there)
+If status is completed, cancelled, or cancellation_pending: show no action buttons (read-only)
+Each button should:
+
+Show a confirmation alert before acting: "Are you sure you want to mark this trip as In Transit? This confirms the driver has started the journey." (or equivalent for Complete)
+On confirm, call the appropriate endpoint
+On success, refresh the trip detail screen to show the updated status
+On error, show a clear inline error message
+Add startTrip(tripId) and completeTrip(tripId) helpers to services/api.ts if they don't already exist.Step 3 -- Update trip list to reflect new statusesIn (tripadmin)/index.tsx, confirm that the "Request Cancellation" button on trip cards correctly appears for both created AND in_transit trips (it should -- confirm in the code). The status badges for in_transit and completed should already be styled -- confirm they display correctly.Step 4 -- TypeScript check
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.

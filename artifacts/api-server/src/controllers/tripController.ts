@@ -363,10 +363,10 @@ export async function startTrip(req: Request, res: Response): Promise<void> {
   try {
     const { rows } = await pool.query<{
       id: string;
-      driver_id: string | null;
+      created_by: string;
       status: string;
     }>(
-      `SELECT id, driver_id, status FROM trips WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+      `SELECT id, created_by, status FROM trips WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
       [tripId]
     );
 
@@ -377,8 +377,8 @@ export async function startTrip(req: Request, res: Response): Promise<void> {
 
     const trip = rows[0]!;
 
-    if (trip.driver_id !== callerId) {
-      res.status(403).json({ error: "FORBIDDEN", message: "You are not assigned to this trip" });
+    if (trip.created_by !== callerId) {
+      res.status(403).json({ error: "FORBIDDEN", message: "You did not create this trip" });
       return;
     }
 
@@ -420,10 +420,10 @@ export async function completeTrip(req: Request, res: Response): Promise<void> {
   try {
     const { rows } = await pool.query<{
       id: string;
-      driver_id: string | null;
+      created_by: string;
       status: string;
     }>(
-      `SELECT id, driver_id, status FROM trips WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+      `SELECT id, created_by, status FROM trips WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
       [tripId]
     );
 
@@ -434,8 +434,8 @@ export async function completeTrip(req: Request, res: Response): Promise<void> {
 
     const trip = rows[0]!;
 
-    if (trip.driver_id !== callerId) {
-      res.status(403).json({ error: "FORBIDDEN", message: "You are not assigned to this trip" });
+    if (trip.created_by !== callerId) {
+      res.status(403).json({ error: "FORBIDDEN", message: "You did not create this trip" });
       return;
     }
 

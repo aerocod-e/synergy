@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { AlertCircle, ChevronLeft, ChevronRight, Search } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
-import { getTripById } from '@/services/api';
+import { getTripById, startTrip, completeTrip } from '@/services/api';
 import TripDetailView, { type TripDetail } from '@/components/TripDetailView';
 
 export default function TripAdminTripDetail() {
@@ -12,6 +12,8 @@ export default function TripAdminTripDetail() {
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const fetchTrip = useCallback(async () => {
     if (!id) return;
@@ -30,6 +32,58 @@ export default function TripAdminTripDetail() {
   useEffect(() => {
     fetchTrip();
   }, [fetchTrip]);
+
+  const handleStart = () => {
+    Alert.alert(
+      'Mark as In Transit',
+      'Are you sure you want to mark this trip as In Transit? This confirms the driver has started the journey.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm',
+          style: 'default',
+          onPress: async () => {
+            setActionLoading(true);
+            setActionError(null);
+            try {
+              await startTrip(id!);
+              await fetchTrip();
+            } catch (err: any) {
+              setActionError(err?.message ?? 'Failed to update trip status. Please try again.');
+            } finally {
+              setActionLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleComplete = () => {
+    Alert.alert(
+      'Mark as Completed',
+      'Are you sure you want to mark this trip as Completed? This confirms the delivery has been made.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm',
+          style: 'default',
+          onPress: async () => {
+            setActionLoading(true);
+            setActionError(null);
+            try {
+              await completeTrip(id!);
+              await fetchTrip();
+            } catch (err: any) {
+              setActionError(err?.message ?? 'Failed to update trip status. Please try again.');
+            } finally {
+              setActionLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const header = (
     <View style={styles.header}>
@@ -83,10 +137,51 @@ export default function TripAdminTripDetail() {
     </TouchableOpacity>
   ) : undefined;
 
+  const showActions = trip.status === 'created' || trip.status === 'in_transit';
+
   return (
     <View style={styles.root}>
       {header}
       <TripDetailView trip={trip} footer={verifyFooter} />
+
+      {showActions && (
+        <View style={styles.actionsContainer}>
+          {actionError && (
+            <View style={styles.actionErrorBox}>
+              <AlertCircle size={16} color={theme.colors.error} />
+              <Text style={styles.actionErrorText}>{actionError}</Text>
+            </View>
+          )}
+
+          {trip.status === 'created' && (
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.actionBtnGreen, actionLoading && styles.actionBtnDisabled]}
+              onPress={handleStart}
+              disabled={actionLoading}
+              activeOpacity={0.8}
+            >
+              {actionLoading
+                ? <ActivityIndicator size="small" color={theme.colors.white} />
+                : <Text style={styles.actionBtnText}>Mark as In Transit</Text>
+              }
+            </TouchableOpacity>
+          )}
+
+          {trip.status === 'in_transit' && (
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.actionBtnGreen, actionLoading && styles.actionBtnDisabled]}
+              onPress={handleComplete}
+              disabled={actionLoading}
+              activeOpacity={0.8}
+            >
+              {actionLoading
+                ? <ActivityIndicator size="small" color={theme.colors.white} />
+                : <Text style={styles.actionBtnText}>Mark as Completed</Text>
+              }
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
     </View>
   );
 }
@@ -158,5 +253,45 @@ const styles = StyleSheet.create({
     color: theme.colors.white,
     fontWeight: '600',
     fontSize: 14,
+  },
+  actionsContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 16,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.separator,
+    backgroundColor: theme.colors.background,
+    gap: 10,
+  },
+  actionBtn: {
+    borderRadius: 12,
+    paddingVertical: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionBtnGreen: {
+    backgroundColor: theme.colors.green,
+  },
+  actionBtnDisabled: {
+    opacity: 0.6,
+  },
+  actionBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.colors.white,
+  },
+  actionErrorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fef2f2',
+    borderRadius: 8,
+    padding: 12,
+  },
+  actionErrorText: {
+    flex: 1,
+    fontSize: 14,
+    color: theme.colors.error,
+    fontWeight: '500',
   },
 });
