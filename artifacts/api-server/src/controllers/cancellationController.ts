@@ -50,7 +50,7 @@ async function applyWalletReversal(
 
   await client.query(
     `UPDATE trips
-     SET status = 'cancelled', deleted_at = NOW(), updated_at = NOW()
+     SET status = 'cancelled', updated_at = NOW()
      WHERE id = $1`,
     [tripId]
   );

@@ -40,6 +40,8 @@ interface TripItem {
   driver: { id: string; email: string } | null;
   originDescription: string | null;
   destinationDescription: string | null;
+  createdByName?: string | null;
+  createdByEmail?: string | null;
   createdAt: string;
 }
 
@@ -391,6 +393,13 @@ export default function TripAdminTrips() {
             <Text style={styles.driverEmail} numberOfLines={1}>{item.driver.email}</Text>
           </View>
         )}
+        {item.createdByEmail === user?.email ? (
+          <View style={styles.yourTripBadge}>
+            <Text style={styles.yourTripBadgeText}>Your trip</Text>
+          </View>
+        ) : item.createdByName ? (
+          <Text style={styles.createdByText} numberOfLines={1}>{item.createdByName}</Text>
+        ) : null}
         {(item.status === 'created' || item.status === 'in_transit') && (
           <TouchableOpacity
             style={styles.cancelRequestBtn}
@@ -960,6 +969,24 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.colors.grey1,
     flex: 1,
+  },
+  yourTripBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    backgroundColor: theme.colors.blueMuted,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  yourTripBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: theme.colors.blueText,
+  },
+  createdByText: {
+    fontSize: 12,
+    color: theme.colors.grey1,
+    marginTop: 5,
   },
 
   // empty / error

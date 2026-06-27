@@ -27,6 +27,7 @@ export async function searchTrips(req: Request, res: Response): Promise<void> {
       loading_state_name:      string;
       unloading_state_name:    string;
       driver_full_name:        string | null;
+      created_by_name:         string | null;
     }>(
       `SELECT
          t.id,
@@ -38,12 +39,14 @@ export async function searchTrips(req: Request, res: Response): Promise<void> {
          t.created_at,
          COALESCE(ls.name, 'Unknown') AS loading_state_name,
          COALESCE(us.name, 'Unknown') AS unloading_state_name,
-         dr.full_name AS driver_full_name
+         dr.full_name AS driver_full_name,
+         u.first_name || ' ' || u.last_name AS created_by_name
        FROM trips t
        JOIN vehicles v ON t.vehicle_id = v.id
        LEFT JOIN  states ls ON t.loading_state_id   = ls.id
        LEFT JOIN  states us ON t.unloading_state_id = us.id
        LEFT JOIN drivers dr ON dr.id = t.driver_id
+       LEFT JOIN users u ON u.id = t.created_by
        WHERE (t.deleted_at IS NULL OR t.status = 'cancelled')
          AND t.status IN ('created', 'in_transit', 'completed', 'cancelled')
          AND (
@@ -121,6 +124,7 @@ export async function searchTrips(req: Request, res: Response): Promise<void> {
           loadingStateName:        trip.loading_state_name,
           unloadingStateName:      trip.unloading_state_name,
           driverName:              trip.driver_full_name,
+          createdByName:           trip.created_by_name,
           originDescription:       trip.origin_description,
           destinationDescription:  trip.destination_description,
           createdAt:               trip.created_at,

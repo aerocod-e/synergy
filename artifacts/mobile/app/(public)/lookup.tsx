@@ -37,6 +37,7 @@ interface TripResult {
   loadingStateName: string;
   unloadingStateName: string;
   driverName: string | null;
+  createdByName: string | null;
   originDescription: string | null;
   destinationDescription: string | null;
   createdAt: string;
@@ -137,6 +138,12 @@ function TripCard({
       {expanded && (
         <View style={styles.paymentBreakdown}>
           <View style={styles.divider} />
+          {trip.createdByName ? (
+            <View style={styles.payRow}>
+              <Text style={styles.payLabel}>Created by</Text>
+              <Text style={[styles.payLabel, { textAlign: 'right', flex: 1.5 }]}>{trip.createdByName}</Text>
+            </View>
+          ) : null}
           <Text style={styles.breakdownTitle}>Payment Verification</Text>
 
           <View style={styles.payRow}>

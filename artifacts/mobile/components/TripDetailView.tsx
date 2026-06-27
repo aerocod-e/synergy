@@ -31,6 +31,8 @@ export interface TripDetail {
   driver: { id: string; email: string } | null;
   originDescription: string | null;
   destinationDescription: string | null;
+  createdByName?: string | null;
+  createdByEmail?: string | null;
   createdAt: string;
   updatedAt: string;
   fees: TripFee[];
@@ -147,6 +149,8 @@ export default function TripDetailView({ trip, footer }: TripDetailViewProps) {
           <InfoRow label="Origin"          value={trip.originDescription ?? '—'} />
           <View style={styles.rowDivider} />
           <InfoRow label="Destination"     value={trip.destinationDescription ?? '—'} />
+          <View style={styles.rowDivider} />
+          <InfoRow label="Created by"      value={trip.createdByName ?? '—'} />
           <View style={styles.rowDivider} />
           <InfoRow label="Created"         value={formatDateShort(trip.createdAt)} />
         </View>

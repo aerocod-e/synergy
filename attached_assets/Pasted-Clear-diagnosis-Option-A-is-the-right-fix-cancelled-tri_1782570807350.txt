@@ -1,0 +1,44 @@
+Clear diagnosis. Option A is the right fix -- cancelled trips are historical records with fee reversals, event logs, and ledger entries. Making them invisible via deleted_at is semantically wrong. Soft-delete should mean "explicitly removed by an admin", not "naturally ended lifecycle". The fix is to remove AND t.deleted_at IS NULL from getTripById only, leaving list endpoints unchanged.
+Now let me bundle all pending fixes into one prompt -- the cancelled trip bug, trip data sharing between Trip Admins, and the "created by" field everywhere. Paste this into the Replit Agent:
+
+Three connected fixes. Follow all steps in order.
+Fix 1 -- Cancelled trips return 404 on detail screen
+In artifacts/api-server/src/controllers/tripController.ts, find getTripById. Remove AND t.deleted_at IS NULL from the WHERE clause. The endpoint should return any trip by ID regardless of its deleted_at status -- cancelled trips are historical records that must remain readable.
+Do NOT remove the deleted_at IS NULL filter from listTrips or any other list endpoint -- those should continue to exclude soft-deleted records from lists.
+Also check cancellationController.ts -- the direct cancel path sets deleted_at = NOW(). This is incorrect for a cancellation. A cancellation is a status change, not a deletion. Remove the deleted_at = NOW() from the cancellation update. Only keep status = 'cancelled' and updated_at = NOW(). A trip should only get deleted_at set if it is explicitly hard-removed by an admin, which is not currently a feature.
+Confirm after this fix that GET /api/trips/:id returns a cancelled trip correctly with status: 'cancelled' and all its fee data.
+Fix 2 -- Trip Admins see all trips for their state
+Currently Trip Admins only see trips they personally created. Change this so all Trip Admins in the same state see all trips for their state.
+In tripController.ts, find listTrips. Currently it filters by created_by = req.user.userId for trip_admin role. Change this for trip_admin to filter by loading state instead:
+sqlAND (
+  t.loading_state_id = $entityId  -- trips originating from their state
+  OR t.created_by = req.user.userId  -- or trips they created (covers edge cases)
+)
+Where $entityId is the Trip Admin's entityId (their state ID) from the JWT.
+This means all Trip Admins in Lagos see all Lagos trips regardless of who created them.
+Important: Keep the action restrictions -- PATCH /trips/:id/start, PATCH /trips/:id/complete, and cancellation requests must still verify created_by = req.user.userId. Trip Admins can only see all state trips but can only act on their own.
+Fix 3 -- Add "Created by" field everywhere
+Backend: In tripController.ts, getTripById currently joins drivers, vehicles, and states but does not return the creator's name. Add a JOIN to get the Trip Admin's first and last name:
+sqlJOIN users u ON u.id = t.created_by
+Return createdByName (full name: u.first_name || ' ' || u.last_name) and createdByEmail in the trip detail response.
+Also update listTrips to include createdByName and createdByEmail in each trip row -- needed for the Trip Admin trip list which now shows all state trips.
+Also update publicLookupController.ts to include createdByName in the lookup results.
+Frontend -- TripDetailView:
+
+In artifacts/mobile/components/TripDetailView.tsx, add a "Created by" row in the info section showing the Trip Admin's full name. Add createdByName?: string and createdByEmail?: string to the TripDetail interface.
+Style it the same as other info rows (Driver, Origin, Destination etc.).
+Frontend -- Trip Admin trip list:
+
+In (tripadmin)/index.tsx, each trip card now shows trips from all Trip Admins in the state. Add a subtle label on each trip card indicating who created it:
+
+If item.createdByEmail === user?.email: show a small "Your trip" badge in the primary color
+Otherwise: show the creator's full name in small gray text below the vehicle/route info
+
+This makes it immediately clear which trips belong to the viewing Trip Admin vs colleagues.
+Frontend -- Public lookup:
+
+In the public lookup results, add "Created by: [Name]" to the trip detail expansion.
+Step 4 -- TypeScript check
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.

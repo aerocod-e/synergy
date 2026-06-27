@@ -495,8 +495,10 @@ export async function listTrips(req: Request, res: Response): Promise<void> {
     const conditions: string[] = [];
 
     if (isTripAdmin) {
+      const entityId = req.user!.entityId;
+      params.push(entityId);
       params.push(userId);
-      conditions.push(`t.created_by = $${idx++}`);
+      conditions.push(`(t.loading_state_id = $${idx++} OR t.created_by = $${idx++})`);
     } else if (!isSuperAdmin) {
       params.push(userId);
       conditions.push(`t.driver_id = $${idx++}`);
@@ -515,6 +517,7 @@ export async function listTrips(req: Request, res: Response): Promise<void> {
       JOIN states ls ON t.loading_state_id   = ls.id
       JOIN states us ON t.unloading_state_id = us.id
       LEFT JOIN users d ON t.driver_id = d.id
+      LEFT JOIN users u ON u.id = t.created_by
       ${whereClause}`;
 
     const [countRes, unstartedRes, rowsRes] = await Promise.all([
@@ -549,6 +552,8 @@ export async function listTrips(req: Request, res: Response): Promise<void> {
         driver_id:             string | null;
         driver_email:          string | null;
         unstarted_flag:        boolean | null;
+        created_by_name:       string | null;
+        created_by_email:      string | null;
       }>(
         `SELECT
            t.id,
@@ -571,7 +576,9 @@ export async function listTrips(req: Request, res: Response): Promise<void> {
            ${isSuperAdmin
              ? "(t.status = 'created' AND t.created_at < NOW() - INTERVAL '2 hours')"
              : "NULL"
-           } AS unstarted_flag
+           } AS unstarted_flag,
+           u.first_name || ' ' || u.last_name AS created_by_name,
+           u.email AS created_by_email
          ${baseFrom}
          ORDER BY t.created_at DESC
          LIMIT $${idx} OFFSET $${idx + 1}`,
@@ -599,6 +606,8 @@ export async function listTrips(req: Request, res: Response): Promise<void> {
           originDescription:      r.origin_description,
           destinationDescription: r.destination_description,
           unstartedFlag:   isSuperAdmin ? (r.unstarted_flag ?? false) : null,
+          createdByName:   r.created_by_name,
+          createdByEmail:  r.created_by_email,
           createdAt:       r.created_at,
           updatedAt:       r.updated_at,
         })),
@@ -640,6 +649,8 @@ export async function getTripById(req: Request, res: Response): Promise<void> {
       unloading_state_name:  string;
       unloading_state_code:  string;
       unstarted_flag:        boolean;
+      created_by_name:       string | null;
+      created_by_email:      string | null;
     }>(
       `SELECT
          t.id,
@@ -660,14 +671,17 @@ export async function getTripById(req: Request, res: Response): Promise<void> {
          us.id   AS unloading_state_id,
          us.name AS unloading_state_name,
          us.code AS unloading_state_code,
-         (t.status = 'created' AND t.created_at < NOW() - INTERVAL '2 hours') AS unstarted_flag
+         (t.status = 'created' AND t.created_at < NOW() - INTERVAL '2 hours') AS unstarted_flag,
+         u.first_name || ' ' || u.last_name AS created_by_name,
+         u.email AS created_by_email
        FROM trips t
        JOIN vehicles v ON t.vehicle_id = v.id
        LEFT JOIN vehicle_types vt ON vt.id = v.vehicle_type_id
        JOIN states ls ON t.loading_state_id   = ls.id
        JOIN states us ON t.unloading_state_id = us.id
        LEFT JOIN users d ON t.driver_id = d.id
-       WHERE t.id = $1 AND t.deleted_at IS NULL
+       LEFT JOIN users u ON u.id = t.created_by
+       WHERE t.id = $1
        LIMIT 1`,
       [tripId]
     );
@@ -679,14 +693,15 @@ export async function getTripById(req: Request, res: Response): Promise<void> {
 
     const trip = rows[0]!;
 
-    // Role-based access: drivers see only their own trips; trip_admins see only trips they created
-    if (role === "trip_admin" && trip.driver_id !== userId) {
-      // trip_admin can see any trip they created — check created_by via separate query
+    // Role-based access: trip_admins see any trip in their state or any trip they created
+    if (role === "trip_admin") {
+      const entityId = req.user!.entityId;
       const creatorCheck = await pool.query<{ created_by: string }>(
         `SELECT created_by FROM trips WHERE id = $1`,
         [tripId]
       );
-      if (creatorCheck.rows[0]?.created_by !== userId) {
+      const createdBy = creatorCheck.rows[0]?.created_by;
+      if (trip.loading_state_id !== entityId && createdBy !== userId) {
         res.status(403).json({ error: "FORBIDDEN", message: "Access denied" });
         return;
       }
@@ -746,6 +761,8 @@ export async function getTripById(req: Request, res: Response): Promise<void> {
           originDescription:      trip.origin_description,
           destinationDescription: trip.destination_description,
           unstartedFlag:   trip.unstarted_flag,
+          createdByName:   trip.created_by_name,
+          createdByEmail:  trip.created_by_email,
           createdAt:       trip.created_at,
           updatedAt:       trip.updated_at,
           fees:            feesRes.rows.map((f) => ({

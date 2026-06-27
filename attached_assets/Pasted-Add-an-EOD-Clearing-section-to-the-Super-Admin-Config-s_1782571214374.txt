@@ -1,0 +1,35 @@
+Add an EOD Clearing section to the Super Admin Config screen. This is UI-only -- the backend toggle endpoint already exists at PATCH /api/wallets/:walletId/clearing. Follow all steps in order.
+Step 1 -- Fetch state wallets on Config screen
+In artifacts/mobile/app/(superadmin)/config.tsx, add a new data fetch on mount that calls GET /api/wallets/all (already exists, Super Admin only). From the response, filter to only state wallets (owner_type === 'state'). Store as stateWallets in component state.
+Cross-reference with the states list (already fetched for other purposes) to get the state name for each wallet. Match by wallet.ownerId === state.id.
+Step 2 -- Add EOD Clearing section to Config screen
+Below the existing pricing chart section and above the "Verify Trip Payment" link, add a new section titled "EOD Payment Clearing".
+Add a short explanatory subtitle in small gray text:
+
+"When enabled for a state, collected fees will be transferred to the state's bank account during end-of-day clearing. Requires payment processor integration."
+Display a scrollable list of state cards, each showing:
+
+State name (bold)
+Current wallet balance (from wallet.totalCollected, formatted in Naira)
+A Switch component on the right
+
+All switches must be disabled and grayed out -- set disabled={true} on every Switch. This is intentional. The toggle infrastructure is ready but the payment processor is not yet connected, so enabling clearing is not yet functional.
+Add a small amber warning badge or text below each disabled switch:
+
+"Requires payment processor setup"
+Or alternatively, show one banner at the top of the section:
+⚠️ Payment processor not connected. These toggles will be enabled once the payment integration is complete.
+The switch should visually reflect the current isClearingEnabled value from the wallet data (so if any were previously toggled on via the API, they show as on -- just still disabled in the UI for now).
+Step 3 -- Style consistently
+Use the same card style as the rest of the Config screen:
+
+backgroundColor: '#ffffff'
+borderRadius: 12
+padding: 16
+marginBottom: 12
+Standard card shadow
+
+State name in bold, balance in primary color below it, switch on the far right.
+Step 4 -- TypeScript check
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Must return zero errors.
