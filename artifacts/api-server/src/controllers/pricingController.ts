@@ -25,7 +25,7 @@ export async function createPricingChart(req: Request, res: Response): Promise<v
     const chart = chartRes.rows[0]!;
 
     await client.query("COMMIT");
-    res.status(201).json({ data: { chart: { ...chart, vehicleTypeRates: [], unassignedStakeholders: [] } } });
+    res.status(201).json({ data: { chart: { ...chart, vehicleTypeRates: [] } } });
   } catch (err) {
     await client.query("ROLLBACK");
     console.error(err);
@@ -131,19 +131,6 @@ export async function getActivePricingChart(_req: Request, res: Response): Promi
       });
     }
 
-    // Find stakeholders that have no rate on any vehicle type for this chart
-    const unassignedRes = await pool.query<{ id: string; name: string }>(
-      `SELECT s.id, s.name
-       FROM stakeholders s
-       WHERE s.is_active = true
-         AND NOT EXISTS (
-           SELECT 1 FROM pricing_chart_stakeholder_rates pcsr
-           WHERE pcsr.pricing_chart_id = $1 AND pcsr.stakeholder_id = s.id
-         )
-       ORDER BY s.name ASC`,
-      [chart.id],
-    );
-
     res.json({
       data: {
         chart: {
@@ -151,7 +138,6 @@ export async function getActivePricingChart(_req: Request, res: Response): Promi
           isActive:         chart.is_active,
           createdAt:        chart.created_at,
           vehicleTypeRates: Array.from(vehicleTypeMap.values()),
-          unassignedStakeholders: unassignedRes.rows,
         },
       },
     });
@@ -219,11 +205,7 @@ export async function addStakeholderRate(req: Request, res: Response): Promise<v
       [chartId, stakeholderId, vehicleTypeId, amount],
     );
     res.status(201).json({ data: { rate: result.rows[0] } });
-  } catch (err: unknown) {
-    if (typeof err === "object" && err !== null && (err as { code?: string }).code === "23505") {
-      res.status(409).json({ error: "CONFLICT", message: "Rate already exists for this stakeholder and vehicle type" });
-      return;
-    }
+  } catch (err) {
     console.error(err);
     res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to add stakeholder rate" });
   }

@@ -472,6 +472,17 @@ export async function createUser(req: Request, res: Response): Promise<void> {
              VALUES ('stakeholder', $1, 0) ON CONFLICT DO NOTHING`,
             [resolvedShId],
           );
+          // Auto-add ₦0 rates for every active vehicle type on the active pricing chart
+          await client.query(
+            `INSERT INTO pricing_chart_stakeholder_rates (pricing_chart_id, stakeholder_id, vehicle_type_id, amount)
+             SELECT pc.id, $1, vt.id, 0
+             FROM pricing_charts pc
+             CROSS JOIN vehicle_types vt
+             WHERE pc.is_active = true
+               AND vt.is_active = true
+             ON CONFLICT (pricing_chart_id, stakeholder_id, vehicle_type_id) DO NOTHING`,
+            [resolvedShId],
+          );
         }
 
         // ── Check for existing user (active or soft-deleted) ───────────────

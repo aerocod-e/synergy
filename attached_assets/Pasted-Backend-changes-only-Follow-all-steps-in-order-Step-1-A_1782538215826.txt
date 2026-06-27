@@ -1,0 +1,26 @@
+Backend changes only. Follow all steps in order.
+Step 1 -- Auto-add new stakeholders to all vehicle types at ₦0
+In artifacts/api-server/src/controllers/userController.ts, find the createUser function, specifically the block that creates a new stakeholder entity when stakeholderName doesn't match an existing one.
+After the stakeholder entity and wallet are created, add a block inside the same transaction that inserts ₦0 rates for every active vehicle type on the active pricing chart:
+sqlINSERT INTO pricing_chart_stakeholder_rates (pricing_chart_id, stakeholder_id, vehicle_type_id, amount)
+SELECT pc.id, $newStakeholderId, vt.id, 0
+FROM pricing_charts pc
+CROSS JOIN vehicle_types vt
+WHERE pc.is_active = true
+AND vt.is_active = true
+ON CONFLICT (pricing_chart_id, stakeholder_id, vehicle_type_id) DO NOTHING;
+This means every newly onboarded stakeholder immediately appears in the pricing chart at ₦0 for all vehicle types. Super Admin then edits the rates to set correct amounts.
+Step 2 -- Remove unassignedStakeholders from getActivePricingChart
+In pricingController.ts, find getActivePricingChart. Remove the query that fetches unassignedStakeholders and remove unassignedStakeholders from the response entirely. It is no longer needed since all stakeholders are auto-assigned at ₦0.
+Step 3 -- Update addStakeholderRate endpoint behavior
+The POST /pricing/:chartId/stakeholders endpoint currently adds a stakeholder to the chart for a specific vehicle type. Since stakeholders are now auto-added for all vehicle types, this endpoint is redundant. However keep it for now but update it to behave as an upsert rather than insert-only -- change the INSERT to ON CONFLICT (pricing_chart_id, stakeholder_id, vehicle_type_id) DO UPDATE SET amount = EXCLUDED.amount. Remove the 409 conflict response.
+Step 4 -- Update updateStakeholderRate to be an upsert
+In pricingController.ts, find updateStakeholderRate. Currently it updates an existing row. Change it to an upsert:
+sqlINSERT INTO pricing_chart_stakeholder_rates (pricing_chart_id, stakeholder_id, vehicle_type_id, amount)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (pricing_chart_id, stakeholder_id, vehicle_type_id) 
+DO UPDATE SET amount = EXCLUDED.amount, updated_at = NOW()
+This handles the case where a rate row doesn't exist yet.
+Step 5 -- TypeScript check
+pnpm --filter @workspace/api-server exec tsc --noEmit
+Must return zero errors.
