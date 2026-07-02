@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { Check, ChevronRight, UserPlus, X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
+import PasswordRulesChecklist, { allRulesPass } from '@/components/PasswordRulesChecklist';
 import { useRouter } from 'expo-router';
 import { getUsers, createUser, getStates, getStakeholders } from '@/services/api';
 import type { User, State } from '@/types/index';
@@ -186,7 +187,7 @@ export default function UsersScreen() {
     if (!formFirstName.trim()) { setFormError('First name is required.'); return; }
     if (!formLastName.trim())  { setFormError('Last name is required.');  return; }
     if (!formEmail.trim() || !formEmail.includes('@')) { setFormError('A valid email is required.'); return; }
-    if (!formPassword || formPassword.length < 6) { setFormError('Password must be at least 6 characters.'); return; }
+    if (!allRulesPass(formPassword)) { setFormError('Password does not meet the required rules.'); return; }
     if (!formRole) { setFormError('Please select a role.'); return; }
     if (formRole === 'state_admin' && !formEntityId) { setFormError('Please select a state.'); return; }
     if (formRole === 'stakeholder') {
@@ -392,12 +393,13 @@ export default function UsersScreen() {
             <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>Password</Text>
             <TextInput
               style={styles.input}
-              placeholder="Min. 6 characters"
+              placeholder="Password"
               placeholderTextColor={theme.colors.placeholder}
               secureTextEntry
               value={formPassword}
               onChangeText={setFormPassword}
             />
+            <PasswordRulesChecklist password={formPassword} />
 
             {/* Role picker */}
             <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>Role</Text>
@@ -542,9 +544,9 @@ export default function UsersScreen() {
 
             {/* Submit */}
             <TouchableOpacity
-              style={[styles.submitButton, submitting && styles.buttonDisabled]}
+              style={[styles.submitButton, (submitting || !allRulesPass(formPassword)) && styles.buttonDisabled]}
               onPress={handleSubmit}
-              disabled={submitting}
+              disabled={submitting || !allRulesPass(formPassword)}
               activeOpacity={0.85}
             >
               {submitting ? (

@@ -1,0 +1,55 @@
+Do not make any changes. I need the complete current database schema so nothing gets missed in an upcoming diagnosis and cleanup.
+Run the following and report full output for each:
+
+List every table in the database with its exact name.
+For every table, run and report the full column list including type, nullability, and default:
+
+sqlSELECT table_name, column_name, data_type, is_nullable, column_default
+FROM information_schema.columns
+WHERE table_schema = 'public'
+ORDER BY table_name, ordinal_position;
+
+List every foreign key relationship in the database:
+
+sqlSELECT
+  tc.table_name AS from_table,
+  kcu.column_name AS from_column,
+  ccu.table_name AS to_table,
+  ccu.column_name AS to_column
+FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
+WHERE tc.constraint_type = 'FOREIGN KEY';
+
+List every unique constraint and index in the database:
+
+sqlSELECT tablename, indexname, indexdef FROM pg_indexes WHERE schemaname = 'public' ORDER BY tablename;
+
+For every table, report a row count:
+
+sqlSELECT 'wallets' AS table_name, COUNT(*) FROM wallets
+UNION ALL SELECT 'stakeholders', COUNT(*) FROM stakeholders
+UNION ALL SELECT 'users', COUNT(*) FROM users
+UNION ALL SELECT 'trips', COUNT(*) FROM trips
+UNION ALL SELECT 'trip_fees', COUNT(*) FROM trip_fees
+UNION ALL SELECT 'trip_events', COUNT(*) FROM trip_events
+UNION ALL SELECT 'wallet_ledger', COUNT(*) FROM wallet_ledger
+UNION ALL SELECT 'cancellation_requests', COUNT(*) FROM cancellation_requests
+UNION ALL SELECT 'vehicles', COUNT(*) FROM vehicles
+UNION ALL SELECT 'drivers', COUNT(*) FROM drivers
+UNION ALL SELECT 'vehicle_types', COUNT(*) FROM vehicle_types
+UNION ALL SELECT 'pricing_charts', COUNT(*) FROM pricing_charts
+UNION ALL SELECT 'pricing_chart_stakeholder_rates', COUNT(*) FROM pricing_chart_stakeholder_rates
+UNION ALL SELECT 'states', COUNT(*) FROM states;
+If any table name above does not exist, report that instead of erroring, and separately list any table that exists in the database but is not in this list.
+Report everything in full, do not summarize or truncate.
+
+Prompt 2, run this second, the bug diagnosis, unchanged from before
+Paste this into the Replit Agent:
+
+Do not make any changes. Two display bugs need root cause diagnosis.
+1, Config screen pricing chart shows inactive stakeholders
+In artifacts/mobile/app/(superadmin)/config.tsx, find the query or API call that populates the stakeholder rows shown under each vehicle type on the pricing chart. Trace it back to the backend endpoint it calls, most likely GET /api/pricing/active. In pricingController.ts, find getActivePricingChart, report the exact SQL query used to fetch stakeholder rates for display, and confirm whether it joins to stakeholders and filters is_active = true, or whether it reads pricing_chart_stakeholder_rates without that join at all, which would explain rates for deactivated stakeholders still appearing.
+2, EOD clearing section shows entries named "Unknown"
+In artifacts/mobile/app/(superadmin)/config.tsx, find the EOD Payment Clearing section's data source, most likely GET /api/wallets/all. In walletController.ts, find getAllWallets, report the exact SQL query, specifically how it resolves a display name for a stakeholder type wallet versus a state type wallet. Report whether the name resolution uses a LEFT JOIN or an INNER JOIN to stakeholders, and whether there is any wallet row in the wallets table whose owner_id does not match any row in stakeholders at all, which would explain the name resolving to a fallback string like "Unknown" rather than failing outright. Run SELECT w.id, w.owner_type, w.owner_id, s.name FROM wallets w LEFT JOIN stakeholders s ON s.id = w.owner_id WHERE w.owner_type = 'stakeholder' AND s.id IS NULL and report any orphaned rows found.
+Report findings only, no changes, from both investigations.

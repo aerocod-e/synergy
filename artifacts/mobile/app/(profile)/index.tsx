@@ -1,5 +1,6 @@
 import { Eye, EyeOff } from 'lucide-react-native';
 import React, { useState } from 'react';
+import PasswordRulesChecklist, { allRulesPass } from '@/components/PasswordRulesChecklist';
 import {
   View,
   Text,
@@ -56,10 +57,9 @@ export default function ProfileScreen() {
   const role = user?.role ?? '';
   const badgeColors = roleBadgeColors(role);
 
-  const newPwTooShort = newPw.length > 0 && newPw.length < 8;
   const pwMismatch = confirmPw.length > 0 && newPw !== confirmPw;
   const canSave =
-    currentPw.length > 0 && newPw.length >= 8 && newPw === confirmPw;
+    currentPw.length > 0 && allRulesPass(newPw) && newPw === confirmPw;
 
   const handleSavePassword = async () => {
     if (!canSave) return;
@@ -166,9 +166,7 @@ export default function ProfileScreen() {
                 color={theme.colors.grey1} />}
             </TouchableOpacity>
           </View>
-          {newPwTooShort && (
-            <Text style={styles.fieldError}>New password must be at least 8 characters</Text>
-          )}
+          <PasswordRulesChecklist password={newPw} />
 
           <View style={[styles.pwFieldRow, styles.inputSpaced]}>
             <TextInput

@@ -5,6 +5,7 @@ import {
   generateTokens,
   verifyRefreshToken,
 } from "../utils/tokenUtils.js";
+import { validatePassword } from "../utils/passwordPolicy.js";
 
 // NOTE: Prototype scope — refresh tokens are stateless (no DB blacklist table).
 // In production, store refresh tokens in a `refresh_tokens` table and
@@ -219,8 +220,9 @@ export async function changePassword(req: Request, res: Response): Promise<void>
       return;
     }
 
-    if (newPassword.length < 8) {
-      res.status(400).json({ error: "BAD_REQUEST", message: "New password must be at least 8 characters" });
+    const pwCheck = validatePassword(newPassword);
+    if (!pwCheck.valid) {
+      res.status(400).json({ error: "BAD_REQUEST", message: pwCheck.message });
       return;
     }
 

@@ -1,6 +1,7 @@
 import { type Request, type Response } from "express";
 import bcrypt from "bcrypt";
 import pool from "../db/connection.js";
+import { validatePassword } from "../utils/passwordPolicy.js";
 
 export async function listUsers(req: Request, res: Response): Promise<void> {
   const rawPage  = parseInt((req.query.page  as string) ?? "1",  10);
@@ -386,8 +387,13 @@ export async function createUser(req: Request, res: Response): Promise<void> {
       res.status(400).json({ error: "BAD_REQUEST", message: "Valid email is required" });
       return;
     }
-    if (!password || typeof password !== "string" || password.length < 6) {
-      res.status(400).json({ error: "BAD_REQUEST", message: "Password must be at least 6 characters" });
+    if (!password || typeof password !== "string") {
+      res.status(400).json({ error: "BAD_REQUEST", message: "Password is required" });
+      return;
+    }
+    const pwCheck = validatePassword(password as string);
+    if (!pwCheck.valid) {
+      res.status(400).json({ error: "BAD_REQUEST", message: pwCheck.message });
       return;
     }
     if (!role || !VALID_ROLES.includes(role as ValidRole)) {
@@ -824,6 +830,8 @@ export async function resetUserPassword(req: Request, res: Response): Promise<vo
       return;
     }
 
+    // "Temp@1234" satisfies the password policy (6-15 chars, uppercase, digit, special).
+    // Do not change this default without verifying it still passes validatePassword.
     const hash = await bcrypt.hash("Temp@1234", 10);
     await pool.query(
       `UPDATE users SET password_hash = $1 WHERE id = $2 AND deleted_at IS NULL`,

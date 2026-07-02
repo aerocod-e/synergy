@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import PasswordRulesChecklist, { allRulesPass } from '@/components/PasswordRulesChecklist';
 import {
   View,
   Text,
@@ -276,8 +277,8 @@ export default function StateAdminTripAdmins() {
       setSubmitError('Please enter a valid email address.');
       return;
     }
-    if (password.length < 6) {
-      setSubmitError('Password must be at least 6 characters.');
+    if (!allRulesPass(password)) {
+      setSubmitError('Password does not meet the required rules.');
       return;
     }
     setSubmitting(true);
@@ -615,7 +616,7 @@ export default function StateAdminTripAdmins() {
                 style={[styles.textField, { flex: 1 }]}
                 value={password}
                 onChangeText={setPassword}
-                placeholder="Min. 6 characters"
+                placeholder="Password"
                 placeholderTextColor={theme.colors.grey1}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
@@ -631,6 +632,7 @@ export default function StateAdminTripAdmins() {
                   color={theme.colors.grey1} />}
               </TouchableOpacity>
             </View>
+            <PasswordRulesChecklist password={password} />
 
             {submitError && (
               <View style={styles.errorBox}>
@@ -640,10 +642,10 @@ export default function StateAdminTripAdmins() {
             )}
 
             <TouchableOpacity
-              style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+              style={[styles.submitButton, (submitting || !allRulesPass(password)) && styles.submitButtonDisabled]}
               onPress={handleCreate}
               activeOpacity={0.85}
-              disabled={submitting}
+              disabled={submitting || !allRulesPass(password)}
             >
               {submitting ? (
                 <ActivityIndicator size="small" color={theme.colors.white} />
