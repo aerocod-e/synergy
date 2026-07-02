@@ -13,8 +13,8 @@ import {
   Alert,
   ScrollView,
 } from 'react-native';
-import { useFocusEffect, useNavigation } from 'expo-router';
-import { AlertCircle, Car, Check, CloudOff, LogOut, Pencil, Plus, PlusCircle, Trash2, X } from 'lucide-react-native';
+import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
+import { AlertCircle, BarChart2, Car, Check, CloudOff, LogOut, Pencil, Plus, PlusCircle, Trash2, X } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
 import ScreenTransition from '@/components/ScreenTransition';
@@ -61,7 +61,12 @@ export default function TripAdminVehicles() {
   const [pendingVehicleTypeId, setPendingVehicleTypeId] = useState<string>('');
 
   const navigation = useNavigation();
+  const router     = useRouter();
   const { handleLogout } = useLogout();
+
+  const [auditModalVisible, setAuditModalVisible] = useState(false);
+  const [auditMode, setAuditMode]                 = useState<'choice' | 'select'>('choice');
+  const [auditVehicleSearch, setAuditVehicleSearch] = useState('');
 
   useEffect(() => {
     listVehicleTypes()
@@ -121,11 +126,34 @@ export default function TripAdminVehicles() {
     setModalVisible(true);
   }, []);
 
+  const openAuditPicker = useCallback(() => {
+    setAuditMode('choice');
+    setAuditVehicleSearch('');
+    setAuditModalVisible(true);
+  }, []);
+
+  const goAuditAll = () => {
+    setAuditModalVisible(false);
+    router.push('/(tripadmin)/audit-report');
+  };
+
+  const goAuditVehicle = (v: VehicleWithCount) => {
+    setAuditModalVisible(false);
+    router.push(`/(tripadmin)/audit-report?vehicleId=${v.id}&vehicleReg=${encodeURIComponent(v.registrationNumber)}`);
+  };
+
   useEffect(() => {
     if (Platform.OS === 'web') {
       navigation.setOptions({
         headerRight: () => (
           <View style={styles.headerRight}>
+            <TouchableOpacity
+              onPress={openAuditPicker}
+              style={styles.headerBtn}
+              accessibilityLabel="Generate audit"
+            >
+              <BarChart2 size={24} color={theme.colors.primary} />
+            </TouchableOpacity>
             <TouchableOpacity
               onPress={openModal}
               style={styles.headerBtn}
@@ -140,7 +168,7 @@ export default function TripAdminVehicles() {
         ),
       });
     }
-  }, [navigation, openModal, handleLogout]);
+  }, [navigation, openModal, openAuditPicker, handleLogout]);
 
   const fetchVehicles = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -324,6 +352,18 @@ export default function TripAdminVehicles() {
         keyExtractor={(v) => v.id}
         renderItem={renderVehicle}
         contentContainerStyle={styles.listContent}
+        ListHeaderComponent={
+          <View style={styles.auditHeaderRow}>
+            <TouchableOpacity
+              style={styles.auditBtn}
+              onPress={openAuditPicker}
+              activeOpacity={0.8}
+            >
+              <BarChart2 size={16} color={theme.colors.primary} />
+              <Text style={styles.auditBtnText}>Generate Audit</Text>
+            </TouchableOpacity>
+          </View>
+        }
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -532,6 +572,91 @@ export default function TripAdminVehicles() {
           </ScrollView>
         </View>
       </Modal>
+      {/* ── Audit picker modal ───────────────────────────────────────────── */}
+      <Modal
+        visible={auditModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setAuditModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>
+              {auditMode === 'select' ? 'Select Vehicle' : 'Generate Audit'}
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                if (auditMode === 'select') { setAuditMode('choice'); setAuditVehicleSearch(''); }
+                else { setAuditModalVisible(false); }
+              }}
+            >
+              <X size={24} color={theme.colors.grey2} />
+            </TouchableOpacity>
+          </View>
+
+          {auditMode === 'choice' ? (
+            <View style={styles.auditChoiceBody}>
+              <TouchableOpacity style={styles.auditChoiceBtn} onPress={goAuditAll} activeOpacity={0.8}>
+                <BarChart2 size={22} color={theme.colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.auditChoiceTitle}>All Vehicles</Text>
+                  <Text style={styles.auditChoiceSub}>Combined report across all your vehicles</Text>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.auditChoiceBtn}
+                onPress={() => { setAuditMode('select'); setAuditVehicleSearch(''); }}
+                activeOpacity={0.8}
+              >
+                <Car size={22} color={theme.colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.auditChoiceTitle}>Select a Vehicle</Text>
+                  <Text style={styles.auditChoiceSub}>Report for one specific vehicle</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={{ flex: 1 }}>
+              <View style={styles.auditSearchRow}>
+                <TextInput
+                  style={styles.auditSearchInput}
+                  value={auditVehicleSearch}
+                  onChangeText={setAuditVehicleSearch}
+                  placeholder="Search by registration…"
+                  placeholderTextColor={theme.colors.placeholder}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                />
+              </View>
+              <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1 }}>
+                {vehicles
+                  .filter((v) =>
+                    !auditVehicleSearch.trim() ||
+                    v.registrationNumber.toUpperCase().includes(auditVehicleSearch.toUpperCase()),
+                  )
+                  .map((v) => (
+                    <TouchableOpacity
+                      key={v.id}
+                      style={styles.auditVehicleRow}
+                      onPress={() => goAuditVehicle(v)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.plateBadgeSmall}>
+                        <Text style={styles.plateTextSmall}>{v.registrationNumber}</Text>
+                      </View>
+                      {v.vehicleTypeName ? (
+                        <Text style={styles.vehicleTypeName}>{v.vehicleTypeName}</Text>
+                      ) : null}
+                      <Text style={styles.auditVehicleTripCount}>
+                        {v.tripCount} {v.tripCount === 1 ? 'trip' : 'trips'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+              </ScrollView>
+            </View>
+          )}
+        </View>
+      </Modal>
       </ScreenTransition>
     </View>
   );
@@ -654,6 +779,78 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     ...theme.shadows.strong,
+  },
+  auditHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingBottom: 10,
+  },
+  auditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: theme.colors.blueMuted,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  auditBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.colors.primary,
+  },
+  auditChoiceBody: {
+    padding: 20,
+    gap: 12,
+  },
+  auditChoiceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: theme.colors.white,
+    borderRadius: 14,
+    padding: 18,
+    borderWidth: 1.5,
+    borderColor: theme.colors.grey3,
+    ...theme.shadows.card,
+  },
+  auditChoiceTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.colors.black,
+    marginBottom: 2,
+  },
+  auditChoiceSub: {
+    fontSize: 13,
+    color: theme.colors.grey1,
+  },
+  auditSearchRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  auditSearchInput: {
+    backgroundColor: theme.colors.white,
+    borderWidth: 1.5,
+    borderColor: theme.colors.grey3,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    height: 44,
+    fontSize: 14,
+    color: theme.colors.black,
+  },
+  auditVehicleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.separator,
+  },
+  auditVehicleTripCount: {
+    fontSize: 13,
+    color: theme.colors.grey1,
+    marginLeft: 'auto',
   },
   headerRight: {
     flexDirection: 'row',

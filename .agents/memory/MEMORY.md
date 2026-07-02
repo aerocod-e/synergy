@@ -6,3 +6,4 @@
 - [Expo web pointerEvents warning](expo-web-pointer-events.md) — react-native-web 0.21.x emits a warnOnce for any pointerEvents JSX prop; root fix is patching createDOMProps to remove the warnOnce call.
 - [Expo Android icon rendering](expo-android-icons.md) — use lucide-react-native (SVG), not font-based vector icons; icon-as-component-prop pattern + pin react-native-svg to Expo version.
 - [Vehicle-type pricing frontend pattern](vehicle-type-pricing-frontend.md) — how trip creation, vehicle registration, and config screens handle the new vehicle-type-based pricing model.
+- [expo-file-system v57 API](expo-file-system-v57.md) — v57 uses File/Paths classes; old cacheDirectory/writeAsStringAsync API gone.

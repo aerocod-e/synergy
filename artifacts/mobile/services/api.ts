@@ -235,3 +235,7 @@ export const deleteTripAdmin = (userId: string) =>
 
 export const deleteDriver = (id: string) =>
   apiRequest(`/api/drivers/${id}`, { method: 'DELETE' });
+
+// ── Audit (Trip Admin) ────────────────────────────────────────────────────────
+export const getVehicleAudit = (params?: Record<string, string>) =>
+  apiRequest('/api/audit/vehicles' + (params ? '?' + new URLSearchParams(params).toString() : ''));

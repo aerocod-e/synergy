@@ -10,7 +10,8 @@ export default function TripAdminLayout() {
       <Tabs.Screen name="index"       options={{ title: 'Trips',    tabBarLabel: 'Trips' }} />
       <Tabs.Screen name="vehicles"    options={{ title: 'Vehicles', tabBarLabel: 'Vehicles' }} />
       <Tabs.Screen name="drivers"     options={{ title: 'Drivers',  tabBarLabel: 'Drivers' }} />
-      <Tabs.Screen name="trip-detail" options={{ title: 'Trip Detail', href: null }} />
+      <Tabs.Screen name="trip-detail"   options={{ title: 'Trip Detail',   href: null }} />
+      <Tabs.Screen name="audit-report"  options={{ title: 'Audit Report',  href: null }} />
     </Tabs>
   );
 }

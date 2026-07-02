@@ -13,6 +13,7 @@ import vehiclesRouter     from "./routes/vehicles.js";
 import driversRouter              from "./routes/drivers.js";
 import cancellationRequestsRouter from "./routes/cancellationRequests.js";
 import vehicleTypesRouter        from "./routes/vehicleTypes.js";
+import auditRouter               from "./routes/audit.js";
 
 const app: Express = express();
 app.set('trust proxy', 1);
@@ -38,5 +39,6 @@ app.use("/api/vehicles",     vehiclesRouter);
 app.use("/api/drivers",               driversRouter);
 app.use("/api/cancellation-requests", cancellationRequestsRouter);
 app.use("/api/vehicle-types",         vehicleTypesRouter);
+app.use("/api/audit",                 auditRouter);
 
 export default app;
