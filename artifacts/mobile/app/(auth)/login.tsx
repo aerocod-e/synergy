@@ -29,6 +29,7 @@ interface DemoAccount {
 }
 
 const DEMO_ACCOUNTS: DemoAccount[] = [
+  // Super Admin
   {
     label: 'Super Admin',
     email: 'superadmin@synergy.com',
@@ -36,103 +37,106 @@ const DEMO_ACCOUNTS: DemoAccount[] = [
     badge: 'Super Admin',
     badgeColor: '#7C3AED',
   },
+  // State Admins
   {
-    label: 'Admin — Alpha Stakeholder',
-    email: 'alpha.admin@synergy.com',
-    password: 'Admin@1234',
-    badge: 'Stakeholder Admin',
-    badgeColor: '#1a6ec8',
-  },
-  {
-    label: 'Admin — Beta Stakeholder',
-    email: 'beta.admin@synergy.com',
-    password: 'Admin@1234',
-    badge: 'Stakeholder Admin',
-    badgeColor: '#1a6ec8',
-  },
-  {
-    label: 'Admin — Gamma Stakeholder',
-    email: 'gamma.admin@synergy.com',
-    password: 'Admin@1234',
-    badge: 'Stakeholder Admin',
-    badgeColor: '#1a6ec8',
-  },
-  {
-    label: 'Admin — Lagos State',
+    label: 'Lagos State Admin',
     email: 'lagos.admin@synergy.com',
     password: 'Admin@1234',
     badge: 'State Admin',
     badgeColor: '#0891B2',
   },
   {
-    label: 'Admin — Kano State',
+    label: 'Kano State Admin',
     email: 'kano.admin@synergy.com',
     password: 'Admin@1234',
     badge: 'State Admin',
     badgeColor: '#0891B2',
   },
   {
-    label: 'Admin — Rivers State',
+    label: 'Rivers State Admin',
     email: 'rivers.admin@synergy.com',
     password: 'Admin@1234',
     badge: 'State Admin',
     badgeColor: '#0891B2',
   },
   {
-    label: 'Admin — FCT Abuja',
+    label: 'FCT State Admin',
     email: 'fct.admin@synergy.com',
     password: 'Admin@1234',
     badge: 'State Admin',
     badgeColor: '#0891B2',
   },
   {
-    label: 'Admin — Ogun State',
+    label: 'Ogun State Admin',
     email: 'ogun.admin@synergy.com',
     password: 'Admin@1234',
     badge: 'State Admin',
     badgeColor: '#0891B2',
   },
+  // Trip Admins
   {
-    label: 'Trip Admin — Lagos 1',
+    label: 'Lagos Trip Admin 1',
     email: 'lagos.ta1@synergy.com',
     password: 'Demo@1234',
     badge: 'Trip Admin',
     badgeColor: '#059669',
   },
   {
-    label: 'Trip Admin — Lagos 2',
+    label: 'Lagos Trip Admin 2',
     email: 'lagos.ta2@synergy.com',
     password: 'Demo@1234',
     badge: 'Trip Admin',
     badgeColor: '#059669',
   },
   {
-    label: 'Trip Admin — Rivers',
-    email: 'rivers.ta1@synergy.com',
-    password: 'Demo@1234',
-    badge: 'Trip Admin',
-    badgeColor: '#059669',
-  },
-  {
-    label: 'Trip Admin — Kano',
+    label: 'Kano Trip Admin',
     email: 'kano.ta1@synergy.com',
     password: 'Demo@1234',
     badge: 'Trip Admin',
     badgeColor: '#059669',
   },
   {
-    label: 'Trip Admin — FCT Abuja',
+    label: 'Rivers Trip Admin',
+    email: 'rivers.ta1@synergy.com',
+    password: 'Demo@1234',
+    badge: 'Trip Admin',
+    badgeColor: '#059669',
+  },
+  {
+    label: 'FCT Trip Admin',
     email: 'fct.ta1@synergy.com',
     password: 'Demo@1234',
     badge: 'Trip Admin',
     badgeColor: '#059669',
   },
   {
-    label: 'Trip Admin — Ogun',
+    label: 'Ogun Trip Admin',
     email: 'ogun.ta1@synergy.com',
     password: 'Demo@1234',
     badge: 'Trip Admin',
     badgeColor: '#059669',
+  },
+  // Stakeholders
+  {
+    label: 'Consultant',
+    email: 'alpha.admin@synergy.com',
+    password: 'Admin@1234',
+    badge: 'Stakeholder',
+    badgeColor: '#1a6ec8',
+  },
+  {
+    label: 'Vendor',
+    email: 'beta.admin@synergy.com',
+    password: 'Admin@1234',
+    badge: 'Stakeholder',
+    badgeColor: '#1a6ec8',
+  },
+  {
+    label: 'Integrator',
+    email: 'gamma.admin@synergy.com',
+    password: 'Admin@1234',
+    badge: 'Stakeholder',
+    badgeColor: '#1a6ec8',
   },
 ];
 

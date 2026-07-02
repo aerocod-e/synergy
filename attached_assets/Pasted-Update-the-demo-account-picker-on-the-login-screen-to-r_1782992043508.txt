@@ -1,0 +1,42 @@
+Update the demo account picker on the login screen to reflect the current fresh seed data. Follow all steps in order.
+Step 1, find the demo account picker component, most likely inside artifacts/mobile/app/(auth)/login.tsx or a component it imports. Report the current list of accounts it shows before making any change.
+Step 2, replace the list with exactly these fifteen accounts, grouped by role in this order, Super Admin first, then State Admins, then Trip Admins, then Stakeholders. Use the display names as shown.
+Super Admin
+
+Super Admin, superadmin@synergy.com, Admin@1234
+
+State Admins
+
+Lagos State Admin, lagos.admin@synergy.com, Admin@1234
+Kano State Admin, kano.admin@synergy.com, Admin@1234
+Rivers State Admin, rivers.admin@synergy.com, Admin@1234
+FCT State Admin, fct.admin@synergy.com, Admin@1234
+Ogun State Admin, ogun.admin@synergy.com, Admin@1234
+
+Trip Admins
+
+Lagos Trip Admin 1, lagos.ta1@synergy.com, Demo@1234
+Lagos Trip Admin 2, lagos.ta2@synergy.com, Demo@1234
+Kano Trip Admin, kano.ta1@synergy.com, Demo@1234
+Rivers Trip Admin, rivers.ta1@synergy.com, Demo@1234
+FCT Trip Admin, fct.ta1@synergy.com, Demo@1234
+Ogun Trip Admin, ogun.ta1@synergy.com, Demo@1234
+
+Stakeholders
+
+Consultant, alpha.admin@synergy.com, Admin@1234
+Vendor, beta.admin@synergy.com, Admin@1234
+Integrator, gamma.admin@synergy.com, Admin@1234
+
+Step 3, remove any account from the picker that is not in the list above, including any leftover test accounts, old stakeholder display names like Alpha, Beta, Gamma, or any account that no longer exists after the wipe.
+Step 4, confirm tapping any entry in the picker correctly pre-fills the email and password fields and that login succeeds for at least three accounts across three different roles during testing.
+Step 5, TypeScript check.
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Must return zero errors.
+Testing, 390x844px, tap only.
+Test 1, open the login screen. Confirm the picker shows exactly fifteen accounts grouped by role in the order specified.
+Test 2, tap Super Admin, confirm fields prefill correctly, confirm login succeeds.
+Test 3, tap a Trip Admin entry, confirm fields prefill with Demo@1234, confirm login succeeds.
+Test 4, tap a Stakeholder entry, confirm the display name shown is Consultant, Vendor, or Integrator, not Alpha, Beta, Gamma, confirm login succeeds.
+Test 5, console clean throughout.
+Report every file changed and every test result.
