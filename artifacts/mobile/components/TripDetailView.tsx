@@ -6,6 +6,7 @@ export interface TripFee {
   id: string;
   recipientType: string;
   recipientId: string;
+  recipientName: string | null;
   feeType: string;
   amount: number;
   amountNaira: string;
@@ -182,11 +183,11 @@ export default function TripDetailView({ trip, footer }: TripDetailViewProps) {
                   </View>
                 </View>
               ))}
-              {stakeholderFees.map((f, idx) => (
+              {stakeholderFees.map((f) => (
                 <View key={f.id}>
                   <View style={styles.rowDivider} />
                   <View style={styles.feeRow}>
-                    <Text style={styles.feeLabel}>{`Stakeholder Fee ${stakeholderFees.length > 1 ? idx + 1 : ''}`}</Text>
+                    <Text style={styles.feeLabel}>{f.recipientName ?? 'Stakeholder Fee'}</Text>
                     <Text style={styles.feeAmount}>{formatNaira(f.amount)}</Text>
                   </View>
                 </View>
