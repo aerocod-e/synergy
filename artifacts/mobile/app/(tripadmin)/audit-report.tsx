@@ -18,7 +18,7 @@ import * as XLSX from 'xlsx';
 import { File, Paths } from 'expo-file-system';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
-import { getVehicleAudit } from '@/services/api';
+import { getDriverAudit, getVehicleAudit } from '@/services/api';
 import { formatNaira } from '@/utils/formatCurrency';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -27,14 +27,15 @@ interface TripEntry {
   id: string;
   tripCode: string;
   date: string;
-  loadingState: string | null;
+  loadingState:   string | null;
   unloadingState: string | null;
-  status: string;
-  driverName: string | null;
-  totalFees: number;
+  status:         string;
+  driverName:     string | null;
+  vehicleReg:     string | null;
+  totalFees:      number;
 }
 
-interface VehicleSummary {
+interface EntitySummary {
   totalTrips: number;
   completed: number;
   cancelled: number;
@@ -44,18 +45,18 @@ interface VehicleSummary {
   totalRevenue: number;
 }
 
-interface VehicleReport {
+interface AuditEntity {
   id: string;
-  registrationNumber: string;
-  vehicleTypeName: string | null;
+  displayName:    string;
+  subLabel:       string | null;
   dateRegistered: string;
-  summary: VehicleSummary;
-  trips: TripEntry[];
+  summary:        EntitySummary;
+  trips:          TripEntry[];
 }
 
 interface AuditData {
-  vehicles: VehicleReport[];
-  summary: VehicleSummary;
+  entities: AuditEntity[];
+  summary:  EntitySummary;
 }
 
 // ── Status helpers ────────────────────────────────────────────────────────────
@@ -132,15 +133,44 @@ function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function completionPct(s: VehicleSummary): string {
+function completionPct(s: EntitySummary): string {
   if (!s.totalTrips) return '0%';
   return Math.round((s.completed / s.totalTrips) * 100) + '%';
 }
 
+// ── Response normalizer ───────────────────────────────────────────────────────
+
+function normalizeResponse(isDriver: boolean, raw: any): AuditData {
+  if (isDriver) {
+    return {
+      entities: (raw.drivers ?? []).map((d: any) => ({
+        id:             d.id,
+        displayName:    d.fullName   as string,
+        subLabel:       d.licenseNumber ?? null,
+        dateRegistered: d.dateRegistered,
+        summary:        d.summary,
+        trips:          (d.trips ?? []).map((t: any) => ({ ...t, vehicleReg: t.vehicleReg ?? null, driverName: null })),
+      })),
+      summary: raw.summary,
+    };
+  }
+  return {
+    entities: (raw.vehicles ?? []).map((v: any) => ({
+      id:             v.id,
+      displayName:    v.registrationNumber as string,
+      subLabel:       v.vehicleTypeName ?? null,
+      dateRegistered: v.dateRegistered,
+      summary:        v.summary,
+      trips:          (v.trips ?? []).map((t: any) => ({ ...t, vehicleReg: null })),
+    })),
+    summary: raw.summary,
+  };
+}
+
 // ── PDF builder ───────────────────────────────────────────────────────────────
 
-function buildHtml(data: AuditData, title: string, isSingle: boolean): string {
-  const summaryBlock = (s: VehicleSummary) => `
+function buildHtml(data: AuditData, title: string, isSingle: boolean, isDriver: boolean): string {
+  const summaryBlock = (s: EntitySummary) => `
     <table class="summary">
       <tr><td>Total trips</td><td><b>${s.totalTrips}</b></td>
           <td>Completed</td><td><b>${s.completed}</b></td></tr>
@@ -151,39 +181,41 @@ function buildHtml(data: AuditData, title: string, isSingle: boolean): string {
       <tr><td>Total revenue</td><td colspan="3"><b>${formatNaira(s.totalRevenue)}</b></td></tr>
     </table>`;
 
+  const secondaryCol = isDriver ? 'Vehicle' : 'Driver';
   const tripRows = (trips: TripEntry[]) => trips.map((t) => `
     <tr>
       <td>${t.tripCode ?? '—'}</td>
       <td>${fmtDate(t.date)}</td>
       <td>${t.loadingState ?? '—'} → ${t.unloadingState ?? '—'}</td>
       <td>${STATUS_LABELS[t.status] ?? t.status}</td>
-      <td>${t.driverName ?? '—'}</td>
+      <td>${(isDriver ? t.vehicleReg : t.driverName) ?? '—'}</td>
       <td>${formatNaira(t.totalFees)}</td>
     </tr>`).join('');
 
-  const vehicleSections = isSingle
+  const entitySections = isSingle
     ? ''
-    : data.vehicles.map((v) => `
-        <h3>${v.registrationNumber}${v.vehicleTypeName ? ' — ' + v.vehicleTypeName : ''}</h3>
-        <p style="color:#666;font-size:13px">Registered: ${fmtDate(v.dateRegistered)} &nbsp;|&nbsp;
-          ${v.summary.totalTrips} trips &nbsp;|&nbsp; ${completionPct(v.summary)} completion &nbsp;|&nbsp;
-          ${formatNaira(v.summary.totalRevenue)} revenue</p>
-        ${summaryBlock(v.summary)}
+    : data.entities.map((e) => `
+        <h3>${e.displayName}${e.subLabel ? ' — ' + e.subLabel : ''}</h3>
+        <p style="color:#666;font-size:13px">Registered: ${fmtDate(e.dateRegistered)} &nbsp;|&nbsp;
+          ${e.summary.totalTrips} trips &nbsp;|&nbsp; ${completionPct(e.summary)} completion &nbsp;|&nbsp;
+          ${formatNaira(e.summary.totalRevenue)} revenue</p>
+        ${summaryBlock(e.summary)}
         <table class="trips">
-          <thead><tr><th>Code</th><th>Date</th><th>Route</th><th>Status</th><th>Driver</th><th>Fees</th></tr></thead>
-          <tbody>${tripRows(v.trips)}</tbody>
+          <thead><tr><th>Code</th><th>Date</th><th>Route</th><th>Status</th><th>${secondaryCol}</th><th>Fees</th></tr></thead>
+          <tbody>${tripRows(e.trips)}</tbody>
         </table>`).join('<hr/>');
 
   const singleSection = !isSingle ? '' : (() => {
-    const v = data.vehicles[0];
-    if (!v) return '';
-    return `${summaryBlock(v.summary)}
+    const e = data.entities[0];
+    if (!e) return '';
+    return `${summaryBlock(e.summary)}
       <table class="trips">
-        <thead><tr><th>Code</th><th>Date</th><th>Route</th><th>Status</th><th>Driver</th><th>Fees</th></tr></thead>
-        <tbody>${tripRows(v.trips)}</tbody>
+        <thead><tr><th>Code</th><th>Date</th><th>Route</th><th>Status</th><th>${secondaryCol}</th><th>Fees</th></tr></thead>
+        <tbody>${tripRows(e.trips)}</tbody>
       </table>`;
   })();
 
+  const reportType = isDriver ? 'Driver' : 'Vehicle';
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
   <style>
     body{font-family:sans-serif;padding:24px;color:#111;}
@@ -199,79 +231,82 @@ function buildHtml(data: AuditData, title: string, isSingle: boolean): string {
     hr{border:none;border-top:1px solid #eee;margin:20px 0;}
     .meta{color:#666;font-size:13px;margin-bottom:16px;}
   </style></head><body>
-  <h1>Vehicle Audit Report — ${title}</h1>
+  <h1>${reportType} Audit Report — ${title}</h1>
   <p class="meta">Generated: ${new Date().toLocaleString('en-NG')}</p>
   ${isSingle ? '' : '<h2 style="font-size:16px;margin-bottom:8px;">Combined Summary</h2>' + summaryBlock(data.summary) + '<hr/>'}
   ${singleSection}
-  ${vehicleSections}
+  ${entitySections}
   </body></html>`;
 }
 
 // ── Excel builder ─────────────────────────────────────────────────────────────
 
-function buildWorkbook(data: AuditData, isSingle: boolean): XLSX.WorkBook {
+function buildWorkbook(data: AuditData, isSingle: boolean, isDriver: boolean): XLSX.WorkBook {
   const wb = XLSX.utils.book_new();
 
-  const summaryRows = (s: VehicleSummary): (string | number)[][] => [
+  const summaryRows = (s: EntitySummary): (string | number)[][] => [
     ['SUMMARY'],
-    ['Total Trips',         s.totalTrips],
-    ['Completed',           s.completed],
-    ['In Transit',          s.inTransit],
-    ['Created',             s.created],
-    ['Cancelled',           s.cancelled],
-    ['Cancellation Pending',s.cancellationPending],
-    ['Total Revenue (₦)',   s.totalRevenue / 100],
+    ['Total Trips',          s.totalTrips],
+    ['Completed',            s.completed],
+    ['In Transit',           s.inTransit],
+    ['Created',              s.created],
+    ['Cancelled',            s.cancelled],
+    ['Cancellation Pending', s.cancellationPending],
+    ['Total Revenue (₦)',    s.totalRevenue / 100],
     [],
   ];
 
-  const tripHeaders = ['Trip Code', 'Date', 'Loading State', 'Unloading State', 'Status', 'Driver', 'Total Fees (₦)'];
+  const secondaryHeader = isDriver ? 'Vehicle' : 'Driver';
+  const tripHeaders = ['Trip Code', 'Date', 'Loading State', 'Unloading State', 'Status', secondaryHeader, 'Total Fees (₦)'];
   const tripRow = (t: TripEntry): (string | number)[] => [
     t.tripCode ?? '',
     fmtDate(t.date),
     t.loadingState ?? '',
     t.unloadingState ?? '',
     STATUS_LABELS[t.status] ?? t.status,
-    t.driverName ?? '',
+    (isDriver ? t.vehicleReg : t.driverName) ?? '',
     t.totalFees / 100,
   ];
 
-  const vehicles = isSingle ? data.vehicles.slice(0, 1) : data.vehicles;
+  const entities = isSingle ? data.entities.slice(0, 1) : data.entities;
 
-  for (const v of vehicles) {
-    const sheetName = v.registrationNumber
+  for (const e of entities) {
+    const sheetName = e.displayName
       .replace(/[:\\\/?*[\]]/g, '_')
       .slice(0, 31);
+    const typeLabel = isDriver ? 'License' : 'Vehicle Type';
     const wsData: (string | number)[][] = [
-      [`Audit — ${v.registrationNumber}`],
-      ['Vehicle Type', v.vehicleTypeName ?? ''],
-      ['Date Registered', fmtDate(v.dateRegistered)],
+      [`Audit — ${e.displayName}`],
+      [typeLabel, e.subLabel ?? ''],
+      ['Date Registered', fmtDate(e.dateRegistered)],
       [],
-      ...summaryRows(v.summary),
+      ...summaryRows(e.summary),
       ['TRIPS'],
       tripHeaders,
-      ...v.trips.map(tripRow),
+      ...e.trips.map(tripRow),
     ];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
   }
 
-  if (!isSingle && data.vehicles.length > 1) {
+  if (!isSingle && data.entities.length > 1) {
+    const entityLabel = isDriver ? 'Driver' : 'Vehicle';
     const wsData: (string | number)[][] = [
-      ['Combined Summary — All Vehicles'],
+      [`Combined Summary — All ${isDriver ? 'Drivers' : 'Vehicles'}`],
       [],
       ...summaryRows(data.summary),
-      ['Vehicle', 'Type', 'Registered', 'Trips', 'Completed', 'Revenue (₦)'],
-      ...data.vehicles.map((v) => [
-        v.registrationNumber,
-        v.vehicleTypeName ?? '',
-        fmtDate(v.dateRegistered),
-        v.summary.totalTrips,
-        v.summary.completed,
-        v.summary.totalRevenue / 100,
+      [entityLabel, isDriver ? 'License' : 'Type', 'Registered', 'Trips', 'Completed', 'Revenue (₦)'],
+      ...data.entities.map((e) => [
+        e.displayName,
+        e.subLabel ?? '',
+        fmtDate(e.dateRegistered),
+        e.summary.totalTrips,
+        e.summary.completed,
+        e.summary.totalRevenue / 100,
       ]),
     ];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
-    XLSX.utils.book_append_sheet(wb, ws, 'All Vehicles');
+    XLSX.utils.book_append_sheet(wb, ws, isDriver ? 'All Drivers' : 'All Vehicles');
   }
 
   return wb;
@@ -281,11 +316,21 @@ function buildWorkbook(data: AuditData, isSingle: boolean): XLSX.WorkBook {
 
 export default function AuditReportScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ vehicleId?: string; vehicleReg?: string }>();
-  const vehicleId  = params.vehicleId  ?? undefined;
-  const vehicleReg = params.vehicleReg ?? undefined;
-  const isSingle   = !!vehicleId;
-  const title      = isSingle ? (vehicleReg ?? vehicleId ?? 'Vehicle') : 'All Vehicles';
+  const params = useLocalSearchParams<{
+    entityType?: string;
+    vehicleId?: string; vehicleReg?: string;
+    driverId?:  string; driverName?: string;
+  }>();
+  const entityType = (params.entityType ?? 'vehicle') as 'vehicle' | 'driver';
+  const isDriver   = entityType === 'driver';
+  const entityId   = isDriver ? params.driverId   : params.vehicleId;
+  const entityName = isDriver ? params.driverName : params.vehicleReg;
+  const isSingle   = !!entityId;
+  const title      = isSingle
+    ? (entityName ?? entityId ?? (isDriver ? 'Driver' : 'Vehicle'))
+    : (isDriver ? 'All Drivers' : 'All Vehicles');
+  const backPath  = isDriver ? '/(tripadmin)/drivers'  as const : '/(tripadmin)/vehicles'  as const;
+  const backLabel = isDriver ? 'Drivers' : 'Vehicles';
 
   const [preset,     setPreset]     = useState<Preset>('all');
   const [customFrom, setCustomFrom] = useState('');
@@ -308,20 +353,21 @@ export default function AuditReportScreen() {
     setLoading(true);
     setError(null);
     try {
-      const params: Record<string, string> = {};
-      if (vehicleId) params.vehicleId = vehicleId;
-      if (sf)        params.status    = sf;
+      const qp: Record<string, string> = {};
+      if (entityId) qp[isDriver ? 'driverId' : 'vehicleId'] = entityId;
+      if (sf)       qp.status = sf;
       const { dateFrom, dateTo } = computeDateRange(p, cFrom, cTo);
-      if (dateFrom) params.dateFrom = dateFrom;
-      if (dateTo)   params.dateTo   = dateTo;
-      const result = await getVehicleAudit(Object.keys(params).length ? params : undefined);
-      setData(result as AuditData);
+      if (dateFrom) qp.dateFrom = dateFrom;
+      if (dateTo)   qp.dateTo   = dateTo;
+      const apiCall = isDriver ? getDriverAudit : getVehicleAudit;
+      const result  = await apiCall(Object.keys(qp).length ? qp : undefined);
+      setData(normalizeResponse(isDriver, result as any));
     } catch {
       setError("Couldn't load audit data");
     } finally {
       setLoading(false);
     }
-  }, [vehicleId]);
+  }, [entityId, isDriver]);
 
   useEffect(() => {
     fetchAudit(preset, customFrom, customTo, statusFilter);
@@ -334,7 +380,7 @@ export default function AuditReportScreen() {
     if (!data) return;
     setExportingPdf(true);
     try {
-      const html = buildHtml(data, title, isSingle);
+      const html = buildHtml(data, title, isSingle, isDriver);
       if (Platform.OS === 'web') {
         const win = window.open('', '_blank');
         if (win) {
@@ -362,7 +408,7 @@ export default function AuditReportScreen() {
     if (!data) return;
     setExportingExcel(true);
     try {
-      const wb = buildWorkbook(data, isSingle);
+      const wb = buildWorkbook(data, isSingle, isDriver);
       if (Platform.OS === 'web') {
         XLSX.writeFile(wb, `audit-report-${Date.now()}.xlsx`);
       } else {
@@ -384,7 +430,7 @@ export default function AuditReportScreen() {
 
   // ── Render helpers ──────────────────────────────────────────────────────────
 
-  const renderSummaryCards = (s: VehicleSummary) => (
+  const renderSummaryCards = (s: EntitySummary) => (
     <View style={styles.cardsGrid}>
       <View style={styles.card}>
         <Text style={styles.cardValue}>{s.totalTrips}</Text>
@@ -434,7 +480,10 @@ export default function AuditReportScreen() {
         </Text>
         <View style={styles.tripRowMeta}>
           <Text style={styles.tripMeta}>{fmtDate(t.date)}</Text>
-          {t.driverName ? <Text style={styles.tripMeta}>{t.driverName}</Text> : null}
+          {isDriver
+            ? (t.vehicleReg ? <Text style={styles.tripMeta}>{t.vehicleReg}</Text> : null)
+            : (t.driverName ? <Text style={styles.tripMeta}>{t.driverName}</Text> : null)
+          }
           <Text style={styles.tripFees}>{formatNaira(t.totalFees)}</Text>
         </View>
       </View>
@@ -447,9 +496,10 @@ export default function AuditReportScreen() {
     <View style={styles.container}>
       <TopBar />
       <View style={styles.backRow}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
+        {/* Back path is conditional: points to Drivers or Vehicles depending on which entity type opened this screen. */}
+        <TouchableOpacity onPress={() => router.push(backPath)} style={styles.backBtn} activeOpacity={0.7}>
           <ChevronLeft size={22} color={theme.colors.primary} />
-          <Text style={styles.backLabel}>Vehicles</Text>
+          <Text style={styles.backLabel}>{backLabel}</Text>
         </TouchableOpacity>
       </View>
 
@@ -461,7 +511,7 @@ export default function AuditReportScreen() {
         {/* ── Title ── */}
         <View style={styles.titleRow}>
           <Text style={styles.titleText} numberOfLines={1}>{title}</Text>
-          <Text style={styles.titleSub}>Vehicle Audit Report</Text>
+          <Text style={styles.titleSub}>{isDriver ? 'Driver' : 'Vehicle'} Audit Report</Text>
         </View>
 
         {/* ── Date preset pills ── */}
@@ -563,50 +613,54 @@ export default function AuditReportScreen() {
           </View>
         ) : !data ? null : (
           <>
-            {/* ── Combined summary (multi-vehicle mode) ── */}
-            {!isSingle && data.vehicles.length > 1 && (
+            {/* ── Combined summary (multi-entity mode) ── */}
+            {!isSingle && data.entities.length > 1 && (
               <View style={styles.section}>
                 <Text style={styles.sectionLabel}>COMBINED SUMMARY</Text>
                 {renderSummaryCards(data.summary)}
               </View>
             )}
 
-            {/* ── Vehicle sections ── */}
+            {/* ── Entity sections ── */}
             {isSingle ? (
               <View style={styles.section}>
                 <Text style={styles.sectionLabel}>SUMMARY</Text>
-                {data.vehicles[0] && renderSummaryCards(data.vehicles[0].summary)}
+                {data.entities[0] && renderSummaryCards(data.entities[0].summary)}
                 <Text style={[styles.sectionLabel, { marginTop: 20 }]}>
-                  TRIPS ({data.vehicles[0]?.trips.length ?? 0})
+                  TRIPS ({data.entities[0]?.trips.length ?? 0})
                 </Text>
-                {data.vehicles[0]?.trips.length === 0 ? (
+                {data.entities[0]?.trips.length === 0 ? (
                   <Text style={styles.emptyText}>No trips match the selected filters.</Text>
                 ) : (
-                  data.vehicles[0]?.trips.map(renderTripRow)
+                  data.entities[0]?.trips.map(renderTripRow)
                 )}
               </View>
             ) : (
-              data.vehicles.map((v) => (
-                <View key={v.id} style={styles.section}>
+              data.entities.map((entity) => (
+                <View key={entity.id} style={styles.section}>
                   <View style={styles.vehicleHeader}>
-                    <View style={styles.plateBadge}>
-                      <Text style={styles.plateText}>{v.registrationNumber}</Text>
-                    </View>
-                    {v.vehicleTypeName ? (
-                      <Text style={styles.vehicleType}>{v.vehicleTypeName}</Text>
+                    {isDriver ? (
+                      <Text style={styles.driverNameLabel}>{entity.displayName}</Text>
+                    ) : (
+                      <View style={styles.plateBadge}>
+                        <Text style={styles.plateText}>{entity.displayName}</Text>
+                      </View>
+                    )}
+                    {entity.subLabel ? (
+                      <Text style={styles.vehicleType}>{entity.subLabel}</Text>
                     ) : null}
                   </View>
                   <Text style={styles.vehicleSubMeta}>
-                    {v.summary.totalTrips} trips · {completionPct(v.summary)} completion · {formatNaira(v.summary.totalRevenue)}
+                    {entity.summary.totalTrips} trips · {completionPct(entity.summary)} completion · {formatNaira(entity.summary.totalRevenue)}
                   </Text>
-                  {renderSummaryCards(v.summary)}
+                  {renderSummaryCards(entity.summary)}
                   <Text style={[styles.sectionLabel, { marginTop: 8 }]}>
-                    TRIPS ({v.trips.length})
+                    TRIPS ({entity.trips.length})
                   </Text>
-                  {v.trips.length === 0 ? (
+                  {entity.trips.length === 0 ? (
                     <Text style={styles.emptyText}>No trips match the selected filters.</Text>
                   ) : (
-                    v.trips.map(renderTripRow)
+                    entity.trips.map(renderTripRow)
                   )}
                 </View>
               ))
@@ -839,6 +893,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: theme.colors.blueText,
     letterSpacing: 1,
+  },
+  driverNameLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.colors.black,
   },
   vehicleType: {
     fontSize: 13,

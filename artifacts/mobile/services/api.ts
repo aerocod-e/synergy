@@ -239,3 +239,6 @@ export const deleteDriver = (id: string) =>
 // ── Audit (Trip Admin) ────────────────────────────────────────────────────────
 export const getVehicleAudit = (params?: Record<string, string>) =>
   apiRequest('/api/audit/vehicles' + (params ? '?' + new URLSearchParams(params).toString() : ''));
+
+export const getDriverAudit = (params?: Record<string, string>) =>
+  apiRequest('/api/audit/drivers' + (params ? '?' + new URLSearchParams(params).toString() : ''));

@@ -12,8 +12,8 @@ import {
   Platform,
   Alert,
 } from 'react-native';
-import { useFocusEffect, useNavigation } from 'expo-router';
-import { AlertCircle, CloudOff, CreditCard, LogOut, Pencil, Phone, Plus, PlusCircle, Trash2, User, X } from 'lucide-react-native';
+import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
+import { AlertCircle, BarChart2, CloudOff, CreditCard, LogOut, Pencil, Phone, Plus, PlusCircle, Trash2, User, X } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
 import ScreenTransition from '@/components/ScreenTransition';
@@ -60,7 +60,28 @@ export default function TripAdminDrivers() {
   const [deleteError, setDeleteError] = useState<Record<string, string>>({});
 
   const navigation = useNavigation();
+  const router     = useRouter();
   const { handleLogout } = useLogout();
+
+  const [auditModalVisible,  setAuditModalVisible]  = useState(false);
+  const [auditMode,          setAuditMode]          = useState<'choice' | 'select'>('choice');
+  const [auditDriverSearch,  setAuditDriverSearch]  = useState('');
+
+  const openAuditPicker = useCallback(() => {
+    setAuditMode('choice');
+    setAuditDriverSearch('');
+    setAuditModalVisible(true);
+  }, []);
+
+  const goAuditAll = () => {
+    setAuditModalVisible(false);
+    router.push('/(tripadmin)/audit-report?entityType=driver');
+  };
+
+  const goAuditDriver = (d: DriverItem) => {
+    setAuditModalVisible(false);
+    router.push(`/(tripadmin)/audit-report?entityType=driver&driverId=${d.id}&driverName=${encodeURIComponent(d.fullName)}`);
+  };
 
   const openModal = useCallback(() => {
     setFullName('');
@@ -77,6 +98,13 @@ export default function TripAdminDrivers() {
           headerRight: () => (
             <View style={styles.headerRight}>
               <TouchableOpacity
+                onPress={openAuditPicker}
+                style={styles.headerBtn}
+                accessibilityLabel="Driver audit report"
+              >
+                <BarChart2 size={24} color={theme.colors.primary} />
+              </TouchableOpacity>
+              <TouchableOpacity
                 onPress={openModal}
                 style={styles.headerBtn}
                 accessibilityLabel="Register driver"
@@ -90,7 +118,7 @@ export default function TripAdminDrivers() {
           ),
         });
       }
-    }, [navigation, openModal, handleLogout])
+    }, [navigation, openModal, openAuditPicker, handleLogout])
   );
 
   const fetchDrivers = useCallback(async (isRefresh = false) => {
@@ -310,6 +338,16 @@ export default function TripAdminDrivers() {
         keyExtractor={(d) => d.id}
         renderItem={renderDriver}
         contentContainerStyle={styles.listContent}
+        ListHeaderComponent={
+          <TouchableOpacity
+            style={styles.auditBannerBtn}
+            onPress={openAuditPicker}
+            activeOpacity={0.85}
+          >
+            <BarChart2 size={18} color={theme.colors.primary} />
+            <Text style={styles.auditBannerText}>Generate Audit Report</Text>
+          </TouchableOpacity>
+        }
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -510,6 +548,90 @@ export default function TripAdminDrivers() {
           </View>
         </View>
       </Modal>
+
+      {/* ── Audit picker modal ──────────────────────────────────────────── */}
+      <Modal
+        visible={auditModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setAuditModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>
+              {auditMode === 'choice' ? 'Driver Audit Report' : 'Select a Driver'}
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                if (auditMode === 'select') { setAuditMode('choice'); }
+                else { setAuditModalVisible(false); }
+              }}
+              accessibilityLabel="Close"
+            >
+              <X size={24} color={theme.colors.grey2} />
+            </TouchableOpacity>
+          </View>
+
+          {auditMode === 'choice' ? (
+            <View style={styles.auditChoiceBody}>
+              <TouchableOpacity style={styles.auditChoiceBtn} onPress={goAuditAll} activeOpacity={0.85}>
+                <BarChart2 size={22} color={theme.colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.auditChoiceTitle}>All Drivers</Text>
+                  <Text style={styles.auditChoiceSub}>Aggregate report across every driver</Text>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.auditChoiceBtn}
+                onPress={() => setAuditMode('select')}
+                activeOpacity={0.85}
+              >
+                <User size={22} color={theme.colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.auditChoiceTitle}>Select a Driver</Text>
+                  <Text style={styles.auditChoiceSub}>Report for one specific driver</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.modalBody}>
+              <TextInput
+                style={[styles.textField, { marginBottom: 12 }]}
+                placeholder="Search by name or license…"
+                placeholderTextColor={theme.colors.grey1}
+                value={auditDriverSearch}
+                onChangeText={setAuditDriverSearch}
+                autoCorrect={false}
+              />
+              <FlatList
+                data={drivers.filter((d) => {
+                  const q = auditDriverSearch.toLowerCase();
+                  return !q || d.fullName.toLowerCase().includes(q) || d.licenseNumber.toLowerCase().includes(q);
+                })}
+                keyExtractor={(d) => d.id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.auditDriverRow}
+                    onPress={() => goAuditDriver(item)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.auditDriverName}>{item.fullName}</Text>
+                      <Text style={styles.auditDriverSub}>{item.licenseNumber}</Text>
+                    </View>
+                    <BarChart2 size={18} color={theme.colors.primary} />
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
+                  <Text style={{ color: theme.colors.grey1, textAlign: 'center', marginTop: 32 }}>
+                    No drivers found
+                  </Text>
+                }
+              />
+            </View>
+          )}
+        </View>
+      </Modal>
       </ScreenTransition>
     </View>
   );
@@ -678,8 +800,70 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: theme.colors.black,
   },
+  auditBannerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: theme.colors.white,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: theme.colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 12,
+    ...theme.shadows.card,
+  },
+  auditBannerText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.colors.primary,
+  },
+  auditChoiceBody: {
+    padding: 20,
+    gap: 12,
+  },
+  auditChoiceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: theme.colors.white,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: theme.colors.grey3,
+    ...theme.shadows.card,
+  },
+  auditChoiceTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: theme.colors.black,
+    marginBottom: 2,
+  },
+  auditChoiceSub: {
+    fontSize: 13,
+    color: theme.colors.grey1,
+  },
+  auditDriverRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.separator,
+  },
+  auditDriverName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.colors.black,
+  },
+  auditDriverSub: {
+    fontSize: 13,
+    color: theme.colors.grey1,
+    marginTop: 2,
+  },
   modalBody: {
     padding: 20,
+    flex: 1,
   },
   fieldLabel: {
     ...theme.typography.sectionLabel,

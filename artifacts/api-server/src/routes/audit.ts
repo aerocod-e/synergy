@@ -1,10 +1,11 @@
 import { Router } from 'express';
-import { getVehicleAudit } from '../controllers/auditController.js';
+import { getDriverAudit, getVehicleAudit } from '../controllers/auditController.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { requireRole } from '../middleware/roleGuard.js';
 
 const router = Router();
 
 router.get('/vehicles', authenticateToken, requireRole('trip_admin'), getVehicleAudit);
+router.get('/drivers',  authenticateToken, requireRole('trip_admin'), getDriverAudit);
 
 export default router;
