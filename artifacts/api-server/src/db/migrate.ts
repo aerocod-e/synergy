@@ -351,7 +351,52 @@ async function migrate(): Promise<void> {
     `);
     console.log('✓ wallets: is_clearing_enabled column added (default false)');
 
-    console.log('\n✅ Migration complete: 14 tables + vehicle_type_id columns + vehicle-type-based pricing + clearing flag.');
+    // Trigger: enforce referential integrity on wallets.owner_id (polymorphic FK simulation)
+    // wallets.owner_id has no native FK because it references either states or stakeholders
+    // depending on owner_type. This trigger rejects any INSERT/UPDATE with a dangling owner_id.
+    await client.query(`
+      CREATE OR REPLACE FUNCTION check_wallet_owner_exists() RETURNS TRIGGER AS $$
+      BEGIN
+        IF NEW.owner_type = 'state' THEN
+          IF NOT EXISTS (SELECT 1 FROM states WHERE id = NEW.owner_id) THEN
+            RAISE EXCEPTION 'wallets.owner_id % does not exist in states', NEW.owner_id;
+          END IF;
+        ELSIF NEW.owner_type = 'stakeholder' THEN
+          IF NOT EXISTS (SELECT 1 FROM stakeholders WHERE id = NEW.owner_id) THEN
+            RAISE EXCEPTION 'wallets.owner_id % does not exist in stakeholders', NEW.owner_id;
+          END IF;
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS wallet_owner_check ON wallets;
+      CREATE TRIGGER wallet_owner_check
+      BEFORE INSERT OR UPDATE ON wallets
+      FOR EACH ROW EXECUTE FUNCTION check_wallet_owner_exists();
+    `);
+    console.log('✓ Trigger created: wallet_owner_check (prevents orphaned wallet owner_id)');
+
+    // Trigger: prevent hard-deleting a stakeholder while a wallet still references it.
+    // Soft-delete (is_active = false) remains the correct removal path.
+    await client.query(`
+      CREATE OR REPLACE FUNCTION prevent_stakeholder_delete_with_wallet() RETURNS TRIGGER AS $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM wallets WHERE owner_type = 'stakeholder' AND owner_id = OLD.id) THEN
+          RAISE EXCEPTION 'Cannot delete stakeholder % because a wallet still references it, deactivate instead', OLD.id;
+        END IF;
+        RETURN OLD;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS stakeholder_delete_guard ON stakeholders;
+      CREATE TRIGGER stakeholder_delete_guard
+      BEFORE DELETE ON stakeholders
+      FOR EACH ROW EXECUTE FUNCTION prevent_stakeholder_delete_with_wallet();
+    `);
+    console.log('✓ Trigger created: stakeholder_delete_guard (prevents hard-delete of stakeholder with wallet)');
+
+    console.log('\n✅ Migration complete: 14 tables + vehicle_type_id columns + vehicle-type-based pricing + clearing flag + wallet integrity triggers.');
   } finally {
     client.release();
     await pool.end();

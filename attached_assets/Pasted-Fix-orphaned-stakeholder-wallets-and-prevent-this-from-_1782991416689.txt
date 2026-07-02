@@ -1,0 +1,61 @@
+Fix orphaned stakeholder wallets and prevent this from recurring. Do not touch anything unrelated.
+Step 1, delete the orphaned wallet rows
+There are stakeholder-type wallet rows whose owner_id does not exist in stakeholders. Confirm the exact count first, then delete them along with any dependent wallet_ledger rows referencing them.
+sqlSELECT w.id FROM wallets w
+LEFT JOIN stakeholders sh ON w.owner_type = 'stakeholder' AND w.owner_id = sh.id
+WHERE w.owner_type = 'stakeholder' AND sh.id IS NULL;
+Report the count and confirm it matches the 10 found in the earlier audit before proceeding.
+sqlDELETE FROM wallet_ledger WHERE wallet_id IN (
+  SELECT w.id FROM wallets w
+  LEFT JOIN stakeholders sh ON w.owner_type = 'stakeholder' AND w.owner_id = sh.id
+  WHERE w.owner_type = 'stakeholder' AND sh.id IS NULL
+);
+
+DELETE FROM wallets w
+WHERE w.owner_type = 'stakeholder'
+AND NOT EXISTS (SELECT 1 FROM stakeholders sh WHERE sh.id = w.owner_id);
+Step 2, add a real foreign key so this cannot happen again
+The root cause is that wallets.owner_id has no foreign key to either states or stakeholders, since it is a polymorphic column, a normal single foreign key is not possible here. Add a partial foreign key using a trigger instead, since Postgres cannot do a conditional FK directly.
+Add a trigger function in migrate.ts:
+sqlCREATE OR REPLACE FUNCTION check_wallet_owner_exists() RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.owner_type = 'state' THEN
+    IF NOT EXISTS (SELECT 1 FROM states WHERE id = NEW.owner_id) THEN
+      RAISE EXCEPTION 'wallets.owner_id % does not exist in states', NEW.owner_id;
+    END IF;
+  ELSIF NEW.owner_type = 'stakeholder' THEN
+    IF NOT EXISTS (SELECT 1 FROM stakeholders WHERE id = NEW.owner_id) THEN
+      RAISE EXCEPTION 'wallets.owner_id % does not exist in stakeholders', NEW.owner_id;
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS wallet_owner_check ON wallets;
+CREATE TRIGGER wallet_owner_check
+BEFORE INSERT OR UPDATE ON wallets
+FOR EACH ROW EXECUTE FUNCTION check_wallet_owner_exists();
+This makes it impossible to insert or update a wallet row with an owner_id that does not exist in the correct parent table going forward, regardless of which code path tries to do it.
+Step 3, also prevent hard-deleting a stakeholder while a wallet still references it
+Add a second trigger so a stakeholder row can never be hard-deleted while a wallet still points to it, forcing soft-delete via is_active = false to remain the only real removal path.
+sqlCREATE OR REPLACE FUNCTION prevent_stakeholder_delete_with_wallet() RETURNS TRIGGER AS $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM wallets WHERE owner_type = 'stakeholder' AND owner_id = OLD.id) THEN
+    RAISE EXCEPTION 'Cannot delete stakeholder % because a wallet still references it, deactivate instead', OLD.id;
+  END IF;
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS stakeholder_delete_guard ON stakeholders;
+CREATE TRIGGER stakeholder_delete_guard
+BEFORE DELETE ON stakeholders
+FOR EACH ROW EXECUTE FUNCTION prevent_stakeholder_delete_with_wallet();
+Step 4, verify
+Re-run:
+sqlSELECT w.id FROM wallets w
+LEFT JOIN stakeholders sh ON w.owner_type = 'stakeholder' AND w.owner_id = sh.id
+WHERE w.owner_type = 'stakeholder' AND sh.id IS NULL;
+Confirm zero rows returned.
+Report the count deleted in Step 1, confirmation both triggers were created successfully, and the final zero-row confirmation from Step 4.
