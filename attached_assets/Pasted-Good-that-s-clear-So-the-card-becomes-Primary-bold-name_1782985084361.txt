@@ -1,0 +1,35 @@
+Good, that's clear. So the card becomes:
+Primary bold name: organization name or state name
+Pill: "Stakeholder - John Doe" or "State Admin - John Doe" (role plus person's name, using a hyphen)
+Email stays where it is
+For Trip Admin cards, nothing changes since they don't belong to an organization or state in the same way, just leave those as they are.
+Paste this into the Replit Agent:
+
+Fix the user card display on the Super Admin Users tab. Only State Admin and Stakeholder cards change. Trip Admin and Super Admin cards stay exactly as they are.
+Open artifacts/mobile/app/(superadmin)/users.tsx. Find the UserRow or user card render function.
+For users where role === 'state_admin' or role === 'stakeholder':
+
+The primary bold name at the top of the card should be the entity name (the state name for State Admin, the organization name for Stakeholder) instead of the person's first and last name
+The pill that currently shows the role plus entity name (e.g. "State Admin - Lagos") should instead show the role plus the person's full name (e.g. "State Admin - John Doe" or "Stakeholder - Jane Smith")
+Email stays in its current position, unchanged
+
+For users where role === 'trip_admin' or role === 'super_admin', keep the card exactly as it currently is, no changes.
+You will need the entity name (state name or stakeholder organization name) already available on each user row from GET /api/users -- confirm whether the response already includes this. If not, check listUsers in userController.ts and add a JOIN to states or stakeholders to include the entity name in the response as entityName.
+Update the card render logic:
+tsxconst isOrgUser = user.role === 'state_admin' || user.role === 'stakeholder';
+const primaryName = isOrgUser ? (user.entityName ?? 'Unknown') : `${user.firstName} ${user.lastName}`;
+const pillText = isOrgUser 
+  ? `${roleLabel} - ${user.firstName} ${user.lastName}` 
+  : `${roleLabel} - ${user.entityName ?? ''}`;
+Adjust based on the actual existing variable names in the file.
+TypeScript check:
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Must return zero errors.
+
+Testing (390x844px, tap only):
+Test 1 - Login as Super Admin. Go to Users tab. Confirm State Admin cards show the state name as the primary bold name (e.g. "Lagos"), with the pill showing "State Admin - [Person's Full Name]".
+Test 2 - Confirm Stakeholder cards show the organization name as the primary bold name, with the pill showing "Stakeholder - [Person's Full Name]".
+Test 3 - Confirm Trip Admin cards are unchanged, still showing the person's name as primary.
+Test 4 - Confirm email is still visible in its current position on all card types.
+Test 5 - Console is clean throughout.
+Report every file changed and every test result.

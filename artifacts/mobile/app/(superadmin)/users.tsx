@@ -33,26 +33,28 @@ function getRoleBadgeColors(role: string): { bg: string; text: string } {
 }
 
 function roleLabel(user: User): string {
+  const fullName = `${user.firstName} ${user.lastName}`.trim();
   if (user.role === 'super_admin') return 'Super Admin';
-  if (user.role === 'state_admin') return user.entityName ? `State Admin — ${user.entityName}` : 'State Admin';
+  if (user.role === 'state_admin') return fullName ? `State Admin - ${fullName}` : 'State Admin';
   if (user.role === 'trip_admin') return user.entityName ? `Trip Admin — ${user.entityName}` : 'Trip Admin';
-  if (user.role === 'stakeholder') return user.entityName ? `Stakeholder — ${user.entityName}` : 'Stakeholder';
+  if (user.role === 'stakeholder') return fullName ? `Stakeholder - ${fullName}` : 'Stakeholder';
   return user.role;
 }
 
 function UserRow({ user, onPress }: { user: User; onPress: () => void }) {
   const badgeColors = getRoleBadgeColors(user.role);
-  const displayName = (user.firstName || user.lastName)
-    ? `${user.firstName} ${user.lastName}`.trim()
-    : null;
+  const isOrgUser = user.role === 'state_admin' || user.role === 'stakeholder';
+  const primaryName = isOrgUser
+    ? (user.entityName ?? 'Unknown')
+    : ((user.firstName || user.lastName) ? `${user.firstName} ${user.lastName}`.trim() : null);
   return (
     <TouchableOpacity style={styles.item} onPress={onPress} activeOpacity={0.8}>
       <View style={styles.itemHeader}>
         <View style={{ flex: 1, marginRight: 8 }}>
-          {displayName ? (
-            <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
+          {primaryName ? (
+            <Text style={styles.name} numberOfLines={1}>{primaryName}</Text>
           ) : null}
-          <Text style={displayName ? styles.emailSecondary : styles.email} numberOfLines={1}>
+          <Text style={primaryName ? styles.emailSecondary : styles.email} numberOfLines={1}>
             {user.email}
           </Text>
         </View>
