@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { AlertCircle, ChevronLeft } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
 import { getTripById } from '@/services/api';
 import TripDetailView, { type TripDetail } from '@/components/TripDetailView';
@@ -9,6 +10,7 @@ import TripDetailView, { type TripDetail } from '@/components/TripDetailView';
 export default function StateAdminTripDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -31,10 +33,12 @@ export default function StateAdminTripDetail() {
     fetchTrip();
   }, [fetchTrip]);
 
+  const headerStyle = [styles.header, { paddingTop: insets.top + 12 }];
+
   if (loading) {
     return (
       <View style={styles.root}>
-        <View style={styles.header}>
+        <View style={headerStyle}>
           <TouchableOpacity
             onPress={() => router.push('/(stateadmin)/trips')}
             style={styles.backButton}
@@ -55,7 +59,7 @@ export default function StateAdminTripDetail() {
   if (error || !trip) {
     return (
       <View style={styles.root}>
-        <View style={styles.header}>
+        <View style={headerStyle}>
           <TouchableOpacity
             onPress={() => router.push('/(stateadmin)/trips')}
             style={styles.backButton}
@@ -79,7 +83,7 @@ export default function StateAdminTripDetail() {
 
   return (
     <View style={styles.root}>
-      <View style={styles.header}>
+      <View style={headerStyle}>
         <TouchableOpacity
           onPress={() => router.push('/(stateadmin)/trips')}
           style={styles.backButton}
@@ -104,7 +108,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 12 : 12,
     paddingBottom: 12,
     backgroundColor: theme.colors.background,
     borderBottomWidth: 1,
