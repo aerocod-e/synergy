@@ -16,8 +16,8 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
-import { useFocusEffect, useNavigation } from 'expo-router';
-import { AlertCircle, AlertTriangle, Ban, CheckCircle, CloudOff, Eye, EyeOff, Plus, PlusCircle, Trash2, UserCircle, Users, X } from 'lucide-react-native';
+import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
+import { AlertCircle, AlertTriangle, Ban, BarChart2, CheckCircle, CloudOff, Eye, EyeOff, Plus, PlusCircle, Trash2, UserCircle, Users, X } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
 import ScreenTransition from '@/components/ScreenTransition';
@@ -43,6 +43,7 @@ interface TripAdmin {
 export default function StateAdminTripAdmins() {
   const { user } = useAuthContext();
   const navigation = useNavigation();
+  const router     = useRouter();
 
   const PAGE_LIMIT = 20;
   const [admins, setAdmins] = useState<TripAdmin[]>([]);
@@ -72,6 +73,11 @@ export default function StateAdminTripAdmins() {
     activeTripsCount: number;
   } | null>(null);
   const [confirmDeactivating, setConfirmDeactivating] = useState(false);
+
+  // audit picker modal
+  const [auditPickerVisible, setAuditPickerVisible]   = useState(false);
+  const [auditMode, setAuditMode]                     = useState<'all' | 'single'>('all');
+  const [selectedAdminId, setSelectedAdminId]         = useState<string | null>(null);
 
   // create modal
   const [modalVisible, setModalVisible] = useState(false);
@@ -138,21 +144,54 @@ export default function StateAdminTripAdmins() {
     setModalVisible(true);
   }, []);
 
-  useEffect(() => {
-    if (Platform.OS === 'web') {
-      navigation.setOptions({
-        headerRight: () => (
-          <TouchableOpacity
-            onPress={openModal}
-            style={styles.headerBtn}
-            accessibilityLabel="Add Trip Admin"
-          >
-            <PlusCircle size={26} color={theme.colors.primary} />
-          </TouchableOpacity>
-        ),
+  const openAuditPicker = useCallback(() => {
+    setAuditMode('all');
+    setSelectedAdminId(null);
+    setAuditPickerVisible(true);
+  }, []);
+
+  const launchAudit = useCallback(() => {
+    setAuditPickerVisible(false);
+    if (auditMode === 'single' && selectedAdminId) {
+      const admin = admins.find((a) => a.id === selectedAdminId);
+      const displayName = (admin?.firstName || admin?.lastName)
+        ? `${admin?.firstName} ${admin?.lastName}`.trim()
+        : (admin?.email ?? selectedAdminId);
+      router.push({
+        pathname: '/(tripadmin)/audit-report',
+        params: { entityType: 'trip-admin', tripAdminId: selectedAdminId, tripAdminName: displayName },
       });
+    } else {
+      router.push({ pathname: '/(tripadmin)/audit-report', params: { entityType: 'trip-admin' } });
     }
-  }, [navigation, openModal]);
+  }, [auditMode, selectedAdminId, admins, router]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS === 'web') {
+        navigation.setOptions({
+          headerRight: () => (
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TouchableOpacity
+                onPress={openAuditPicker}
+                style={styles.headerBtn}
+                accessibilityLabel="Audit Trip Admins"
+              >
+                <BarChart2 size={22} color={theme.colors.primary} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={openModal}
+                style={styles.headerBtn}
+                accessibilityLabel="Add Trip Admin"
+              >
+                <PlusCircle size={26} color={theme.colors.primary} />
+              </TouchableOpacity>
+            </View>
+          ),
+        });
+      }
+    }, [navigation, openModal, openAuditPicker])
+  );
 
   // ── toggle active status ──────────────────────────────────────────────────────
 
@@ -451,7 +490,18 @@ export default function StateAdminTripAdmins() {
         }
         ListHeaderComponent={
           <>
-            <Text style={styles.listHeaderTitle}>Trip Admins</Text>
+            <View style={styles.listHeaderRow}>
+              <Text style={styles.listHeaderTitle}>Trip Admins</Text>
+              <TouchableOpacity
+                onPress={openAuditPicker}
+                style={styles.auditBannerBtn}
+                activeOpacity={0.8}
+                accessibilityLabel="Audit Trip Admins"
+              >
+                <BarChart2 size={15} color={theme.colors.primary} />
+                <Text style={styles.auditBannerText}>Audit Report</Text>
+              </TouchableOpacity>
+            </View>
             {toggleError && (
               <View style={styles.inlineError}>
                 <AlertCircle size={15} color={theme.colors.error} />
@@ -548,6 +598,83 @@ export default function StateAdminTripAdmins() {
             </View>
           </View>
         </View>
+      </Modal>
+
+      {/* ── Audit picker modal ── */}
+      <Modal
+        visible={auditPickerVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setAuditPickerVisible(false)}
+      >
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Audit Report</Text>
+          <TouchableOpacity onPress={() => setAuditPickerVisible(false)} accessibilityLabel="Close">
+            <X size={24} color={theme.colors.grey2} />
+          </TouchableOpacity>
+        </View>
+        <ScrollView style={styles.formScroll} contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
+          <Text style={styles.sectionLabel}>SCOPE</Text>
+          <View style={styles.auditScopeRow}>
+            <TouchableOpacity
+              style={[styles.auditScopeBtn, auditMode === 'all' && styles.auditScopeBtnActive]}
+              onPress={() => { setAuditMode('all'); setSelectedAdminId(null); }}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.auditScopeBtnText, auditMode === 'all' && styles.auditScopeBtnTextActive]}>All Admins</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.auditScopeBtn, auditMode === 'single' && styles.auditScopeBtnActive]}
+              onPress={() => setAuditMode('single')}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.auditScopeBtnText, auditMode === 'single' && styles.auditScopeBtnTextActive]}>Single Admin</Text>
+            </TouchableOpacity>
+          </View>
+
+          {auditMode === 'single' && (
+            <>
+              <Text style={[styles.sectionLabel, { marginTop: 20 }]}>SELECT ADMIN</Text>
+              {admins.length === 0 ? (
+                <Text style={{ color: theme.colors.grey1, fontSize: 14, textAlign: 'center', paddingVertical: 16 }}>
+                  No trip admins available.
+                </Text>
+              ) : admins.map((admin) => {
+                const dn = (admin.firstName || admin.lastName)
+                  ? `${admin.firstName} ${admin.lastName}`.trim()
+                  : admin.email;
+                return (
+                  <TouchableOpacity
+                    key={admin.id}
+                    style={[styles.auditAdminItem, selectedAdminId === admin.id && styles.auditAdminItemSelected]}
+                    onPress={() => setSelectedAdminId(admin.id)}
+                    activeOpacity={0.7}
+                  >
+                    <UserCircle size={18} color={selectedAdminId === admin.id ? theme.colors.primary : theme.colors.grey1} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.auditAdminName, selectedAdminId === admin.id && { color: theme.colors.primary }]}>{dn}</Text>
+                      {admin.firstName ? <Text style={styles.auditAdminEmail}>{admin.email}</Text> : null}
+                    </View>
+                    {selectedAdminId === admin.id && <View style={styles.auditCheckDot} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </>
+          )}
+
+          <TouchableOpacity
+            style={[
+              styles.submitButton,
+              { marginTop: 24 },
+              (auditMode === 'single' && !selectedAdminId) && styles.submitButtonDisabled,
+            ]}
+            onPress={launchAudit}
+            activeOpacity={0.85}
+            disabled={auditMode === 'single' && !selectedAdminId}
+          >
+            <Text style={styles.submitButtonText}>Generate Report</Text>
+          </TouchableOpacity>
+        </ScrollView>
       </Modal>
 
       {/* ── Create Trip Admin modal ── */}
@@ -678,11 +805,86 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 16,
   },
+  listHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
   listHeaderTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: theme.colors.black,
-    marginBottom: 12,
+  },
+  auditBannerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: theme.colors.blueMuted,
+  },
+  auditBannerText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.colors.primary,
+  },
+  auditScopeRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 4,
+  },
+  auditScopeBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: theme.colors.grey3,
+    alignItems: 'center',
+  },
+  auditScopeBtnActive: {
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.blueMuted,
+  },
+  auditScopeBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.grey2,
+  },
+  auditScopeBtnTextActive: {
+    color: theme.colors.primary,
+  },
+  auditAdminItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: theme.colors.grey3,
+    marginBottom: 8,
+    backgroundColor: theme.colors.white,
+  },
+  auditAdminItemSelected: {
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.blueMuted,
+  },
+  auditAdminName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.black,
+  },
+  auditAdminEmail: {
+    fontSize: 12,
+    color: theme.colors.grey1,
+    marginTop: 1,
+  },
+  auditCheckDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: theme.colors.primary,
   },
   inlineError: {
     flexDirection: 'row',

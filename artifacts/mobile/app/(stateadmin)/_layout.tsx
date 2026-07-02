@@ -26,8 +26,9 @@ export default function StateAdminLayout() {
       <Tabs.Screen name="trips"        options={{ title: 'Trips',       tabBarLabel: 'Trips' }} />
       <Tabs.Screen name="index"        options={{ title: 'Requests',    tabBarLabel: 'Requests' }} />
       <Tabs.Screen name="trip-admins"  options={{ title: 'Admins', tabBarLabel: 'Admins' }} />
-      <Tabs.Screen name="ledger-detail" options={{ href: null }} />
-      <Tabs.Screen name="trip-detail"  options={{ title: 'Trip Detail', href: null }} />
+      <Tabs.Screen name="ledger-detail"  options={{ href: null }} />
+      <Tabs.Screen name="trip-detail"    options={{ title: 'Trip Detail', href: null }} />
+      <Tabs.Screen name="audit-report"   options={{ href: null }} />
     </Tabs>
   );
 }

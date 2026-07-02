@@ -18,7 +18,7 @@ import * as XLSX from 'xlsx';
 import { File, Paths } from 'expo-file-system';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
-import { getDriverAudit, getVehicleAudit } from '@/services/api';
+import { getDriverAudit, getTripAdminAudit, getVehicleAudit } from '@/services/api';
 import { formatNaira } from '@/utils/formatCurrency';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -43,12 +43,18 @@ interface EntitySummary {
   created: number;
   cancellationPending: number;
   totalRevenue: number;
+  // trip-admin specific
+  directCancellations?:   number;
+  approvalCancellations?: number;
+  approvalApproved?:      number;
+  approvalRejected?:      number;
 }
 
 interface AuditEntity {
   id: string;
   displayName:    string;
   subLabel:       string | null;
+  email:          string | null;
   dateRegistered: string;
   summary:        EntitySummary;
   trips:          TripEntry[];
@@ -140,13 +146,28 @@ function completionPct(s: EntitySummary): string {
 
 // ── Response normalizer ───────────────────────────────────────────────────────
 
-function normalizeResponse(isDriver: boolean, raw: any): AuditData {
-  if (isDriver) {
+function normalizeResponse(entityType: 'vehicle' | 'driver' | 'trip-admin', raw: any): AuditData {
+  if (entityType === 'trip-admin') {
+    return {
+      entities: (raw.tripAdmins ?? []).map((ta: any) => ({
+        id:             ta.id,
+        displayName:    [ta.firstName, ta.lastName].filter(Boolean).join(' ') || ta.email,
+        subLabel:       ta.email as string,
+        email:          ta.email as string,
+        dateRegistered: ta.dateOnboarded,
+        summary:        ta.summary,
+        trips:          (ta.trips ?? []).map((t: any) => ({ ...t, driverName: null })),
+      })),
+      summary: raw.summary,
+    };
+  }
+  if (entityType === 'driver') {
     return {
       entities: (raw.drivers ?? []).map((d: any) => ({
         id:             d.id,
         displayName:    d.fullName   as string,
         subLabel:       d.licenseNumber ?? null,
+        email:          null,
         dateRegistered: d.dateRegistered,
         summary:        d.summary,
         trips:          (d.trips ?? []).map((t: any) => ({ ...t, vehicleReg: t.vehicleReg ?? null, driverName: null })),
@@ -159,6 +180,7 @@ function normalizeResponse(isDriver: boolean, raw: any): AuditData {
       id:             v.id,
       displayName:    v.registrationNumber as string,
       subLabel:       v.vehicleTypeName ?? null,
+      email:          null,
       dateRegistered: v.dateRegistered,
       summary:        v.summary,
       trips:          (v.trips ?? []).map((t: any) => ({ ...t, vehicleReg: null })),
@@ -169,7 +191,10 @@ function normalizeResponse(isDriver: boolean, raw: any): AuditData {
 
 // ── PDF builder ───────────────────────────────────────────────────────────────
 
-function buildHtml(data: AuditData, title: string, isSingle: boolean, isDriver: boolean): string {
+function buildHtml(data: AuditData, title: string, isSingle: boolean, entityType: 'vehicle' | 'driver' | 'trip-admin'): string {
+  const isDriver    = entityType === 'driver';
+  const isTripAdmin = entityType === 'trip-admin';
+
   const summaryBlock = (s: EntitySummary) => `
     <table class="summary">
       <tr><td>Total trips</td><td><b>${s.totalTrips}</b></td>
@@ -179,23 +204,29 @@ function buildHtml(data: AuditData, title: string, isSingle: boolean, isDriver: 
       <tr><td>Cancelled</td><td><b>${s.cancelled}</b></td>
           <td>Pending cancel</td><td><b>${s.cancellationPending}</b></td></tr>
       <tr><td>Total revenue</td><td colspan="3"><b>${formatNaira(s.totalRevenue)}</b></td></tr>
+      ${isTripAdmin && s.directCancellations !== undefined ? `
+      <tr><td>Direct cancellations</td><td><b>${s.directCancellations}</b></td>
+          <td>Via approval workflow</td><td><b>${s.approvalCancellations}</b></td></tr>
+      <tr><td>Approval approved</td><td><b>${s.approvalApproved}</b></td>
+          <td>Approval rejected</td><td><b>${s.approvalRejected}</b></td></tr>` : ''}
     </table>`;
 
-  const secondaryCol = isDriver ? 'Vehicle' : 'Driver';
+  const secondaryCol = (isDriver || isTripAdmin) ? 'Vehicle' : 'Driver';
   const tripRows = (trips: TripEntry[]) => trips.map((t) => `
     <tr>
       <td>${t.tripCode ?? '—'}</td>
       <td>${fmtDate(t.date)}</td>
       <td>${t.loadingState ?? '—'} → ${t.unloadingState ?? '—'}</td>
       <td>${STATUS_LABELS[t.status] ?? t.status}</td>
-      <td>${(isDriver ? t.vehicleReg : t.driverName) ?? '—'}</td>
+      <td>${((isDriver || isTripAdmin) ? t.vehicleReg : t.driverName) ?? '—'}</td>
       <td>${formatNaira(t.totalFees)}</td>
     </tr>`).join('');
 
   const entitySections = isSingle
     ? ''
     : data.entities.map((e) => `
-        <h3>${e.displayName}${e.subLabel ? ' — ' + e.subLabel : ''}</h3>
+        <h3>${e.displayName}${e.subLabel && !isTripAdmin ? ' — ' + e.subLabel : ''}</h3>
+        ${isTripAdmin && e.email ? `<p style="color:#444;font-size:13px">${e.email}</p>` : ''}
         <p style="color:#666;font-size:13px">Registered: ${fmtDate(e.dateRegistered)} &nbsp;|&nbsp;
           ${e.summary.totalTrips} trips &nbsp;|&nbsp; ${completionPct(e.summary)} completion &nbsp;|&nbsp;
           ${formatNaira(e.summary.totalRevenue)} revenue</p>
@@ -215,7 +246,7 @@ function buildHtml(data: AuditData, title: string, isSingle: boolean, isDriver: 
       </table>`;
   })();
 
-  const reportType = isDriver ? 'Driver' : 'Vehicle';
+  const reportType = isTripAdmin ? 'Trip Admin' : isDriver ? 'Driver' : 'Vehicle';
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
   <style>
     body{font-family:sans-serif;padding:24px;color:#111;}
@@ -241,8 +272,10 @@ function buildHtml(data: AuditData, title: string, isSingle: boolean, isDriver: 
 
 // ── Excel builder ─────────────────────────────────────────────────────────────
 
-function buildWorkbook(data: AuditData, isSingle: boolean, isDriver: boolean): XLSX.WorkBook {
-  const wb = XLSX.utils.book_new();
+function buildWorkbook(data: AuditData, isSingle: boolean, entityType: 'vehicle' | 'driver' | 'trip-admin'): XLSX.WorkBook {
+  const wb        = XLSX.utils.book_new();
+  const isDriver    = entityType === 'driver';
+  const isTripAdmin = entityType === 'trip-admin';
 
   const summaryRows = (s: EntitySummary): (string | number)[][] => [
     ['SUMMARY'],
@@ -253,10 +286,16 @@ function buildWorkbook(data: AuditData, isSingle: boolean, isDriver: boolean): X
     ['Cancelled',            s.cancelled],
     ['Cancellation Pending', s.cancellationPending],
     ['Total Revenue (₦)',    s.totalRevenue / 100],
+    ...(isTripAdmin ? [
+      ['Direct Cancellations',   s.directCancellations   ?? 0],
+      ['Via Approval Workflow',  s.approvalCancellations ?? 0],
+      ['Approval Approved',      s.approvalApproved      ?? 0],
+      ['Approval Rejected',      s.approvalRejected      ?? 0],
+    ] : []),
     [],
   ];
 
-  const secondaryHeader = isDriver ? 'Vehicle' : 'Driver';
+  const secondaryHeader = (isDriver || isTripAdmin) ? 'Vehicle' : 'Driver';
   const tripHeaders = ['Trip Code', 'Date', 'Loading State', 'Unloading State', 'Status', secondaryHeader, 'Total Fees (₦)'];
   const tripRow = (t: TripEntry): (string | number)[] => [
     t.tripCode ?? '',
@@ -264,7 +303,7 @@ function buildWorkbook(data: AuditData, isSingle: boolean, isDriver: boolean): X
     t.loadingState ?? '',
     t.unloadingState ?? '',
     STATUS_LABELS[t.status] ?? t.status,
-    (isDriver ? t.vehicleReg : t.driverName) ?? '',
+    ((isDriver || isTripAdmin) ? t.vehicleReg : t.driverName) ?? '',
     t.totalFees / 100,
   ];
 
@@ -274,11 +313,12 @@ function buildWorkbook(data: AuditData, isSingle: boolean, isDriver: boolean): X
     const sheetName = e.displayName
       .replace(/[:\\\/?*[\]]/g, '_')
       .slice(0, 31);
-    const typeLabel = isDriver ? 'License' : 'Vehicle Type';
+    const typeLabel = isTripAdmin ? 'Email' : isDriver ? 'License' : 'Vehicle Type';
+    const regLabel  = isTripAdmin ? 'Date Onboarded' : 'Date Registered';
     const wsData: (string | number)[][] = [
       [`Audit — ${e.displayName}`],
       [typeLabel, e.subLabel ?? ''],
-      ['Date Registered', fmtDate(e.dateRegistered)],
+      [regLabel, fmtDate(e.dateRegistered)],
       [],
       ...summaryRows(e.summary),
       ['TRIPS'],
@@ -290,12 +330,14 @@ function buildWorkbook(data: AuditData, isSingle: boolean, isDriver: boolean): X
   }
 
   if (!isSingle && data.entities.length > 1) {
-    const entityLabel = isDriver ? 'Driver' : 'Vehicle';
+    const entityLabel   = isTripAdmin ? 'Trip Admin' : isDriver ? 'Driver' : 'Vehicle';
+    const allSheetLabel = isTripAdmin ? 'All Trip Admins' : isDriver ? 'All Drivers' : 'All Vehicles';
+    const subLabel      = isTripAdmin ? 'Email' : isDriver ? 'License' : 'Type';
     const wsData: (string | number)[][] = [
-      [`Combined Summary — All ${isDriver ? 'Drivers' : 'Vehicles'}`],
+      [`Combined Summary — ${allSheetLabel}`],
       [],
       ...summaryRows(data.summary),
-      [entityLabel, isDriver ? 'License' : 'Type', 'Registered', 'Trips', 'Completed', 'Revenue (₦)'],
+      [entityLabel, subLabel, 'Registered', 'Trips', 'Completed', 'Revenue (₦)'],
       ...data.entities.map((e) => [
         e.displayName,
         e.subLabel ?? '',
@@ -306,7 +348,7 @@ function buildWorkbook(data: AuditData, isSingle: boolean, isDriver: boolean): X
       ]),
     ];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
-    XLSX.utils.book_append_sheet(wb, ws, isDriver ? 'All Drivers' : 'All Vehicles');
+    XLSX.utils.book_append_sheet(wb, ws, allSheetLabel);
   }
 
   return wb;
@@ -317,20 +359,24 @@ function buildWorkbook(data: AuditData, isSingle: boolean, isDriver: boolean): X
 export default function AuditReportScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{
-    entityType?: string;
-    vehicleId?: string; vehicleReg?: string;
-    driverId?:  string; driverName?: string;
+    entityType?:    string;
+    vehicleId?:     string; vehicleReg?:    string;
+    driverId?:      string; driverName?:    string;
+    tripAdminId?:   string; tripAdminName?: string;
   }>();
-  const entityType = (params.entityType ?? 'vehicle') as 'vehicle' | 'driver';
-  const isDriver   = entityType === 'driver';
-  const entityId   = isDriver ? params.driverId   : params.vehicleId;
-  const entityName = isDriver ? params.driverName : params.vehicleReg;
-  const isSingle   = !!entityId;
-  const title      = isSingle
-    ? (entityName ?? entityId ?? (isDriver ? 'Driver' : 'Vehicle'))
-    : (isDriver ? 'All Drivers' : 'All Vehicles');
-  const backPath  = isDriver ? '/(tripadmin)/drivers'  as const : '/(tripadmin)/vehicles'  as const;
-  const backLabel = isDriver ? 'Drivers' : 'Vehicles';
+  const entityType  = (params.entityType ?? 'vehicle') as 'vehicle' | 'driver' | 'trip-admin';
+  const isDriver    = entityType === 'driver';
+  const isTripAdmin = entityType === 'trip-admin';
+  const entityId    = isTripAdmin ? params.tripAdminId : isDriver ? params.driverId   : params.vehicleId;
+  const entityName  = isTripAdmin ? params.tripAdminName : isDriver ? params.driverName : params.vehicleReg;
+  const isSingle    = !!entityId;
+  const title       = isSingle
+    ? (entityName ?? entityId ?? (isTripAdmin ? 'Trip Admin' : isDriver ? 'Driver' : 'Vehicle'))
+    : (isTripAdmin ? 'All Trip Admins' : isDriver ? 'All Drivers' : 'All Vehicles');
+  const backPath  = isTripAdmin
+    ? '/(stateadmin)/trip-admins' as const
+    : isDriver ? '/(tripadmin)/drivers' as const : '/(tripadmin)/vehicles' as const;
+  const backLabel = isTripAdmin ? 'Trip Admins' : isDriver ? 'Drivers' : 'Vehicles';
 
   const [preset,     setPreset]     = useState<Preset>('all');
   const [customFrom, setCustomFrom] = useState('');
@@ -354,20 +400,20 @@ export default function AuditReportScreen() {
     setError(null);
     try {
       const qp: Record<string, string> = {};
-      if (entityId) qp[isDriver ? 'driverId' : 'vehicleId'] = entityId;
+      if (entityId) qp[isTripAdmin ? 'tripAdminId' : isDriver ? 'driverId' : 'vehicleId'] = entityId;
       if (sf)       qp.status = sf;
       const { dateFrom, dateTo } = computeDateRange(p, cFrom, cTo);
       if (dateFrom) qp.dateFrom = dateFrom;
       if (dateTo)   qp.dateTo   = dateTo;
-      const apiCall = isDriver ? getDriverAudit : getVehicleAudit;
+      const apiCall = isTripAdmin ? getTripAdminAudit : isDriver ? getDriverAudit : getVehicleAudit;
       const result  = await apiCall(Object.keys(qp).length ? qp : undefined);
-      setData(normalizeResponse(isDriver, result as any));
+      setData(normalizeResponse(entityType, result as any));
     } catch {
       setError("Couldn't load audit data");
     } finally {
       setLoading(false);
     }
-  }, [entityId, isDriver]);
+  }, [entityId, entityType, isDriver, isTripAdmin]);
 
   useEffect(() => {
     fetchAudit(preset, customFrom, customTo, statusFilter);
@@ -380,7 +426,7 @@ export default function AuditReportScreen() {
     if (!data) return;
     setExportingPdf(true);
     try {
-      const html = buildHtml(data, title, isSingle, isDriver);
+      const html = buildHtml(data, title, isSingle, entityType);
       if (Platform.OS === 'web') {
         const win = window.open('', '_blank');
         if (win) {
@@ -408,18 +454,22 @@ export default function AuditReportScreen() {
     if (!data) return;
     setExportingExcel(true);
     try {
-      const wb = buildWorkbook(data, isSingle, isDriver);
+      const wb = buildWorkbook(data, isSingle, entityType);
       if (Platform.OS === 'web') {
         XLSX.writeFile(wb, `audit-report-${Date.now()}.xlsx`);
       } else {
         const bytes: Uint8Array = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
         const file = new File(Paths.cache, `audit-${Date.now()}.xlsx`);
         file.write(bytes);
-        await Sharing.shareAsync(file.uri, {
-          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          dialogTitle: 'Share Audit Report Excel',
-          UTI: 'com.microsoft.excel.xlsx',
-        });
+        try {
+          await Sharing.shareAsync(file.uri, {
+            mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            dialogTitle: 'Share Audit Report Excel',
+            UTI: 'com.microsoft.excel.xlsx',
+          });
+        } finally {
+          try { file.delete(); } catch { /* ignore cleanup errors */ }
+        }
       }
     } catch {
       Alert.alert('Export failed', 'Could not generate Excel file. Please try again.');
@@ -480,7 +530,7 @@ export default function AuditReportScreen() {
         </Text>
         <View style={styles.tripRowMeta}>
           <Text style={styles.tripMeta}>{fmtDate(t.date)}</Text>
-          {isDriver
+          {(isDriver || isTripAdmin)
             ? (t.vehicleReg ? <Text style={styles.tripMeta}>{t.vehicleReg}</Text> : null)
             : (t.driverName ? <Text style={styles.tripMeta}>{t.driverName}</Text> : null)
           }
@@ -511,7 +561,7 @@ export default function AuditReportScreen() {
         {/* ── Title ── */}
         <View style={styles.titleRow}>
           <Text style={styles.titleText} numberOfLines={1}>{title}</Text>
-          <Text style={styles.titleSub}>{isDriver ? 'Driver' : 'Vehicle'} Audit Report</Text>
+          <Text style={styles.titleSub}>{isTripAdmin ? 'Trip Admin' : isDriver ? 'Driver' : 'Vehicle'} Audit Report</Text>
         </View>
 
         {/* ── Date preset pills ── */}
@@ -618,6 +668,26 @@ export default function AuditReportScreen() {
               <View style={styles.section}>
                 <Text style={styles.sectionLabel}>COMBINED SUMMARY</Text>
                 {renderSummaryCards(data.summary)}
+                {isTripAdmin && data.summary.directCancellations !== undefined && (
+                  <View style={styles.cardsGrid}>
+                    <View style={[styles.card, { borderLeftColor: theme.colors.error, borderLeftWidth: 3 }]}>
+                      <Text style={[styles.cardValue, { color: theme.colors.error }]}>{data.summary.directCancellations}</Text>
+                      <Text style={styles.cardLabel}>Direct Cancels</Text>
+                    </View>
+                    <View style={[styles.card, { borderLeftColor: '#7c3aed', borderLeftWidth: 3 }]}>
+                      <Text style={[styles.cardValue, { color: '#7c3aed' }]}>{data.summary.approvalCancellations}</Text>
+                      <Text style={styles.cardLabel}>Via Approval</Text>
+                    </View>
+                    <View style={[styles.card, { borderLeftColor: theme.colors.greenText, borderLeftWidth: 3 }]}>
+                      <Text style={[styles.cardValue, { color: theme.colors.greenText }]}>{data.summary.approvalApproved}</Text>
+                      <Text style={styles.cardLabel}>Approved</Text>
+                    </View>
+                    <View style={[styles.card, { borderLeftColor: theme.colors.grey1, borderLeftWidth: 3 }]}>
+                      <Text style={[styles.cardValue, { color: theme.colors.grey1 }]}>{data.summary.approvalRejected}</Text>
+                      <Text style={styles.cardLabel}>Rejected</Text>
+                    </View>
+                  </View>
+                )}
               </View>
             )}
 
@@ -639,21 +709,51 @@ export default function AuditReportScreen() {
               data.entities.map((entity) => (
                 <View key={entity.id} style={styles.section}>
                   <View style={styles.vehicleHeader}>
-                    {isDriver ? (
-                      <Text style={styles.driverNameLabel}>{entity.displayName}</Text>
-                    ) : (
-                      <View style={styles.plateBadge}>
-                        <Text style={styles.plateText}>{entity.displayName}</Text>
+                    {isTripAdmin ? (
+                      <View>
+                        <Text style={styles.driverNameLabel}>{entity.displayName}</Text>
+                        {entity.email ? <Text style={styles.vehicleType}>{entity.email}</Text> : null}
                       </View>
+                    ) : isDriver ? (
+                      <>
+                        <Text style={styles.driverNameLabel}>{entity.displayName}</Text>
+                        {entity.subLabel ? <Text style={styles.vehicleType}>{entity.subLabel}</Text> : null}
+                      </>
+                    ) : (
+                      <>
+                        <View style={styles.plateBadge}>
+                          <Text style={styles.plateText}>{entity.displayName}</Text>
+                        </View>
+                        {entity.subLabel ? (
+                          <Text style={styles.vehicleType}>{entity.subLabel}</Text>
+                        ) : null}
+                      </>
                     )}
-                    {entity.subLabel ? (
-                      <Text style={styles.vehicleType}>{entity.subLabel}</Text>
-                    ) : null}
                   </View>
                   <Text style={styles.vehicleSubMeta}>
                     {entity.summary.totalTrips} trips · {completionPct(entity.summary)} completion · {formatNaira(entity.summary.totalRevenue)}
                   </Text>
                   {renderSummaryCards(entity.summary)}
+                  {isTripAdmin && entity.summary.directCancellations !== undefined && (
+                    <View style={styles.cardsGrid}>
+                      <View style={[styles.card, { borderLeftColor: theme.colors.error, borderLeftWidth: 3 }]}>
+                        <Text style={[styles.cardValue, { color: theme.colors.error }]}>{entity.summary.directCancellations}</Text>
+                        <Text style={styles.cardLabel}>Direct Cancels</Text>
+                      </View>
+                      <View style={[styles.card, { borderLeftColor: '#7c3aed', borderLeftWidth: 3 }]}>
+                        <Text style={[styles.cardValue, { color: '#7c3aed' }]}>{entity.summary.approvalCancellations}</Text>
+                        <Text style={styles.cardLabel}>Via Approval</Text>
+                      </View>
+                      <View style={[styles.card, { borderLeftColor: theme.colors.greenText, borderLeftWidth: 3 }]}>
+                        <Text style={[styles.cardValue, { color: theme.colors.greenText }]}>{entity.summary.approvalApproved}</Text>
+                        <Text style={styles.cardLabel}>Approved</Text>
+                      </View>
+                      <View style={[styles.card, { borderLeftColor: theme.colors.grey1, borderLeftWidth: 3 }]}>
+                        <Text style={[styles.cardValue, { color: theme.colors.grey1 }]}>{entity.summary.approvalRejected}</Text>
+                        <Text style={styles.cardLabel}>Rejected</Text>
+                      </View>
+                    </View>
+                  )}
                   <Text style={[styles.sectionLabel, { marginTop: 8 }]}>
                     TRIPS ({entity.trips.length})
                   </Text>

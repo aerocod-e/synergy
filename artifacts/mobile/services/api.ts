@@ -242,3 +242,6 @@ export const getVehicleAudit = (params?: Record<string, string>) =>
 
 export const getDriverAudit = (params?: Record<string, string>) =>
   apiRequest('/api/audit/drivers' + (params ? '?' + new URLSearchParams(params).toString() : ''));
+
+export const getTripAdminAudit = (params?: Record<string, string>) =>
+  apiRequest('/api/audit/trip-admins' + (params ? '?' + new URLSearchParams(params).toString() : ''));
