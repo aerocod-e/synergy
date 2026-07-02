@@ -1,0 +1,34 @@
+Fix 1, backend: enforce trip origin state server-side
+In artifacts/api-server/src/controllers/tripController.ts, in createTrip, add a check before any fee logic runs. If req.user.role === 'trip_admin', the submitted loadingStateId must equal req.user.entityId. If it does not match, return 403 with message "You can only create trips originating from your own registered state."
+This check should run immediately after the existing presence and UUID validity checks on loadingStateId, before the database existence check, so an invalid attempt fails fast with a clear reason rather than a generic error.
+Do not add this restriction for any other role, this endpoint is trip_admin only already, but be explicit that the check is scoped to trip_admin in case that ever changes.
+Fix 2, backend: State Admin trip list
+In artifacts/api-server/src/routes/trips.ts, add "state_admin" to the requireRole(...) guard on GET /api/trips.
+In listTrips in tripController.ts, add a new branch for state_admin:
+sqlWHERE t.loading_state_id = $stateAdminEntityId
+Now that Fix 1 guarantees loading_state_id always equals the creating Trip Admin's own state, this single condition correctly captures every trip created by any Trip Admin in that State Admin's state. No union or subquery needed.
+Confirm getTripById already allows state_admin to fetch a single trip by ID, add the same entityId scoping there if it is currently unrestricted or restricted differently, a State Admin should only be able to fetch trips where loading_state_id matches their own state.
+Fix 3, frontend: State Admin Trips tab
+Add a new tab to (stateadmin)/_layout.tsx called "Trips", positioned after "Wallet" and before "Requests" in the tab order (keep Wallet as the landing tab per the earlier fix).
+Create artifacts/mobile/app/(stateadmin)/trips.tsx. Mirror the structure of (tripadmin)/index.tsx's trip list closely, status filter pills, trip cards showing trip code, status badge, vehicle, route, and the creator's name on every card since this screen by definition shows trips from multiple Trip Admins. No FAB, no create action, this is read-only for State Admin. Tapping a card navigates to a trip detail screen.
+Create (stateadmin)/trip-detail.tsx reusing the shared TripDetailView component exactly as done for Super Admin and Trip Admin. Register it as a hidden screen with href: null in (stateadmin)/_layout.tsx, and add 'trip-detail' to HIDDEN_ROUTES in PillTabBar.tsx if it is not already covered by an existing entry for that screen name.
+Include <TopBar /> on the new Trips tab, matching every other screen.
+TypeScript check, both packages:
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors.
+
+Testing
+Backend tests:
+Test 1, origin enforcement: as lagos.ta1@synergy.com, attempt POST /api/trips with loadingStateId set to Kano's state ID. Confirm 403 with the correct message. Then confirm a normal trip with Lagos as loadingStateId still succeeds.
+Test 2, State Admin trip list: as lagos.admin@synergy.com, call GET /api/trips. Confirm only trips with loading_state_id equal to Lagos are returned, and confirm trips created by both lagos.ta1 and lagos.ta2 both appear.
+Test 3, State Admin cannot see another state's trips: confirm no Kano or Rivers trips appear in the Lagos State Admin's list.
+Test 4, single trip fetch scoping: as lagos.admin@synergy.com, call GET /api/trips/:id for a Lagos trip, confirm success, then for a Kano trip, confirm it is blocked or not found as appropriate.
+Frontend app tests, 390x844px, tap only:
+Test 5, login as lagos.admin@synergy.com. Confirm a "Trips" tab is now visible in the pill nav between Wallet and Requests.
+Test 6, tap the Trips tab. Confirm trips appear with status filter pills, and confirm each card shows the creator's name.
+Test 7, tap a trip card. Confirm it opens the trip detail screen with full information, and confirm the back chevron returns to the Trips tab, not Home.
+Test 8, confirm no FAB or create button exists on this screen.
+Test 9, console clean throughout.
+
+Report every file changed and every test result.

@@ -57,6 +57,17 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
     return;
   }
 
+  // ── 1.5. Role-based origin state enforcement ────────────────────────────────
+  if (req.user!.role === "trip_admin") {
+    if (loadingStateId !== req.user!.entityId) {
+      res.status(403).json({
+        error: "FORBIDDEN",
+        message: "You can only create trips originating from your own registered state.",
+      });
+      return;
+    }
+  }
+
   // ── 2. DB existence checks ──────────────────────────────────────────────────
   const client = await pool.connect();
   try {
@@ -499,6 +510,10 @@ export async function listTrips(req: Request, res: Response): Promise<void> {
       params.push(entityId);
       params.push(userId);
       conditions.push(`(t.loading_state_id = $${idx++} OR t.created_by = $${idx++})`);
+    } else if (role === "state_admin") {
+      const entityId = req.user!.entityId;
+      params.push(entityId);
+      conditions.push(`t.loading_state_id = $${idx++}`);
     } else if (!isSuperAdmin) {
       params.push(userId);
       conditions.push(`t.driver_id = $${idx++}`);
@@ -702,6 +717,12 @@ export async function getTripById(req: Request, res: Response): Promise<void> {
       );
       const createdBy = creatorCheck.rows[0]?.created_by;
       if (trip.loading_state_id !== entityId && createdBy !== userId) {
+        res.status(403).json({ error: "FORBIDDEN", message: "Access denied" });
+        return;
+      }
+    } else if (role === "state_admin") {
+      const entityId = req.user!.entityId;
+      if (trip.loading_state_id !== entityId) {
         res.status(403).json({ error: "FORBIDDEN", message: "Access denied" });
         return;
       }
