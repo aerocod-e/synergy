@@ -6,6 +6,7 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -22,6 +23,8 @@ import {
   updateVehicleType,
   updateStakeholderRate,
   createVehicleType,
+  getAllWallets,
+  getStates,
 } from '@/services/api';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
@@ -56,6 +59,14 @@ interface PricingChart {
 interface VehicleTypeItem {
   id: string;
   name: string;
+}
+
+interface StateWallet {
+  id: string;
+  ownerId: string;
+  stateName: string;
+  totalCollected: number;
+  isClearingEnabled: boolean;
 }
 
 function nairaToKobo(val: string): number {
@@ -161,6 +172,7 @@ export default function ConfigScreen() {
   const [pageError, setPageError] = useState<string | null>(null);
   const [activeChart, setActiveChart] = useState<PricingChart | null>(null);
   const [vehicleTypes, setVehicleTypes] = useState<VehicleTypeItem[]>([]);
+  const [stateWallets, setStateWallets] = useState<StateWallet[]>([]);
 
   type EditSrEntry = { stakeholderId: string; stakeholderName: string; amount: string };
 
@@ -185,9 +197,11 @@ export default function ConfigScreen() {
   const loadData = useCallback(async () => {
     setPageError(null);
     try {
-      const [chartResult, vehicleTypesResult] = await Promise.allSettled([
+      const [chartResult, vehicleTypesResult, walletsResult, statesResult] = await Promise.allSettled([
         getActivePricingChart(),
         listVehicleTypes(),
+        getAllWallets(),
+        getStates(),
       ]);
 
       if (chartResult.status === 'fulfilled') {
@@ -201,6 +215,25 @@ export default function ConfigScreen() {
 
       if (vehicleTypesResult.status === 'fulfilled') {
         setVehicleTypes((vehicleTypesResult.value as any)?.vehicleTypes ?? []);
+      }
+
+      if (walletsResult.status === 'fulfilled' && statesResult.status === 'fulfilled') {
+        const allWallets: any[] = (walletsResult.value as any)?.wallets ?? [];
+        const allStates: any[] = (statesResult.value as any)?.states ?? [];
+        const stateMap = new Map<string, string>(
+          allStates.map((s: any) => [s.id, s.name]),
+        );
+        const mapped: StateWallet[] = allWallets
+          .filter((w: any) => w.ownerType === 'state' || w.owner_type === 'state')
+          .map((w: any) => ({
+            id: w.id,
+            ownerId: w.ownerId ?? w.owner_id,
+            stateName: stateMap.get(w.ownerId ?? w.owner_id) ?? 'Unknown State',
+            totalCollected: w.totalCollected ?? w.total_collected ?? 0,
+            isClearingEnabled: w.isClearingEnabled ?? w.is_clearing_enabled ?? false,
+          }))
+          .sort((a, b) => a.stateName.localeCompare(b.stateName));
+        setStateWallets(mapped);
       }
     } finally {
       setPageLoading(false);
@@ -389,6 +422,31 @@ export default function ConfigScreen() {
           <Plus size={18} color={theme.colors.primary} />
           <Text style={styles.addVtText}>Add Vehicle Type</Text>
         </TouchableOpacity>
+
+        {stateWallets.length > 0 && (
+          <>
+            <Text style={styles.sectionLabel}>EOD Payment Clearing</Text>
+            <View style={styles.eodWarningBanner}>
+              <Text style={styles.eodWarningText}>
+                ⚠️ Payment processor not connected. These toggles will be enabled once the payment integration is complete.
+              </Text>
+            </View>
+            {stateWallets.map((sw) => (
+              <View key={sw.id} style={styles.eodCard}>
+                <View style={styles.eodCardLeft}>
+                  <Text style={styles.eodStateName}>{sw.stateName}</Text>
+                  <Text style={styles.eodBalance}>{formatNaira(sw.totalCollected)}</Text>
+                </View>
+                <Switch
+                  value={sw.isClearingEnabled}
+                  disabled={true}
+                  trackColor={{ false: theme.colors.separator, true: theme.colors.primary }}
+                  thumbColor={theme.colors.white}
+                />
+              </View>
+            ))}
+          </>
+        )}
 
         <TouchableOpacity
           style={styles.verifyRow}
@@ -761,6 +819,47 @@ const styles = StyleSheet.create({
   },
   retryText: { color: theme.colors.white, fontWeight: '600', fontSize: 14 },
   bottomSpacer: { height: 24 },
+  eodWarningBanner: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+    backgroundColor: '#FFF8E1',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#FFD54F',
+  },
+  eodWarningText: {
+    fontSize: 13,
+    color: '#B45309',
+    lineHeight: 18,
+  },
+  eodCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: theme.colors.white,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    marginHorizontal: 20,
+    ...theme.shadows.card,
+  },
+  eodCardLeft: {
+    flex: 1,
+    marginRight: 12,
+  },
+  eodStateName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: theme.colors.black,
+    marginBottom: 4,
+  },
+  eodBalance: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.primary,
+  },
   verifyRow: {
     flexDirection: 'row',
     alignItems: 'center',
