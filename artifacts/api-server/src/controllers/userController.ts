@@ -361,7 +361,7 @@ function mapUser(r: {
 
 export async function createUser(req: Request, res: Response): Promise<void> {
   try {
-    const { email, password, role, entity_type, entity_id, firstName, lastName, stakeholderName } = req.body as {
+    const { email, password, role, entity_type, entity_id, firstName, lastName, stakeholderName, existingStakeholderId } = req.body as {
       email?: unknown;
       password?: unknown;
       role?: unknown;
@@ -370,6 +370,7 @@ export async function createUser(req: Request, res: Response): Promise<void> {
       firstName?: unknown;
       lastName?: unknown;
       stakeholderName?: unknown;
+      existingStakeholderId?: unknown;
     };
 
     // ── Basic field validation ─────────────────────────────────────────────
@@ -432,8 +433,10 @@ export async function createUser(req: Request, res: Response): Promise<void> {
         return;
       }
     } else if (typedRole === "stakeholder") {
-      if (!stakeholderName || typeof stakeholderName !== "string" || !stakeholderName.trim()) {
-        res.status(400).json({ error: "BAD_REQUEST", message: "stakeholderName is required for stakeholder users" });
+      const hasExistingId = existingStakeholderId && typeof existingStakeholderId === "string" && (existingStakeholderId as string).trim();
+      const hasName = stakeholderName && typeof stakeholderName === "string" && (stakeholderName as string).trim();
+      if (!hasExistingId && !hasName) {
+        res.status(400).json({ error: "BAD_REQUEST", message: "Either stakeholderName or existingStakeholderId is required for stakeholder users" });
         return;
       }
     } else if (typedRole === "super_admin") {
@@ -448,41 +451,60 @@ export async function createUser(req: Request, res: Response): Promise<void> {
 
     // ── Stakeholder path: fully atomic (resolve/create entity + user) ───────
     if (typedRole === "stakeholder") {
-      const shName = (stakeholderName as string).trim();
       const client = await pool.connect();
       try {
         await client.query("BEGIN");
 
-        // Case-insensitive lookup inside the transaction to avoid races
-        const existingSh = await client.query<{ id: string }>(
-          `SELECT id FROM stakeholders WHERE LOWER(name) = LOWER($1)`,
-          [shName],
-        );
         let resolvedShId: string;
-        if (existingSh.rows.length > 0) {
-          resolvedShId = existingSh.rows[0]!.id;
+
+        if (existingStakeholderId && typeof existingStakeholderId === "string" && (existingStakeholderId as string).trim()) {
+          // ── Link to existing stakeholder ──────────────────────────────
+          const { rows: shRows } = await client.query<{ id: string; is_active: boolean }>(
+            `SELECT id, is_active FROM stakeholders WHERE id = $1`,
+            [(existingStakeholderId as string).trim()],
+          );
+          if (shRows.length === 0) {
+            await client.query("ROLLBACK");
+            res.status(400).json({ error: "BAD_REQUEST", message: "existingStakeholderId does not match any known stakeholder" });
+            return;
+          }
+          resolvedShId = shRows[0]!.id;
+          if (!shRows[0]!.is_active) {
+            await client.query(`UPDATE stakeholders SET is_active = true WHERE id = $1`, [resolvedShId]);
+          }
         } else {
-          const newSh = await client.query<{ id: string }>(
-            `INSERT INTO stakeholders (name) VALUES ($1) RETURNING id`,
+          // ── Create new / match by name ────────────────────────────────
+          const shName = (stakeholderName as string).trim();
+          // Case-insensitive lookup inside the transaction to avoid races
+          const existingSh = await client.query<{ id: string }>(
+            `SELECT id FROM stakeholders WHERE LOWER(name) = LOWER($1)`,
             [shName],
           );
-          resolvedShId = newSh.rows[0]!.id;
-          await client.query(
-            `INSERT INTO wallets (owner_type, owner_id, total_collected)
-             VALUES ('stakeholder', $1, 0) ON CONFLICT DO NOTHING`,
-            [resolvedShId],
-          );
-          // Auto-add ₦0 rates for every active vehicle type on the active pricing chart
-          await client.query(
-            `INSERT INTO pricing_chart_stakeholder_rates (pricing_chart_id, stakeholder_id, vehicle_type_id, amount)
-             SELECT pc.id, $1, vt.id, 0
-             FROM pricing_charts pc
-             CROSS JOIN vehicle_types vt
-             WHERE pc.is_active = true
-               AND vt.is_active = true
-             ON CONFLICT (pricing_chart_id, stakeholder_id, vehicle_type_id) DO NOTHING`,
-            [resolvedShId],
-          );
+          if (existingSh.rows.length > 0) {
+            resolvedShId = existingSh.rows[0]!.id;
+          } else {
+            const newSh = await client.query<{ id: string }>(
+              `INSERT INTO stakeholders (name) VALUES ($1) RETURNING id`,
+              [shName],
+            );
+            resolvedShId = newSh.rows[0]!.id;
+            await client.query(
+              `INSERT INTO wallets (owner_type, owner_id, total_collected)
+               VALUES ('stakeholder', $1, 0) ON CONFLICT DO NOTHING`,
+              [resolvedShId],
+            );
+            // Auto-add ₦0 rates for every active vehicle type on the active pricing chart
+            await client.query(
+              `INSERT INTO pricing_chart_stakeholder_rates (pricing_chart_id, stakeholder_id, vehicle_type_id, amount)
+               SELECT pc.id, $1, vt.id, 0
+               FROM pricing_charts pc
+               CROSS JOIN vehicle_types vt
+               WHERE pc.is_active = true
+                 AND vt.is_active = true
+               ON CONFLICT (pricing_chart_id, stakeholder_id, vehicle_type_id) DO NOTHING`,
+              [resolvedShId],
+            );
+          }
         }
 
         // ── Check for existing user (active or soft-deleted) ───────────────
@@ -659,8 +681,8 @@ export async function deleteUser(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const { rows } = await pool.query<{ id: string; role: string; deleted_at: Date | null }>(
-      `SELECT id, role, deleted_at FROM users WHERE id = $1`,
+    const { rows } = await pool.query<{ id: string; role: string; entity_id: string | null; deleted_at: Date | null }>(
+      `SELECT id, role, entity_id, deleted_at FROM users WHERE id = $1`,
       [id],
     );
 
@@ -677,10 +699,35 @@ export async function deleteUser(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    await pool.query(
-      `UPDATE users SET deleted_at = NOW(), is_active = false, updated_at = NOW() WHERE id = $1`,
-      [id],
-    );
+    const target = rows[0]!;
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `UPDATE users SET deleted_at = NOW(), is_active = false, updated_at = NOW() WHERE id = $1`,
+        [id],
+      );
+      if (target.role === "stakeholder" && target.entity_id) {
+        const { rows: remaining } = await client.query<{ count: string }>(
+          `SELECT COUNT(*) AS count FROM users
+           WHERE entity_type = 'stakeholder' AND entity_id = $1 AND deleted_at IS NULL AND id != $2`,
+          [target.entity_id, id],
+        );
+        if (Number(remaining[0]!.count) === 0) {
+          await client.query(`UPDATE stakeholders SET is_active = false WHERE id = $1`, [target.entity_id]);
+          await client.query(
+            `UPDATE wallets SET is_clearing_enabled = false WHERE owner_type = 'stakeholder' AND owner_id = $1`,
+            [target.entity_id],
+          );
+        }
+      }
+      await client.query("COMMIT");
+    } catch (txErr) {
+      await client.query("ROLLBACK");
+      throw txErr;
+    } finally {
+      client.release();
+    }
 
     res.status(200).json({ data: {}, message: "Account has been deactivated successfully" });
   } catch (err) {

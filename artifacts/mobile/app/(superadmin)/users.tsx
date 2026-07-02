@@ -16,7 +16,7 @@ import {
 import { Check, ChevronRight, UserPlus, X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { getUsers, createUser, getStates } from '@/services/api';
+import { getUsers, createUser, getStates, getStakeholders } from '@/services/api';
 import type { User, State } from '@/types/index';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
@@ -99,6 +99,12 @@ export default function UsersScreen() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const [stakeholderMode, setStakeholderMode] = useState<'new' | 'existing'>('new');
+  const [allStakeholders, setAllStakeholders] = useState<{ id: string; name: string; isActive: boolean }[]>([]);
+  const [stakeholderSearch, setStakeholderSearch] = useState('');
+  const [selectedStakeholderId, setSelectedStakeholderId] = useState<string | null>(null);
+  const [loadingStakeholders, setLoadingStakeholders] = useState(false);
+
   const fetchUsers = useCallback(async () => {
     try {
       setError(null);
@@ -152,6 +158,9 @@ export default function UsersScreen() {
     setFormRole(null);
     setFormEntityId(null);
     setFormStakeholderName('');
+    setStakeholderMode('new');
+    setStakeholderSearch('');
+    setSelectedStakeholderId(null);
     setFormError(null);
     setModalVisible(true);
   };
@@ -160,6 +169,16 @@ export default function UsersScreen() {
     setFormRole(role);
     setFormEntityId(null);
     setFormStakeholderName('');
+    setStakeholderMode('new');
+    setStakeholderSearch('');
+    setSelectedStakeholderId(null);
+    if (role === 'stakeholder') {
+      setLoadingStakeholders(true);
+      getStakeholders()
+        .then((d: any) => setAllStakeholders(d.stakeholders ?? []))
+        .catch(() => {})
+        .finally(() => setLoadingStakeholders(false));
+    }
   };
 
   const handleSubmit = async () => {
@@ -170,22 +189,33 @@ export default function UsersScreen() {
     if (!formPassword || formPassword.length < 6) { setFormError('Password must be at least 6 characters.'); return; }
     if (!formRole) { setFormError('Please select a role.'); return; }
     if (formRole === 'state_admin' && !formEntityId) { setFormError('Please select a state.'); return; }
-    if (formRole === 'stakeholder' && !formStakeholderName.trim()) {
-      setFormError('Stakeholder / Organization Name is required.');
-      return;
+    if (formRole === 'stakeholder') {
+      if (stakeholderMode === 'new' && !formStakeholderName.trim()) {
+        setFormError('Organization name is required.');
+        return;
+      }
+      if (stakeholderMode === 'existing' && !selectedStakeholderId) {
+        setFormError('Please select an organization from the list.');
+        return;
+      }
     }
 
     setSubmitting(true);
     try {
       if (formRole === 'stakeholder') {
-        await createUser({
+        const payload: Record<string, unknown> = {
           firstName: formFirstName.trim(),
           lastName: formLastName.trim(),
           email: formEmail.trim(),
           password: formPassword,
           role: formRole,
-          stakeholderName: formStakeholderName.trim(),
-        });
+        };
+        if (stakeholderMode === 'existing' && selectedStakeholderId) {
+          payload.existingStakeholderId = selectedStakeholderId;
+        } else {
+          payload.stakeholderName = formStakeholderName.trim();
+        }
+        await createUser(payload);
       } else {
         await createUser({
           firstName: formFirstName.trim(),
@@ -393,18 +423,85 @@ export default function UsersScreen() {
               <>
                 {formRole === 'stakeholder' ? (
                   <>
-                    <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>
-                      Stakeholder / Organization Name
-                    </Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="e.g. Lagos Transport Union"
-                      placeholderTextColor={theme.colors.placeholder}
-                      autoCapitalize="words"
-                      autoCorrect={false}
-                      value={formStakeholderName}
-                      onChangeText={setFormStakeholderName}
-                    />
+                    <View style={[styles.shSegmentRow, styles.fieldLabelSpaced]}>
+                      <TouchableOpacity
+                        style={[styles.shSegmentBtn, stakeholderMode === 'new' && styles.shSegmentBtnActive]}
+                        onPress={() => { setStakeholderMode('new'); setSelectedStakeholderId(null); setStakeholderSearch(''); }}
+                      >
+                        <Text style={[styles.shSegmentBtnText, stakeholderMode === 'new' && styles.shSegmentBtnTextActive]}>
+                          Create new
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.shSegmentBtn, stakeholderMode === 'existing' && styles.shSegmentBtnActive]}
+                        onPress={() => setStakeholderMode('existing')}
+                      >
+                        <Text style={[styles.shSegmentBtnText, stakeholderMode === 'existing' && styles.shSegmentBtnTextActive]}>
+                          Link existing
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {stakeholderMode === 'new' ? (
+                      <>
+                        <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>Organization Name</Text>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="e.g. Lagos Transport Union"
+                          placeholderTextColor={theme.colors.placeholder}
+                          autoCapitalize="words"
+                          autoCorrect={false}
+                          value={formStakeholderName}
+                          onChangeText={setFormStakeholderName}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>Search organization</Text>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="Filter by name..."
+                          placeholderTextColor={theme.colors.placeholder}
+                          autoCorrect={false}
+                          value={stakeholderSearch}
+                          onChangeText={setStakeholderSearch}
+                        />
+                        {loadingStakeholders ? (
+                          <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginTop: 12 }} />
+                        ) : (
+                          <View style={[styles.entityList, { marginTop: 10 }]}>
+                            {allStakeholders
+                              .filter((s) => !stakeholderSearch.trim() || s.name.toLowerCase().includes(stakeholderSearch.toLowerCase()))
+                              .map((s) => {
+                                const selected = selectedStakeholderId === s.id;
+                                return (
+                                  <TouchableOpacity
+                                    key={s.id}
+                                    style={[styles.entityItem, selected && styles.entityItemSelected]}
+                                    onPress={() => setSelectedStakeholderId(s.id)}
+                                    activeOpacity={0.7}
+                                  >
+                                    <View style={{ flex: 1 }}>
+                                      <Text style={[styles.entityItemText, selected && styles.entityItemTextSelected]}>
+                                        {s.name}
+                                      </Text>
+                                      {!s.isActive && (
+                                        <Text style={styles.shInactiveBadge}>Inactive</Text>
+                                      )}
+                                    </View>
+                                    {selected && <Check size={16} color={theme.colors.primary} />}
+                                  </TouchableOpacity>
+                                );
+                              })}
+                            {allStakeholders.filter((s) => !stakeholderSearch.trim() || s.name.toLowerCase().includes(stakeholderSearch.toLowerCase())).length === 0 && (
+                              <View style={{ padding: 14 }}>
+                                <Text style={styles.emptyText}>No organizations found</Text>
+                              </View>
+                            )}
+                          </View>
+                        )}
+                      </>
+                    )}
                   </>
                 ) : (
                   <>
@@ -674,6 +771,37 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   buttonDisabled: { opacity: 0.6 },
+
+  shSegmentRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  shSegmentBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: theme.colors.grey4,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  shSegmentBtnActive: {
+    backgroundColor: theme.colors.blueMuted,
+    borderColor: theme.colors.primary,
+  },
+  shSegmentBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.grey2,
+  },
+  shSegmentBtnTextActive: {
+    color: theme.colors.primary,
+  },
+  shInactiveBadge: {
+    fontSize: 11,
+    color: theme.colors.grey2,
+    marginTop: 2,
+  },
   loadMoreBtn: {
     alignItems: 'center',
     justifyContent: 'center',

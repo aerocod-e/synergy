@@ -1,0 +1,22 @@
+Do not make any changes. I need a complete business logic audit of the entire application, pulled directly from the actual code, not from memory or documentation. Go through the codebase systematically and report the real, current behavior for each section below. Where behavior differs from what any comment or doc string says, report the actual code behavior. Be exhaustive, this is being used to write a permanent reference document.
+1. Roles and permissions
+For each role (super_admin, state_admin, trip_admin, stakeholder), list every backend route it can access, grouped by controller. For each route, note any additional scoping logic (for example, state_admin can only act on trip_admins with a matching entity_id).
+2. Authentication and account lifecycle
+Describe exactly what happens, step by step, in the code for: login, token refresh, logout, a deactivated user attempting to use an existing token, and account soft-delete for each role. Include the current cascading behavior between a stakeholder's user account and the stakeholder organization entity (what triggers deactivation of the organization, what triggers reactivation, and what happens to is_clearing_enabled in each case).
+3. User and stakeholder onboarding
+Describe the exact current logic in createUser for each role type, including the stakeholder linking logic (existingStakeholderId path vs stakeholderName path), what gets auto-created (wallet, pricing chart rate rows), and any validation rules enforced.
+4. Vehicle types and pricing chart
+Describe how vehicle_types and pricing_chart_stakeholder_rates relate to each other. Describe exactly how a trip's fees get calculated at creation time, including what happens when a stakeholder rate is zero, what happens when a vehicle has no type assigned, and what happens when there is no active pricing chart. Describe every endpoint that can modify pricing (vehicle type fees, stakeholder rates, creating a new vehicle type) and who can call them.
+5. Trip lifecycle
+List every possible trip status and the exact conditions and endpoints that move a trip between them. Include the cancellation flow in full: the difference between a Trip Admin with pre-approved cancellation rights versus one without, what a State Admin can and cannot do, and what happens to fees and wallet ledger entries on cancellation (reversal logic).
+6. Wallets and ledgers
+Describe exactly when a wallet gets credited, what a ledger entry contains, how reversals are recorded, which roles can view which wallets, and the current state of the is_clearing_enabled toggle including what it does and does not currently affect.
+7. Driver and vehicle management
+Describe ownership rules (who can edit or delete a driver or vehicle), what fields are editable versus immutable, and what guards exist against deleting one that has active trips.
+8. Public trip lookup
+Describe exactly what an unauthenticated user can search for and see, including how cancelled trips are handled and what payment status values exist and what they mean.
+9. Data visibility rules
+For trips, list exactly what each role can see, in the current code, not the original spec. Note anywhere this differs from role to role in an inconsistent way.
+10. Any validation or business rule not covered above
+Anything enforced in a controller that a new developer would not guess just from reading the database schema, for example rate limits, uniqueness constraints, or amount validations.
+Report everything in plain, clearly labeled sections. Do not summarize or skip detail, this is the authoritative source for a business logic reference document.

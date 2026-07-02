@@ -25,7 +25,6 @@ import {
   updateStakeholderRate,
   createVehicleType,
   getAllWallets,
-  getStates,
 } from '@/services/api';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
@@ -62,12 +61,14 @@ interface VehicleTypeItem {
   name: string;
 }
 
-interface StateWallet {
+interface Wallet {
   id: string;
   ownerId: string;
-  stateName: string;
+  ownerType: string;
+  ownerName: string;
   totalCollected: number;
   isClearingEnabled: boolean;
+  ownerIsActive: boolean;
 }
 
 function nairaToKobo(val: string): number {
@@ -174,7 +175,9 @@ export default function ConfigScreen() {
   const [pageError, setPageError] = useState<string | null>(null);
   const [activeChart, setActiveChart] = useState<PricingChart | null>(null);
   const [vehicleTypes, setVehicleTypes] = useState<VehicleTypeItem[]>([]);
-  const [stateWallets, setStateWallets] = useState<StateWallet[]>([]);
+  const [allWallets, setAllWallets] = useState<Wallet[]>([]);
+  const [eodSearch, setEodSearch] = useState('');
+  const [eodFilter, setEodFilter] = useState<'all' | 'states' | 'stakeholders'>('all');
 
   type EditSrEntry = { stakeholderId: string; stakeholderName: string; amount: string };
 
@@ -199,11 +202,10 @@ export default function ConfigScreen() {
   const loadData = useCallback(async () => {
     setPageError(null);
     try {
-      const [chartResult, vehicleTypesResult, walletsResult, statesResult] = await Promise.allSettled([
+      const [chartResult, vehicleTypesResult, walletsResult] = await Promise.allSettled([
         getActivePricingChart(),
         listVehicleTypes(),
         getAllWallets(),
-        getStates(),
       ]);
 
       if (chartResult.status === 'fulfilled') {
@@ -219,23 +221,18 @@ export default function ConfigScreen() {
         setVehicleTypes((vehicleTypesResult.value as any)?.vehicleTypes ?? []);
       }
 
-      if (walletsResult.status === 'fulfilled' && statesResult.status === 'fulfilled') {
-        const allWallets: any[] = (walletsResult.value as any)?.wallets ?? [];
-        const allStates: any[] = (statesResult.value as any)?.states ?? [];
-        const stateMap = new Map<string, string>(
-          allStates.map((s: any) => [s.id, s.name]),
-        );
-        const mapped: StateWallet[] = allWallets
-          .filter((w: any) => w.ownerType === 'state' || w.owner_type === 'state')
-          .map((w: any) => ({
-            id: w.id,
-            ownerId: w.ownerId ?? w.owner_id,
-            stateName: stateMap.get(w.ownerId ?? w.owner_id) ?? 'Unknown State',
-            totalCollected: w.totalCollected ?? w.total_collected ?? 0,
-            isClearingEnabled: w.isClearingEnabled ?? w.is_clearing_enabled ?? false,
-          }))
-          .sort((a, b) => a.stateName.localeCompare(b.stateName));
-        setStateWallets(mapped);
+      if (walletsResult.status === 'fulfilled') {
+        const wallets: any[] = (walletsResult.value as any)?.wallets ?? [];
+        const mapped: Wallet[] = wallets.map((w: any) => ({
+          id: w.id,
+          ownerId: w.ownerId ?? w.owner_id,
+          ownerType: w.ownerType ?? w.owner_type ?? '',
+          ownerName: w.ownerName ?? w.owner_name ?? 'Unknown',
+          totalCollected: w.totalCollected ?? w.total_collected ?? 0,
+          isClearingEnabled: w.isClearingEnabled ?? w.is_clearing_enabled ?? false,
+          ownerIsActive: w.ownerIsActive ?? w.owner_is_active ?? true,
+        }));
+        setAllWallets(mapped);
       }
     } finally {
       setPageLoading(false);
@@ -447,28 +444,56 @@ export default function ConfigScreen() {
           <Text style={styles.addVtText}>Add Vehicle Type</Text>
         </TouchableOpacity>
 
-        {stateWallets.length > 0 && (
+        {allWallets.length > 0 && (
           <>
             <Text style={styles.sectionLabel}>EOD Payment Clearing</Text>
-            <View style={styles.eodWarningBanner}>
-              <Text style={styles.eodWarningText}>
-                ⚠️ Payment processor not connected. These toggles will be enabled once the payment integration is complete.
-              </Text>
+            <View style={styles.eodControlsRow}>
+              <TextInput
+                style={styles.eodSearchInput}
+                placeholder="Search..."
+                placeholderTextColor={theme.colors.placeholder}
+                autoCorrect={false}
+                value={eodSearch}
+                onChangeText={setEodSearch}
+              />
             </View>
-            {stateWallets.map((sw) => (
-              <View key={sw.id} style={styles.eodCard}>
-                <View style={styles.eodCardLeft}>
-                  <Text style={styles.eodStateName}>{sw.stateName}</Text>
-                  <Text style={styles.eodBalance}>{formatNaira(sw.totalCollected)}</Text>
+            <View style={styles.eodFilterRow}>
+              {(['all', 'states', 'stakeholders'] as const).map((f) => (
+                <TouchableOpacity
+                  key={f}
+                  style={[styles.eodFilterBtn, eodFilter === f && styles.eodFilterBtnActive]}
+                  onPress={() => setEodFilter(f)}
+                >
+                  <Text style={[styles.eodFilterBtnText, eodFilter === f && styles.eodFilterBtnTextActive]}>
+                    {f === 'all' ? 'All' : f === 'states' ? 'States' : 'Stakeholders'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {allWallets
+              .filter((w) => {
+                if (eodFilter === 'states') return w.ownerType === 'state';
+                if (eodFilter === 'stakeholders') return w.ownerType === 'stakeholder';
+                return true;
+              })
+              .filter((w) => !eodSearch.trim() || w.ownerName.toLowerCase().includes(eodSearch.toLowerCase()))
+              .map((w) => (
+                <View key={w.id} style={[styles.eodCard, !w.ownerIsActive && styles.eodCardInactive]}>
+                  <View style={styles.eodCardLeft}>
+                    <Text style={styles.eodStateName}>{w.ownerName}</Text>
+                    <Text style={styles.eodBalance}>{formatNaira(w.totalCollected)}</Text>
+                    <Text style={styles.eodCardLabel}>
+                      {w.ownerIsActive ? '⚠️ Requires payment processor setup' : '⚠️ Organization inactive'}
+                    </Text>
+                  </View>
+                  <Switch
+                    value={w.ownerIsActive ? w.isClearingEnabled : false}
+                    disabled={true}
+                    trackColor={{ false: theme.colors.separator, true: theme.colors.primary }}
+                    thumbColor={theme.colors.white}
+                  />
                 </View>
-                <Switch
-                  value={sw.isClearingEnabled}
-                  disabled={true}
-                  trackColor={{ false: theme.colors.separator, true: theme.colors.primary }}
-                  thumbColor={theme.colors.white}
-                />
-              </View>
-            ))}
+              ))}
           </>
         )}
 
@@ -843,20 +868,54 @@ const styles = StyleSheet.create({
   },
   retryText: { color: theme.colors.white, fontWeight: '600', fontSize: 14 },
   bottomSpacer: { height: 24 },
-  eodWarningBanner: {
+  eodControlsRow: {
     marginHorizontal: 20,
-    marginBottom: 12,
-    backgroundColor: '#FFF8E1',
+    marginBottom: 10,
+  },
+  eodSearchInput: {
+    backgroundColor: theme.colors.white,
+    borderWidth: 1,
+    borderColor: theme.colors.separator,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: '#FFD54F',
+    fontSize: 15,
+    color: theme.colors.black,
   },
-  eodWarningText: {
+  eodFilterRow: {
+    flexDirection: 'row',
+    marginHorizontal: 20,
+    marginBottom: 12,
+    gap: 8,
+  },
+  eodFilterBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: theme.colors.grey4,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  eodFilterBtnActive: {
+    backgroundColor: theme.colors.blueMuted,
+    borderColor: theme.colors.primary,
+  },
+  eodFilterBtnText: {
     fontSize: 13,
+    fontWeight: '600',
+    color: theme.colors.grey2,
+  },
+  eodFilterBtnTextActive: {
+    color: theme.colors.primary,
+  },
+  eodCardInactive: {
+    opacity: 0.5,
+  },
+  eodCardLabel: {
+    fontSize: 11,
     color: '#B45309',
-    lineHeight: 18,
+    marginTop: 4,
   },
   eodCard: {
     flexDirection: 'row',

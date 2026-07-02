@@ -265,6 +265,7 @@ export async function getAllWallets(_req: Request, res: Response): Promise<void>
       owner_name:          string;
       total_collected:     number;
       is_clearing_enabled: boolean;
+      owner_is_active:     boolean;
     }>(
       `SELECT
          w.id,
@@ -272,7 +273,8 @@ export async function getAllWallets(_req: Request, res: Response): Promise<void>
          w.owner_id,
          COALESCE(s.name, sh.name) AS owner_name,
          w.total_collected,
-         w.is_clearing_enabled
+         w.is_clearing_enabled,
+         COALESCE(sh.is_active, true) AS owner_is_active
        FROM wallets w
        LEFT JOIN states       s  ON w.owner_type = 'state'       AND w.owner_id = s.id
        LEFT JOIN stakeholders sh ON w.owner_type = 'stakeholder' AND w.owner_id = sh.id
@@ -293,6 +295,7 @@ export async function getAllWallets(_req: Request, res: Response): Promise<void>
           totalCollected:      r.total_collected,
           totalCollectedNaira: toNaira(r.total_collected),
           isClearingEnabled:   r.is_clearing_enabled,
+          ownerIsActive:       r.owner_is_active,
         })),
         summary: {
           totalStates,

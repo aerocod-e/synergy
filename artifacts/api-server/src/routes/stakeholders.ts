@@ -35,5 +35,6 @@ async function listStakeholders(_req: Request, res: Response): Promise<void> {
 }
 
 router.get("/", authenticateToken, requireRole("super_admin"), listStakeholders);
+router.get("/all", authenticateToken, requireRole("super_admin"), listStakeholders);
 
 export default router;

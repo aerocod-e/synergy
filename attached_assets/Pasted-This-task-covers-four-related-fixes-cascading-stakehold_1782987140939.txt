@@ -1,0 +1,80 @@
+This task covers four related fixes: cascading stakeholder deactivation, a proper stakeholder picker on user creation, the EOD clearing section improvements, and a back navigation bug on detail screens. Follow all steps in order.
+Step 1 -- Backend: cascade stakeholder deactivation on user delete
+In artifacts/api-server/src/controllers/userController.ts, find deleteUser (the Super Admin soft-delete function). When the target user has role = 'stakeholder', add logic inside the same transaction:
+
+After soft-deleting the user, check whether any other active user is still linked to the same entity_id (same stakeholder). Query:
+
+sqlSELECT COUNT(*) FROM users WHERE entity_type = 'stakeholder' AND entity_id = $stakeholderId AND deleted_at IS NULL AND id != $deletedUserId
+
+If the count is 0 (no other active user tied to this stakeholder), deactivate the stakeholder entity:
+
+sqlUPDATE stakeholders SET is_active = false WHERE id = $stakeholderId;
+UPDATE wallets SET is_clearing_enabled = false WHERE owner_type = 'stakeholder' AND owner_id = $stakeholderId;
+
+The wallet balance itself (total_collected) is NOT touched, only is_clearing_enabled is forced off.
+Do the same logic for role = 'state_admin'? No, skip this for states entirely, states are never deactivated this way, only their user accounts are removed.
+
+Step 2 -- Backend: allow linking to an existing stakeholder, including inactive ones
+In createUser, the stakeholder branch currently matches by free-text name. Add a new accepted field: existingStakeholderId (optional UUID). Update the logic:
+
+If existingStakeholderId is provided: validate it exists in the stakeholders table (any status). Link the new user to it. If the stakeholder was is_active = false, reactivate it: UPDATE stakeholders SET is_active = true WHERE id = $id. Also do NOT auto re-enable its wallet's is_clearing_enabled, that stays off until Super Admin explicitly turns it on again.
+If existingStakeholderId is not provided but stakeholderName is: keep the current behavior (case-insensitive match or create new).
+Both paths remain supported, existingStakeholderId just takes priority if present.
+
+Step 3 -- Backend: list all stakeholders for the picker
+Add a new endpoint or confirm one exists:
+GET /stakeholders/all   authenticateToken + requireRole("super_admin")
+Returns every stakeholder regardless of is_active status, with id, name, isActive. Used to populate the "link to existing" picker on user creation.
+Step 4 -- Backend: EOD wallets endpoint should include stakeholders with their active status
+In walletController.ts, getAllWallets should already return stakeholder wallets. Confirm the response includes, for each stakeholder wallet, the stakeholder's isActive status via a join to stakeholders. Add this if missing, as ownerIsActive.
+Step 5 -- TypeScript check (backend)
+pnpm --filter @workspace/api-server exec tsc --noEmit
+
+Step 6 -- Frontend: stakeholder picker on Create User modal
+In artifacts/mobile/app/(superadmin)/users.tsx, when role === 'Stakeholder' is selected in the Create User modal, replace the current single text input with two options presented clearly:
+
+A toggle or segmented control: "Link to existing organization" vs "Create new organization"
+If "Link to existing": show a searchable list (fetched from GET /stakeholders/all) of all stakeholders, each row showing the name and, if inactive, a gray "Inactive" badge. Tapping one selects it, sets existingStakeholderId in the form.
+If "Create new": show the text input as before, sets stakeholderName in the form.
+
+On submit, send either existingStakeholderId or stakeholderName depending on which mode was used, never both.
+Step 7 -- Frontend: EOD clearing section improvements
+In artifacts/mobile/app/(superadmin)/config.tsx, update the EOD Payment Clearing section:
+
+Add a search input at the top that filters the combined list (states and stakeholders) by name, client-side.
+Add a segmented filter control with three options: "All", "States", "Stakeholders". Default to "All".
+Fix the missing stakeholders: confirm getAllWallets() response includes owner_type === 'stakeholder' rows and that these are now included in the rendered list alongside states, using the same card style. Sort stakeholders after states, or interleave alphabetically, your call on which reads cleaner, but they must be visible.
+For any wallet where ownerIsActive === false (a deactivated stakeholder): gray out the entire card (reduced opacity), force the Switch to appear off regardless of stored value, and keep it disabled with a label "Organization inactive" instead of "Requires payment processor setup".
+Active wallets keep their existing "Requires payment processor setup" label and stay disabled as before, this has not changed, the payment processor is still not connected.
+
+Step 8 -- Frontend: fix back navigation on detail screens
+Investigate and fix the back button behavior on at least these two screens, then check for the same pattern elsewhere:
+
+(superadmin)/user-detail.tsx
+(superadmin)/trip-detail.tsx (Super Admin's own trips tab detail view, if separate from Trip Admin's)
+
+The back chevron currently lands on the Home tab instead of returning to the Users tab or Trips tab respectively. This is very likely the same root cause as the earlier PillTabBar/Tabs navigator issue: router.back() inside a Tabs navigator can resolve to the tab's default screen rather than true browser-style history.
+Fix by replacing router.back() on these back buttons with an explicit router.push() to the correct originating tab:
+tsx// on user-detail.tsx back button:
+onPress={() => router.push('/(superadmin)/users')}
+
+// on trip-detail.tsx back button:
+onPress={() => router.push('/(superadmin)/trips')}
+Search the codebase for any other hidden detail screen (href: null entries in any _layout.tsx) using router.back() on its back button, and apply the same explicit-path fix consistently. List every file you find and fix.
+Step 9 -- TypeScript check (frontend)
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both checks must return zero errors before continuing.
+
+PART 2 -- Testing
+Backend API tests:
+Test 1 -- Delete the only user tied to a stakeholder. Confirm the stakeholder's is_active becomes false and its wallet's is_clearing_enabled becomes false. Confirm GET /api/pricing/active no longer includes that stakeholder in any vehicle type.
+Test 2 -- Create a new user with existingStakeholderId pointing to the deactivated stakeholder from Test 1. Confirm 201, confirm the stakeholder's is_active becomes true again, confirm is_clearing_enabled stays false. Confirm it now reappears in GET /api/pricing/active.
+Test 3 -- GET /stakeholders/all returns both active and inactive stakeholders with correct isActive values.
+Frontend App Tests, 390x844px, tap only:
+Test 4 -- Login as Super Admin. Create a Stakeholder user, choose "Create new organization", confirm it works as before.
+Test 5 -- Delete that user via the user detail screen. Confirm the back chevron after deletion returns to the Users tab, not Home.
+Test 6 -- Go to Config, confirm the deactivated stakeholder no longer appears in the pricing chart, and confirm it appears in EOD Payment Clearing grayed out with "Organization inactive" and its toggle forced off.
+Test 7 -- Create a new user, this time choose "Link to existing organization", search for and select the deactivated one from Test 5. Confirm it reactivates and reappears in the pricing chart at its previous rates.
+Test 8 -- On EOD Payment Clearing, use the search bar to filter by a state name, confirm only matching cards show. Switch the filter to "Stakeholders" and confirm state cards disappear and stakeholder cards, including active ones like Consultant, Vendor, Integrator, are visible.
+Test 9 -- Open any trip detail from the Super Admin Trips tab, tap the back chevron, confirm it returns to the Trips tab, not Home.
+Test 10 -- Console clean throughout.
