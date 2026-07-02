@@ -4,6 +4,7 @@ import {
   LayoutAnimation,
   Modal,
   Platform,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Switch,
@@ -16,7 +17,7 @@ import {
 
 import { ChevronDown, ChevronRight, ChevronUp, Pencil, Plus, Search, X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import {
   getActivePricingChart,
   listVehicleTypes,
@@ -169,6 +170,7 @@ function ActiveChartCard({
 export default function ConfigScreen() {
   const router = useRouter();
   const [pageLoading, setPageLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [activeChart, setActiveChart] = useState<PricingChart | null>(null);
   const [vehicleTypes, setVehicleTypes] = useState<VehicleTypeItem[]>([]);
@@ -240,9 +242,21 @@ export default function ConfigScreen() {
     }
   }, []);
 
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  }, [loadData]);
+
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   const handleOpenEditVt = (vtr: VehicleTypeRate) => {
     setEditVtModal({
@@ -400,7 +414,17 @@ export default function ConfigScreen() {
       <TopBar />
       <ScreenTransition style={{ flex: 1 }}>
       <SlideUpList style={{ flex: 1 }}>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={theme.colors.primary}
+          />
+        }
+      >
 
         <Text style={styles.sectionLabel}>Pricing Chart</Text>
         {activeChart ? (
