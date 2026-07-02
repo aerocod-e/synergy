@@ -339,14 +339,17 @@ export default function TripAdminDrivers() {
         renderItem={renderDriver}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
-          <TouchableOpacity
-            style={styles.auditBannerBtn}
-            onPress={openAuditPicker}
-            activeOpacity={0.85}
-          >
-            <BarChart2 size={18} color={theme.colors.primary} />
-            <Text style={styles.auditBannerText}>Generate Audit Report</Text>
-          </TouchableOpacity>
+          <View style={styles.listHeaderRow}>
+            <Text style={styles.listHeaderTitle}>Drivers</Text>
+            <TouchableOpacity
+              style={styles.auditBannerBtn}
+              onPress={openAuditPicker}
+              activeOpacity={0.85}
+            >
+              <BarChart2 size={16} color={theme.colors.primary} />
+              <Text style={styles.auditBannerText}>Audit Report</Text>
+            </TouchableOpacity>
+          </View>
         }
         refreshControl={
           <RefreshControl
@@ -800,21 +803,28 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: theme.colors.black,
   },
+  listHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  listHeaderTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: theme.colors.black,
+  },
   auditBannerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: theme.colors.white,
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: theme.colors.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 12,
-    ...theme.shadows.card,
+    backgroundColor: theme.colors.blueMuted,
   },
   auditBannerText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: theme.colors.primary,
   },

@@ -353,14 +353,15 @@ export default function TripAdminVehicles() {
         renderItem={renderVehicle}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
-          <View style={styles.auditHeaderRow}>
+          <View style={styles.listHeaderRow}>
+            <Text style={styles.listHeaderTitle}>Vehicles</Text>
             <TouchableOpacity
-              style={styles.auditBtn}
+              style={styles.auditBannerBtn}
               onPress={openAuditPicker}
               activeOpacity={0.8}
             >
               <BarChart2 size={16} color={theme.colors.primary} />
-              <Text style={styles.auditBtnText}>Generate Audit</Text>
+              <Text style={styles.auditBannerText}>Audit Report</Text>
             </TouchableOpacity>
           </View>
         }
@@ -780,22 +781,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...theme.shadows.strong,
   },
-  auditHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    paddingBottom: 10,
-  },
-  auditBtn: {
+  listHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: theme.colors.blueMuted,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
-  auditBtnText: {
-    fontSize: 14,
+  listHeaderTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: theme.colors.black,
+  },
+  auditBannerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: theme.colors.blueMuted,
+  },
+  auditBannerText: {
+    fontSize: 13,
     fontWeight: '700',
     color: theme.colors.primary,
   },
