@@ -1,0 +1,33 @@
+Do not make any changes without following these exact steps. Perform a complete data wipe keeping only the Super Admin account, then reseed.
+Step 1, wipe in FK-safe order.
+sqlDELETE FROM wallet_ledger;
+DELETE FROM cancellation_requests;
+DELETE FROM trip_events;
+DELETE FROM trip_fees;
+DELETE FROM trips;
+DELETE FROM vehicles;
+DELETE FROM drivers;
+DELETE FROM pricing_chart_stakeholder_rates;
+DELETE FROM pricing_charts;
+DELETE FROM stakeholders;
+DELETE FROM wallets WHERE owner_type != 'state';
+UPDATE wallets SET total_collected = 0, is_clearing_enabled = false WHERE owner_type = 'state';
+DELETE FROM users WHERE email != 'superadmin@synergy.com';
+ALTER SEQUENCE trip_code_seq RESTART WITH 1;
+Confirm the two triggers created in the previous task, wallet_owner_check and stakeholder_delete_guard, do not block any of the above deletes. They should not, since these deletes remove stakeholders and their wallets together rather than one without the other, but confirm this explicitly before proceeding and report if either trigger fires unexpectedly during the wipe.
+Step 2, reseed.
+pnpm --filter @workspace/api-server run seed
+Step 3, verify.
+Report results of:
+
+SELECT COUNT(*) FROM users WHERE deleted_at IS NULL and list every email and role
+SELECT name FROM stakeholders WHERE is_active = true ORDER BY name
+SELECT COUNT(*) FROM pricing_chart_stakeholder_rates
+SELECT COUNT(*) FROM vehicles WHERE deleted_at IS NULL
+SELECT COUNT(*) FROM drivers WHERE deleted_at IS NULL
+SELECT COUNT(*) FROM trips
+SELECT COUNT(*) FROM wallets
+SELECT COUNT(*) FROM wallets WHERE owner_type = 'stakeholder' and confirm this matches the number of active stakeholders from the seed
+SELECT w.id FROM wallets w LEFT JOIN stakeholders sh ON w.owner_type = 'stakeholder' AND w.owner_id = sh.id WHERE w.owner_type = 'stakeholder' AND sh.id IS NULL and confirm zero rows, this should now be structurally impossible because of the trigger, but confirm anyway
+
+Report all counts and confirm nothing besides superadmin@synergy.com survived the wipe among users.
