@@ -12,20 +12,47 @@ import {
   TextInput,
   Alert,
   ScrollView,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
-import { AlertCircle, BarChart2, Car, Check, CloudOff, LogOut, Pencil, Plus, PlusCircle, Trash2, X } from 'lucide-react-native';
+import { AlertCircle, BarChart2, Car, Check, ChevronDown, ChevronUp, CloudOff, LogOut, Pencil, Plus, PlusCircle, Trash2, X } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
 import ScreenTransition from '@/components/ScreenTransition';
 import SlideUpList from '@/components/SlideUpList';
 import VehicleSearchInput, { type Vehicle } from '@/components/VehicleSearchInput';
-import { listVehicles, createVehicle, updateVehicle, deleteVehicle as deleteVehicleApi, listVehicleTypes } from '@/services/api';
+import { listVehicles, createVehicle, updateVehicle, deleteVehicle as deleteVehicleApi, listVehicleTypes, getActivePricingChart } from '@/services/api';
 import { useLogout } from '@/hooks/useLogout';
+import { formatNaira } from '@/utils/formatCurrency';
+
+if (Platform.OS === 'android') {
+  UIManager.setLayoutAnimationEnabledExperimental?.(true);
+}
 
 interface VehicleType {
   id: string;
   name: string;
+}
+
+interface VehicleTypeStakeholderRate {
+  stakeholderId: string;
+  stakeholderName: string;
+  amount: number;
+}
+
+interface VehicleTypeRate {
+  vehicleTypeId: string;
+  vehicleTypeName: string;
+  loadingFee: number;
+  unloadingFee: number;
+  stakeholderRates: VehicleTypeStakeholderRate[];
+}
+
+interface PricingChart {
+  id: string;
+  isActive: boolean;
+  vehicleTypeRates: VehicleTypeRate[];
 }
 
 interface VehicleWithCount extends Vehicle {
@@ -59,6 +86,8 @@ export default function TripAdminVehicles() {
   const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([]);
   const [pendingRegNum, setPendingRegNum] = useState<string | null>(null);
   const [pendingVehicleTypeId, setPendingVehicleTypeId] = useState<string>('');
+  const [activeChart, setActiveChart] = useState<PricingChart | null>(null);
+  const [expandedTypeId, setExpandedTypeId] = useState<string | null>(null);
 
   const navigation = useNavigation();
   const router     = useRouter();
@@ -71,6 +100,9 @@ export default function TripAdminVehicles() {
   useEffect(() => {
     listVehicleTypes()
       .then((data: any) => setVehicleTypes(data?.vehicleTypes ?? []))
+      .catch(() => {});
+    getActivePricingChart()
+      .then((data: any) => setActiveChart(data?.chart ?? null))
       .catch(() => {});
   }, []);
 
@@ -531,18 +563,60 @@ export default function TripAdminVehicles() {
                 ) : (
                   vehicleTypes.map((vt) => {
                     const selected = vt.id === pendingVehicleTypeId;
+                    const expanded = vt.id === expandedTypeId;
+                    const rate = activeChart?.vehicleTypeRates.find((r) => r.vehicleTypeId === vt.id) ?? null;
                     return (
-                      <TouchableOpacity
-                        key={vt.id}
-                        style={[styles.typeRow, selected && styles.typeRowSelected]}
-                        onPress={() => setPendingVehicleTypeId(vt.id)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[styles.typeRowText, selected && styles.typeRowTextSelected]}>
-                          {vt.name}
-                        </Text>
-                        {selected && <Check size={18} color={theme.colors.primary} />}
-                      </TouchableOpacity>
+                      <View key={vt.id} style={styles.typeRowWrapper}>
+                        <TouchableOpacity
+                          style={[styles.typeRow, selected && styles.typeRowSelected]}
+                          onPress={() => {
+                            setPendingVehicleTypeId(vt.id);
+                            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                            setExpandedTypeId(expanded ? null : vt.id);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.typeRowText, selected && styles.typeRowTextSelected]}>
+                            {vt.name}
+                          </Text>
+                          <View style={styles.typeRowRight}>
+                            {selected && <Check size={18} color={theme.colors.primary} />}
+                            {expanded
+                              ? <ChevronUp size={16} color={theme.colors.grey1} />
+                              : <ChevronDown size={16} color={theme.colors.grey1} />}
+                          </View>
+                        </TouchableOpacity>
+                        {expanded && (
+                          <View style={styles.typeRateBody}>
+                            {rate ? (
+                              <>
+                                <View style={styles.feeRow}>
+                                  <Text style={styles.feeLabel}>Loading Fee</Text>
+                                  <Text style={styles.feeValue}>{formatNaira(rate.loadingFee)}</Text>
+                                </View>
+                                <View style={styles.feeRow}>
+                                  <Text style={styles.feeLabel}>Unloading Fee</Text>
+                                  <Text style={styles.feeValue}>{formatNaira(rate.unloadingFee)}</Text>
+                                </View>
+                                {rate.stakeholderRates.length > 0 && (
+                                  <>
+                                    <View style={styles.divider} />
+                                    <Text style={styles.subLabel}>STAKEHOLDER RATES</Text>
+                                    {rate.stakeholderRates.map((sr) => (
+                                      <View key={sr.stakeholderId} style={styles.feeRow}>
+                                        <Text style={styles.feeLabel}>{sr.stakeholderName}</Text>
+                                        <Text style={styles.feeValue}>{formatNaira(sr.amount)}</Text>
+                                      </View>
+                                    ))}
+                                  </>
+                                )}
+                              </>
+                            ) : (
+                              <Text style={styles.emptyRatesText}>Rate not yet configured for this vehicle type.</Text>
+                            )}
+                          </View>
+                        )}
+                      </View>
                     );
                   })
                 )}
@@ -981,20 +1055,23 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: theme.colors.grey2,
   },
+  typeRowWrapper: {
+    marginBottom: 8,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: theme.colors.grey3,
+    backgroundColor: theme.colors.white,
+    overflow: 'hidden',
+  },
   typeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: theme.colors.white,
-    borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    marginBottom: 8,
-    borderWidth: 1.5,
-    borderColor: theme.colors.grey3,
   },
   typeRowSelected: {
-    borderColor: theme.colors.primary,
     backgroundColor: theme.colors.blueMuted,
   },
   typeRowText: {
@@ -1005,5 +1082,50 @@ const styles = StyleSheet.create({
   typeRowTextSelected: {
     color: theme.colors.primary,
     fontWeight: '700',
+  },
+  typeRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  typeRateBody: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    paddingTop: 2,
+  },
+  feeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  feeLabel: {
+    fontSize: 14,
+    color: theme.colors.grey2,
+    flex: 1,
+  },
+  feeValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.colors.black,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: theme.colors.separator,
+    marginVertical: 4,
+  },
+  subLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    color: theme.colors.grey1,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  emptyRatesText: {
+    fontSize: 14,
+    color: theme.colors.grey1,
+    paddingVertical: 4,
   },
 });
