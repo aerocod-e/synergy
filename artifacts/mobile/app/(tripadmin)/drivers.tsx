@@ -22,6 +22,7 @@ import { useLogout } from '@/hooks/useLogout';
 import { confirmAction } from '@/utils/confirmAction';
 import DateField from '@/components/DateField';
 import SearchBar from '@/components/SearchBar';
+import FilterPanel from '@/components/FilterPanel';
 
 interface DriverItem {
   id: string;
@@ -407,20 +408,26 @@ export default function TripAdminDrivers() {
               onChangeText={setSearchInput}
               placeholder="Search by name, license, or phone…"
             />
-            <View style={styles.licenseFilterRow}>
-              {(['all', 'valid', 'expired'] as LicenseFilter[]).map((f) => (
-                <TouchableOpacity
-                  key={f}
-                  style={[styles.filterPill, licenseFilter === f && styles.filterPillActive]}
-                  onPress={() => setLicenseFilter(f)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.filterPillText, licenseFilter === f && styles.filterPillTextActive]}>
-                    {f === 'all' ? 'All' : f === 'valid' ? 'Valid' : 'Expired'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <FilterPanel
+              activeFilterCount={licenseFilter !== 'all' ? 1 : 0}
+              summaryText={licenseFilter === 'valid' ? 'Valid' : licenseFilter === 'expired' ? 'Expired' : null}
+              onClearAll={() => setLicenseFilter('all')}
+            >
+              <View style={styles.licenseFilterRow}>
+                {(['all', 'valid', 'expired'] as LicenseFilter[]).map((f) => (
+                  <TouchableOpacity
+                    key={f}
+                    style={[styles.filterPill, licenseFilter === f && styles.filterPillActive]}
+                    onPress={() => setLicenseFilter(f)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.filterPillText, licenseFilter === f && styles.filterPillTextActive]}>
+                      {f === 'all' ? 'All' : f === 'valid' ? 'Valid' : 'Expired'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </FilterPanel>
           </>
         }
         refreshControl={

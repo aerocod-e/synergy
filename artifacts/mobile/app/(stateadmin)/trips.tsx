@@ -15,6 +15,7 @@ import TopBar from '@/components/TopBar';
 import ScreenTransition from '@/components/ScreenTransition';
 import SlideUpList from '@/components/SlideUpList';
 import SearchBar from '@/components/SearchBar';
+import FilterPanel from '@/components/FilterPanel';
 import DateRangeFilter, { getDateRangeParams, type DateRangeValue } from '@/components/DateRangeFilter';
 import { getTrips } from '@/services/api';
 
@@ -198,6 +199,22 @@ export default function StateAdminTrips() {
 
   const skeletons = [1, 2, 3, 4];
 
+  const activeFilterCount = (dateRange.preset !== 'all' ? 1 : 0) + (activeFilter !== 'All' ? 1 : 0);
+  const dateSummary = dateRange.preset === '7d'
+    ? 'Last 7 days'
+    : dateRange.preset === '30d'
+    ? 'Last 30 days'
+    : dateRange.preset === 'custom' && dateRange.startDate && dateRange.endDate
+    ? `${dateRange.startDate} → ${dateRange.endDate}`
+    : null;
+  const summaryParts = [dateSummary, activeFilter !== 'All' ? activeFilter : null].filter(Boolean) as string[];
+  const summaryText = summaryParts.length > 0 ? summaryParts.join(', ') : null;
+
+  const clearAllFilters = () => {
+    setDateRange({ preset: 'all' });
+    setActiveFilter('All');
+  };
+
   return (
     <View style={styles.root}>
       <TopBar />
@@ -211,29 +228,35 @@ export default function StateAdminTrips() {
           placeholder="Search by trip, vehicle, or driver…"
         />
 
-        {/* Date range filter */}
-        <DateRangeFilter value={dateRange} onChange={setDateRange} />
-
-        {/* Status filter pills */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.filterScroll}
-          contentContainerStyle={styles.filterScrollContent}
+        <FilterPanel
+          activeFilterCount={activeFilterCount}
+          summaryText={summaryText}
+          onClearAll={clearAllFilters}
         >
-          {FILTER_OPTIONS.map((f) => (
-            <TouchableOpacity
-              key={f}
-              style={[styles.filterPill, activeFilter === f && styles.filterPillActive]}
-              onPress={() => setActiveFilter(f)}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.filterPillText, activeFilter === f && styles.filterPillTextActive]}>
-                {f}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+          {/* Date range filter */}
+          <DateRangeFilter value={dateRange} onChange={setDateRange} />
+
+          {/* Status filter pills */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.filterScroll}
+            contentContainerStyle={styles.filterScrollContent}
+          >
+            {FILTER_OPTIONS.map((f) => (
+              <TouchableOpacity
+                key={f}
+                style={[styles.filterPill, activeFilter === f && styles.filterPillActive]}
+                onPress={() => setActiveFilter(f)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.filterPillText, activeFilter === f && styles.filterPillTextActive]}>
+                  {f}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </FilterPanel>
 
         {error ? (
           <View style={styles.centered}>

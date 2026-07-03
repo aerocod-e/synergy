@@ -15,6 +15,7 @@ import TopBar from '@/components/TopBar';
 import ScreenTransition from '@/components/ScreenTransition';
 import SlideUpList from '@/components/SlideUpList';
 import SearchBar from '@/components/SearchBar';
+import FilterPanel from '@/components/FilterPanel';
 import DateRangeFilter, { getDateRangeParams, type DateRangeValue } from '@/components/DateRangeFilter';
 import { getMyWallet, getMyLedger } from '@/services/api';
 import { formatNaira, formatNairaWithSign } from '@/utils/formatCurrency';
@@ -157,6 +158,27 @@ export default function StateAdminWallet() {
     );
   }
 
+  // ── filter summary ────────────────────────────────────────────────────────
+
+  const activeFilterCount = (dateRange.preset !== 'all' ? 1 : 0) + (entryType !== 'all' ? 1 : 0);
+  const dateSummary = dateRange.preset === '7d'
+    ? 'Last 7 days'
+    : dateRange.preset === '30d'
+    ? 'Last 30 days'
+    : dateRange.preset === 'custom' && dateRange.startDate && dateRange.endDate
+    ? `${dateRange.startDate} → ${dateRange.endDate}`
+    : null;
+  const entryTypeSummary = entryType !== 'all'
+    ? ENTRY_TYPE_FILTERS.find((f) => f.key === entryType)?.label ?? null
+    : null;
+  const summaryParts = [dateSummary, entryTypeSummary].filter(Boolean) as string[];
+  const summaryText = summaryParts.length > 0 ? summaryParts.join(', ') : null;
+
+  const clearAllFilters = () => {
+    setDateRange({ preset: 'all' });
+    setEntryType('all');
+  };
+
   // ── render helpers ────────────────────────────────────────────────────────
 
   const renderEntry = ({ item }: { item: LedgerEntry }) => (
@@ -236,24 +258,30 @@ export default function StateAdminWallet() {
           placeholder="Search by trip, vehicle, or route…"
         />
 
-        {/* Date range filter */}
-        <DateRangeFilter value={dateRange} onChange={setDateRange} />
+        <FilterPanel
+          activeFilterCount={activeFilterCount}
+          summaryText={summaryText}
+          onClearAll={clearAllFilters}
+        >
+          {/* Date range filter */}
+          <DateRangeFilter value={dateRange} onChange={setDateRange} />
 
-        {/* Entry type chips */}
-        <View style={styles.filterRow}>
-          {ENTRY_TYPE_FILTERS.map((f) => (
-            <TouchableOpacity
-              key={f.key}
-              style={[styles.chip, entryType === f.key && styles.chipActive]}
-              onPress={() => setEntryType(f.key)}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.chipText, entryType === f.key && styles.chipTextActive]}>
-                {f.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+          {/* Entry type chips */}
+          <View style={styles.filterRow}>
+            {ENTRY_TYPE_FILTERS.map((f) => (
+              <TouchableOpacity
+                key={f.key}
+                style={[styles.chip, entryType === f.key && styles.chipActive]}
+                onPress={() => setEntryType(f.key)}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.chipText, entryType === f.key && styles.chipTextActive]}>
+                  {f.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </FilterPanel>
 
         {/* Summary row */}
         {entries.length > 0 && (

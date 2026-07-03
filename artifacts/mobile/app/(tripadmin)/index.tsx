@@ -24,6 +24,7 @@ import SlideUpList from '@/components/SlideUpList';
 import VehicleSearchInput, { type Vehicle } from '@/components/VehicleSearchInput';
 import DriverSearchInput, { type Driver, isDriverLicenseExpired } from '@/components/DriverSearchInput';
 import SearchBar from '@/components/SearchBar';
+import FilterPanel from '@/components/FilterPanel';
 import DateRangeFilter, { getDateRangeParams, type DateRangeValue } from '@/components/DateRangeFilter';
 import { getTrips, createTrip, getActivePricingChart, getStates, requestCancellation, createVehicle, listVehicleTypes } from '@/services/api';
 import { formatNaira } from '@/utils/formatCurrency';
@@ -490,6 +491,24 @@ export default function TripAdminTrips() {
     );
   }
 
+  // ── filter summary ────────────────────────────────────────────────────────
+
+  const activeFilterCount = (dateRange.preset !== 'all' ? 1 : 0) + (statusFilter !== 'All' ? 1 : 0);
+  const dateSummary = dateRange.preset === '7d'
+    ? 'Last 7 days'
+    : dateRange.preset === '30d'
+    ? 'Last 30 days'
+    : dateRange.preset === 'custom' && dateRange.startDate && dateRange.endDate
+    ? `${dateRange.startDate} → ${dateRange.endDate}`
+    : null;
+  const filterSummaryParts = [dateSummary, statusFilter !== 'All' ? statusFilter : null].filter(Boolean) as string[];
+  const filterSummaryText = filterSummaryParts.length > 0 ? filterSummaryParts.join(', ') : null;
+
+  const clearAllFilters = () => {
+    setDateRange({ preset: 'all' });
+    setStatusFilter('All');
+  };
+
   // ── main ────────────────────────────────────────────────────────────────────
 
   return (
@@ -509,26 +528,32 @@ export default function TripAdminTrips() {
               onChangeText={setSearchInput}
               placeholder="Search by trip, vehicle, or driver…"
             />
-            <DateRangeFilter value={dateRange} onChange={setDateRange} />
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.filterScroll}
-              contentContainerStyle={styles.filterScrollContent}
+            <FilterPanel
+              activeFilterCount={activeFilterCount}
+              summaryText={filterSummaryText}
+              onClearAll={clearAllFilters}
             >
-              {STATUS_FILTER_OPTIONS.map((f) => (
-                <TouchableOpacity
-                  key={f}
-                  style={[styles.filterPill, statusFilter === f && styles.filterPillActive]}
-                  onPress={() => setStatusFilter(f)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.filterPillText, statusFilter === f && styles.filterPillTextActive]}>
-                    {f}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+              <DateRangeFilter value={dateRange} onChange={setDateRange} />
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.filterScroll}
+                contentContainerStyle={styles.filterScrollContent}
+              >
+                {STATUS_FILTER_OPTIONS.map((f) => (
+                  <TouchableOpacity
+                    key={f}
+                    style={[styles.filterPill, statusFilter === f && styles.filterPillActive]}
+                    onPress={() => setStatusFilter(f)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.filterPillText, statusFilter === f && styles.filterPillTextActive]}>
+                      {f}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </FilterPanel>
           </>
         }
         refreshControl={

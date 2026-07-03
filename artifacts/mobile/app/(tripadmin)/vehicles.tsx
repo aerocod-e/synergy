@@ -22,6 +22,7 @@ import ScreenTransition from '@/components/ScreenTransition';
 import SlideUpList from '@/components/SlideUpList';
 import VehicleSearchInput, { type Vehicle } from '@/components/VehicleSearchInput';
 import SearchBar from '@/components/SearchBar';
+import FilterPanel from '@/components/FilterPanel';
 import { listVehicles, createVehicle, updateVehicle, deleteVehicle as deleteVehicleApi, listVehicleTypes, getActivePricingChart } from '@/services/api';
 import { useLogout } from '@/hooks/useLogout';
 import { formatNaira } from '@/utils/formatCurrency';
@@ -418,34 +419,40 @@ export default function TripAdminVehicles() {
               placeholder="Search by registration number…"
             />
             {vehicleTypes.length > 0 && (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.typeFilterScroll}
-                contentContainerStyle={styles.typeFilterScrollContent}
+              <FilterPanel
+                activeFilterCount={selectedTypeFilterId ? 1 : 0}
+                summaryText={selectedTypeFilterId ? (vehicleTypes.find((vt) => vt.id === selectedTypeFilterId)?.name ?? null) : null}
+                onClearAll={() => setSelectedTypeFilterId('')}
               >
-                <TouchableOpacity
-                  style={[styles.filterPill, selectedTypeFilterId === '' && styles.filterPillActive]}
-                  onPress={() => setSelectedTypeFilterId('')}
-                  activeOpacity={0.7}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.typeFilterScroll}
+                  contentContainerStyle={styles.typeFilterScrollContent}
                 >
-                  <Text style={[styles.filterPillText, selectedTypeFilterId === '' && styles.filterPillTextActive]}>
-                    All Types
-                  </Text>
-                </TouchableOpacity>
-                {vehicleTypes.map((vt) => (
                   <TouchableOpacity
-                    key={vt.id}
-                    style={[styles.filterPill, selectedTypeFilterId === vt.id && styles.filterPillActive]}
-                    onPress={() => setSelectedTypeFilterId(vt.id)}
+                    style={[styles.filterPill, selectedTypeFilterId === '' && styles.filterPillActive]}
+                    onPress={() => setSelectedTypeFilterId('')}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.filterPillText, selectedTypeFilterId === vt.id && styles.filterPillTextActive]}>
-                      {vt.name}
+                    <Text style={[styles.filterPillText, selectedTypeFilterId === '' && styles.filterPillTextActive]}>
+                      All Types
                     </Text>
                   </TouchableOpacity>
-                ))}
-              </ScrollView>
+                  {vehicleTypes.map((vt) => (
+                    <TouchableOpacity
+                      key={vt.id}
+                      style={[styles.filterPill, selectedTypeFilterId === vt.id && styles.filterPillActive]}
+                      onPress={() => setSelectedTypeFilterId(vt.id)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.filterPillText, selectedTypeFilterId === vt.id && styles.filterPillTextActive]}>
+                        {vt.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </FilterPanel>
             )}
           </>
         }
