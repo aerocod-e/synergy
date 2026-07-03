@@ -92,11 +92,9 @@ function isValidAmount(val: string): boolean {
 function ActiveChartCard({
   chart,
   onEdit,
-  onToggleActive,
 }: {
   chart: PricingChart;
   onEdit: (vtr: VehicleTypeRate) => void;
-  onToggleActive: (vtr: VehicleTypeRate) => void;
 }) {
   const [expandedTypeId, setExpandedTypeId] = useState<string | null>(null);
 
@@ -149,17 +147,6 @@ function ActiveChartCard({
                   accessibilityRole="button"
                 >
                   <Pencil size={15} color={theme.colors.primary} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => onToggleActive(vtr)}
-                  hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
-                  style={[styles.editIconBtn, styles.toggleIconBtn]}
-                  accessibilityLabel={vtr.isActive ? 'Deactivate vehicle type' : 'Reactivate vehicle type'}
-                  accessibilityRole="button"
-                >
-                  {vtr.isActive
-                    ? <Ban size={15} color={theme.colors.error} />
-                    : <RotateCcw size={15} color={theme.colors.greenText} />}
                 </TouchableOpacity>
               </View>
               {expanded && (
@@ -214,6 +201,7 @@ export default function ConfigScreen() {
     loadingFee: string;
     unloadingFee: string;
     stakeholderRates: EditSrEntry[];
+    isActive: boolean;
   } | null>(null);
   const [editVtSubmitting, setEditVtSubmitting] = useState(false);
   const [editVtError, setEditVtError] = useState<string | null>(null);
@@ -295,6 +283,7 @@ export default function ConfigScreen() {
         stakeholderName: sr.stakeholderName,
         amount: (sr.amount / 100).toFixed(2),
       })),
+      isActive: vtr.isActive,
     });
     setEditVtError(null);
   };
@@ -361,6 +350,7 @@ export default function ConfigScreen() {
           const doDeactivate = async () => {
             try {
               await setVehicleTypeActive(vtr.vehicleTypeId, false);
+              setEditVtModal(null);
               setPageLoading(true);
               await loadData();
             } catch (e: any) {
@@ -387,6 +377,7 @@ export default function ConfigScreen() {
       setTogglingVtId(vtr.vehicleTypeId);
       setVehicleTypeActive(vtr.vehicleTypeId, true)
         .then(async () => {
+          setEditVtModal(null);
           setPageLoading(true);
           await loadData();
         })
@@ -513,7 +504,6 @@ export default function ConfigScreen() {
           <ActiveChartCard
             chart={activeChart}
             onEdit={handleOpenEditVt}
-            onToggleActive={handleToggleVtActive}
           />
         ) : (
           <View style={styles.emptyCard}>
@@ -680,6 +670,42 @@ export default function ConfigScreen() {
                 ? <ActivityIndicator color={theme.colors.white} />
                 : <Text style={styles.submitButtonText}>Save Changes</Text>}
             </TouchableOpacity>
+
+            {editVtModal && (
+              <View style={styles.dangerZone}>
+                <View style={styles.divider} />
+                <Text style={styles.dangerZoneLabel}>DANGER ZONE</Text>
+                <TouchableOpacity
+                  style={styles.dangerButton}
+                  onPress={() =>
+                    handleToggleVtActive({
+                      vehicleTypeId: editVtModal.vehicleTypeId,
+                      vehicleTypeName: editVtModal.vehicleTypeName,
+                      loadingFee: 0,
+                      unloadingFee: 0,
+                      isActive: editVtModal.isActive,
+                      stakeholderRates: [],
+                    })
+                  }
+                  disabled={togglingVtId === editVtModal.vehicleTypeId}
+                  activeOpacity={0.85}
+                >
+                  {togglingVtId === editVtModal.vehicleTypeId ? (
+                    <ActivityIndicator color={theme.colors.error} />
+                  ) : editVtModal.isActive ? (
+                    <>
+                      <Ban size={16} color={theme.colors.error} />
+                      <Text style={styles.dangerButtonText}>Deactivate Vehicle Type</Text>
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw size={16} color={theme.colors.greenText} />
+                      <Text style={[styles.dangerButtonText, styles.reactivateButtonText]}>Reactivate Vehicle Type</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
           </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
@@ -833,9 +859,6 @@ const styles = StyleSheet.create({
     paddingLeft: 10,
     paddingVertical: 12,
   },
-  toggleIconBtn: {
-    paddingLeft: 16,
-  },
   inactiveTypeRow: {
     opacity: 0.55,
   },
@@ -975,6 +998,37 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   buttonDisabled: { opacity: 0.6 },
+  dangerZone: {
+    marginTop: 24,
+  },
+  dangerZoneLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    color: theme.colors.error,
+    textTransform: 'uppercase',
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  dangerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: theme.colors.error,
+    borderRadius: 12,
+    paddingVertical: 14,
+  },
+  dangerButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: theme.colors.error,
+  },
+  reactivateButtonText: {
+    color: theme.colors.greenText,
+  },
   errorText: {
     fontSize: 13,
     color: theme.colors.error,
