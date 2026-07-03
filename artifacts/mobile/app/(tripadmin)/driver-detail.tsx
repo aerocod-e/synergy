@@ -66,8 +66,8 @@ export default function TripAdminDriverDetail() {
         getDriver(id),
         getDriverLicenseHistory(id),
       ]);
-      setDriver(driverRes.data as DriverDetail);
-      setHistory(historyRes.data as LicenseHistoryEntry[]);
+      setDriver(driverRes as DriverDetail);
+      setHistory(historyRes as LicenseHistoryEntry[]);
     } catch {
       setError(true);
     } finally {
