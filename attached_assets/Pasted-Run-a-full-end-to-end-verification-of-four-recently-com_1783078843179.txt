@@ -1,0 +1,44 @@
+Run a full end to end verification of four recently completed features. Test backend first using direct API calls, then test frontend using the browser at this exact URL.
+App URL for all frontend testing
+https://2f2a3156-e178-45fc-95e3-f3726442355f-00-2f9hl4ag0p8j2.expo.kirk.replit.dev
+Set the browser viewport to 390 by 844 pixels before starting any frontend test, this app is mobile only and will not render correctly at desktop width.
+Demo accounts to use
+Trip Admin, Lagos: lagos.ta1@synergy.com, password Demo@1234
+Super Admin: superadmin@synergy.com, password Admin@1234
+
+Part 1, backend tests for the Alert.alert fix
+This fix is frontend only, so there is nothing to test at the API level for this one, skip to Part 2 for its frontend tests.
+
+Part 2, backend tests for proof of payment
+Test 1, login as Lagos Trip Admin, call GET /api/trips/:id for any existing trip, confirm the response now includes a vehicleTypeStakeholderRates array, confirm it includes every stakeholder for that vehicle type on the active pricing chart, including any with an amount of zero, not only the ones with an actual fee.
+Test 2, confirm the same trip's existing trip_fees data is still present and unchanged in the response.
+
+Part 3, backend tests for driver license expiry
+Test 3, login as Lagos Trip Admin, call POST /api/drivers without a license_expiry_date field, confirm this returns a validation error rather than succeeding.
+Test 4, call POST /api/drivers with a valid license_expiry_date set to a future date, confirm success and confirm the returned driver record includes that expiry date.
+Test 5, call PATCH /api/drivers/:id/license on that same driver, submitting a new license number and a new expiry date, confirm success.
+Test 6, call GET /api/drivers/:id/license-history for that driver, confirm exactly one history row exists, confirm it correctly shows the original license number and expiry as the old values, and the values submitted in Test 5 as the new values.
+Test 7, manually set that driver's license_expiry_date to a date in the past directly in the database, then attempt POST /api/trips using that driver, confirm this returns a 422 error with a message referencing the expired license, confirm no trip was created.
+Test 8, confirm an existing trip that was already created before the license expired is completely unaffected, call GET /api/trips/:id for that earlier trip, confirm it still returns normally with no error.
+
+Part 4, backend tests for Excel removal
+Test 9, confirm there is no longer any Excel related endpoint or export path being called anywhere, this is primarily a frontend removal, note if any backend audit endpoint response shape changed, it should not have.
+
+Part 5, frontend tests
+Test 10, Alert.alert fix. Login as Lagos Trip Admin at the URL above. Go to the Vehicles tab. Tap the delete icon on any vehicle. Confirm a real browser popup now appears asking for confirmation, rather than nothing happening. Tap Cancel, confirm the vehicle is not deleted. Repeat and this time confirm, confirm the vehicle is actually deleted this time.
+Test 11, repeat the same style of test on the Drivers tab, tap delete on a driver, confirm a real popup appears, confirm Cancel and Confirm both work correctly.
+Test 12, login as Super Admin, go to Config tab, tap the deactivate icon on any vehicle type, confirm a real popup appears showing the vehicle count warning, confirm Cancel and Confirm both work correctly.
+Test 13, proof of payment PDF. Login as Lagos Trip Admin, go to the Trips tab, tap into any existing trip to open its detail screen. Confirm a Download Proof of Payment button is visible. Confirm a toggle labeled Include zero-fee parties is visible above it, defaulting to off.
+Test 14, tap Download Proof of Payment with the toggle off, confirm the native share sheet opens with a generated PDF, open the file if possible and confirm it shows trip code, driver name, license number, vehicle registration, vehicle type, route, a payment breakdown table showing only parties who were actually paid, and a total.
+Test 15, go back, turn the toggle on, tap Download Proof of Payment again, confirm the PDF this time also includes stakeholders with a zero rate, clearly labeled as No Fee or Not Applicable rather than Paid.
+Test 16, find or create a cancelled trip, open its detail screen, tap Download Proof of Payment, confirm the resulting PDF shows a clear cancelled and reversed notice instead of a payment breakdown claiming anyone is currently paid.
+Test 17, driver license expiry and history. Login as Lagos Trip Admin, go to the Drivers tab. Confirm each driver card now shows a Valid or Expired badge. Tap a driver card, confirm it opens a new driver detail screen showing the driver's current license number, expiry date, and the same valid or expired badge.
+Test 18, on the driver detail screen, confirm a license history section is visible below, confirm it lists past license changes if any exist, each with old number, old expiry, new number, new expiry, and a timestamp.
+Test 19, tap Update License, confirm a modal opens asking for a new license number and new expiry date, submit new values, confirm success, confirm the driver detail screen now shows the new values as current, and confirm a new row now appears in the license history list reflecting this exact change.
+Test 20, go to the trip creation form, attempt to select a driver whose license has expired, confirm a clear inline warning appears before submission is attempted.
+Test 21, attempt to actually submit that trip creation with the expired license driver selected, confirm it is blocked with a clear error message, confirm no trip is created.
+Test 22, Excel removal confirmation. Go to the audit report screen for any vehicle, driver, or trip admin audit. Confirm there is no Excel export button anywhere on this screen, only PDF export remains visible.
+Test 23, tap Export PDF on this audit report, confirm it still works exactly as before, confirm the native share sheet opens with a valid PDF.
+Test 24, confirm the browser console is clean throughout every test above, no errors, no warnings introduced by any of this work.
+
+Report every test individually with a clear pass or fail, and for any failure include the exact error message or behavior observed, so it can be fixed precisely rather than re-investigated from scratch.
