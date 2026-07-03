@@ -122,7 +122,6 @@ function buildProofOfPaymentHtml(trip: TripDetail, includeZeroFee: boolean): str
 
   ${breakdownSection}
 
-  <p class="footer">This document confirms the fee allocation status for this trip as of trip creation. It is not a receipt of physical cash handling and does not reflect any pricing changes made after the trip was created.</p>
   </body></html>`;
 }
 
