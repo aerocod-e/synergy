@@ -1,0 +1,22 @@
+Fix the Excel export failure on native, and fix the silent error handling that made it hard to diagnose.
+Step 1, downgrade expo-file-system to the version Expo SDK 54 actually expects. Run:
+npx expo install expo-file-system
+This should automatically resolve to the SDK compatible version, ~19.0.23 or whatever the current SDK 54 expected version is at install time, rather than the ^57.0.0 currently pinned in package.json. Confirm after install that package.json now reflects the corrected version, and that the Expo dev server startup log no longer flags expo-file-system as incompatible.
+Also run the same command for the other two packages flagged as incompatible in the earlier investigation, expo-print and expo-sharing, since both were also shown pinned far ahead of their expected SDK 54 versions.
+npx expo install expo-print
+npx expo install expo-sharing
+Confirm all three no longer appear in the compatibility warning after the dev server restarts.
+Step 2, update the native Excel export code in artifacts/mobile/app/(tripadmin)/audit-report.tsx to match whichever API surface the newly installed expo-file-system version actually exports. If the resolved version is the older function based API, replace the current new File(Paths.cache, ...) plus file.write(...) calls with the correct equivalent for that version, most likely something along the lines of FileSystem.cacheDirectory for the target path and FileSystem.writeAsStringAsync with an appropriate encoding option for writing the binary content. Since xlsx with type: 'array' currently produces a Uint8Array, and the older writeAsStringAsync API expects a string, convert the output to base64 first and pass EncodingType.Base64 as the write option, rather than trying to write raw bytes directly.
+Apply the same correction to the PDF export function if it uses the same file system API pattern, confirm whether exportPdf also references File or Paths from expo-file-system directly, or whether it relies entirely on expo-print's own file generation, in which case it may be unaffected by this specific version issue, but confirm this explicitly rather than assuming.
+Step 3, fix the empty catch blocks in both exportExcel and exportPdf. Replace catch { Alert.alert(...) } with a version that logs the actual error before showing the alert, for example:
+tscatch (error) {
+  console.error('Excel export failed:', error);
+  Alert.alert('Export failed', 'Could not generate Excel file. Please try again.');
+}
+This ensures any future export failure produces a visible error in the device logs rather than disappearing silently, which is what made this specific bug difficult to pin down.
+Step 4, TypeScript check.
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Must return zero errors.
+Step 5, report the exact resolved versions of all three packages after the install commands, the exact code change made to the native Excel write path, and whether the PDF export needed a corresponding change or was confirmed unaffected.
+Testing note, since this failure only reproduces on physical iOS or Android and not in the web preview, code level confirmation is what can be verified here, actual success needs to be confirmed on your device once this is applied. After the fix lands, test on your iPhone, export Excel for a vehicle audit, a driver audit, and a trip admin audit, confirm each produces a real file through the native share sheet rather than the export failed alert, and confirm the resulting file actually opens and contains correct data when viewed.
+Report every file changed, every resolved package version, and flag the actual on device verification as something only you can confirm.

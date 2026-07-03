@@ -442,7 +442,8 @@ export default function AuditReportScreen() {
           UTI: 'com.adobe.pdf',
         });
       }
-    } catch {
+    } catch (error) {
+      console.error('PDF export failed:', error);
       Alert.alert('Export failed', 'Could not generate PDF. Please try again.');
     } finally {
       setExportingPdf(false);
@@ -471,7 +472,8 @@ export default function AuditReportScreen() {
           try { file.delete(); } catch { /* ignore cleanup errors */ }
         }
       }
-    } catch {
+    } catch (error) {
+      console.error('Excel export failed:', error);
       Alert.alert('Export failed', 'Could not generate Excel file. Please try again.');
     } finally {
       setExportingExcel(false);
