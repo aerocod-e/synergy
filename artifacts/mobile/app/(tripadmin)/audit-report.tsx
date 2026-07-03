@@ -21,6 +21,31 @@ import TopBar from '@/components/TopBar';
 import { getDriverAudit, getTripAdminAudit, getVehicleAudit } from '@/services/api';
 import { formatNaira } from '@/utils/formatCurrency';
 
+// ── Share helpers ────────────────────────────────────────────────────────────
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/**
+ * On iOS, `Sharing.shareAsync` can fail to resolve/reject when the native
+ * share sheet is dismissed without the user picking a share option. This
+ * races the real share promise against a timeout so UI loading state is
+ * never left stuck. The real promise is still allowed to settle in the
+ * background afterwards; any late result/error is only logged, not surfaced.
+ */
+const shareWithTimeout = async (
+  sharePromise: Promise<unknown>,
+  timeoutMs = 3000,
+  label = 'Share'
+): Promise<void> => {
+  let timedOut = false;
+  await Promise.race([sharePromise, sleep(timeoutMs).then(() => { timedOut = true; })]);
+  if (timedOut) {
+    sharePromise.catch((error) => {
+      console.error(`${label} settled after timeout with an error:`, error);
+    });
+  }
+};
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface TripEntry {
@@ -436,11 +461,12 @@ export default function AuditReportScreen() {
         }
       } else {
         const { uri } = await Print.printToFileAsync({ html });
-        await Sharing.shareAsync(uri, {
+        const sharePromise = Sharing.shareAsync(uri, {
           mimeType: 'application/pdf',
           dialogTitle: 'Share Audit Report PDF',
           UTI: 'com.adobe.pdf',
         });
+        await shareWithTimeout(sharePromise, 3000, 'PDF share');
       }
     } catch (error) {
       console.error('PDF export failed:', error);
@@ -462,15 +488,14 @@ export default function AuditReportScreen() {
         const base64: string = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
         const file = new File(Paths.cache, `audit-${Date.now()}.xlsx`);
         file.write(base64, { encoding: 'base64' });
-        try {
-          await Sharing.shareAsync(file.uri, {
-            mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            dialogTitle: 'Share Audit Report Excel',
-            UTI: 'com.microsoft.excel.xlsx',
-          });
-        } finally {
+        const sharePromise = Sharing.shareAsync(file.uri, {
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          dialogTitle: 'Share Audit Report Excel',
+          UTI: 'com.microsoft.excel.xlsx',
+        }).finally(() => {
           try { file.delete(); } catch { /* ignore cleanup errors */ }
-        }
+        });
+        await shareWithTimeout(sharePromise, 3000, 'Excel share');
       }
     } catch (error) {
       console.error('Excel export failed:', error);
