@@ -1,0 +1,14 @@
+Fix the State Admin audit navigation bug found in the previous diagnosis.
+Step 1, in artifacts/mobile/app/(stateadmin)/trip-admins.tsx, change both router.push calls inside launchAudit from /(tripadmin)/audit-report back to /(stateadmin)/audit-report.
+Step 2, restart the Expo dev server so Expo Router regenerates its typed routes declarations and picks up the existing (stateadmin)/audit-report.tsx re-export file as a valid route. Confirm after restart that referencing /(stateadmin)/audit-report as the pathname no longer produces a TypeScript typed routes error, since the file already exists and is already correctly registered in (stateadmin)/_layout.tsx.
+Step 3, if restarting the dev server does not clear the typed routes error on its own, do not cast the pathname as any. Instead check whether the typed routes generation needs a manual trigger, some Expo Router versions require deleting the .expo cache folder or running the app once through expo start fresh for the generated types file to update. Use whichever correct method applies to the installed Expo Router version, report which one was needed.
+Step 4, TypeScript check.
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Must return zero errors, with the pathname referencing the correct real route, not a cast workaround.
+Testing, 390x844px, tap only.
+Test 1, login as State Admin, Trip Admins tab, tap Generate Audit, choose All Trip Admins, confirm the combined report screen actually opens and shows Trip Admin data from that State Admin's own state, not a redirect back to Wallet.
+Test 2, tap Generate Audit again, choose Select a Trip Admin, pick one, confirm the single report opens correctly with that Trip Admin's data.
+Test 3, confirm the back button on this report returns to the Trip Admins tab.
+Test 4, confirm this fix did not break the vehicle or driver audit flows on the Trip Admin side, open both from their respective screens and confirm they still work exactly as before.
+Test 5, console clean throughout.
+Report the exact fix applied, whether a cast was needed or avoided entirely, and every test result.

@@ -158,11 +158,11 @@ export default function StateAdminTripAdmins() {
         ? `${admin?.firstName} ${admin?.lastName}`.trim()
         : (admin?.email ?? selectedAdminId);
       router.push({
-        pathname: '/(tripadmin)/audit-report',
+        pathname: '/(stateadmin)/audit-report',
         params: { entityType: 'trip-admin', tripAdminId: selectedAdminId, tripAdminName: displayName },
       });
     } else {
-      router.push({ pathname: '/(tripadmin)/audit-report', params: { entityType: 'trip-admin' } });
+      router.push({ pathname: '/(stateadmin)/audit-report', params: { entityType: 'trip-admin' } });
     }
   }, [auditMode, selectedAdminId, admins, router]);
 
