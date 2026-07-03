@@ -1,0 +1,14 @@
+Do not make any changes. The Generate Audit button on the State Admin Trip Admins tab does not open the audit report screen. Instead it silently returns to the Wallet tab. Diagnose the exact cause.
+
+Step 1, open artifacts/mobile/app/(stateadmin)/trip-admins.tsx. Find the launchAudit function or equivalent that navigates to the audit report screen when a choice is made in the picker modal. Report the exact router.push call being used, the exact path string and query params passed.
+
+Step 2, open artifacts/mobile/app/(stateadmin)/_layout.tsx. Report how audit-report is currently registered, confirm whether it uses href: null correctly, and confirm the exact screen name matches what Step 1 is trying to navigate to.
+
+Step 3, confirm the file artifacts/mobile/app/(stateadmin)/audit-report.tsx actually exists and report its full contents. The previous implementation summary claimed this was created as a re-export for runtime routing, confirm what it actually contains, whether it correctly re-exports the shared component from (tripadmin)/audit-report.tsx, or whether it is empty, broken, or missing entirely.
+
+Step 4, open artifacts/mobile/components/PillTabBar.tsx. Confirm whether audit-report is present in HIDDEN_ROUTES. If it is missing, this alone would explain the redirect back to Wallet, since we have seen this exact failure pattern before on this project, a hidden screen not being in HIDDEN_ROUTES causes the tab bar or the landing route logic to treat it as an unknown route and fall back to the default tab.
+
+Step 5, check whether (stateadmin)/_layout.tsx has the useEffect redirect to Wallet that was added earlier in the project to fix the landing tab issue. Report its exact condition. If that redirect is checking for anything other than the current segment being wallet, it is possible this same redirect logic is incorrectly firing when the audit report screen is opened and forcing navigation back to Wallet regardless of intent.
+
+Report all findings clearly, which of these is the actual root cause, and propose the exact fix, but do not apply it yet.
+
