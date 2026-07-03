@@ -781,17 +781,6 @@ export default function AuditReportScreen() {
                   : <><FileText size={18} color={theme.colors.white} /><Text style={styles.exportBtnText}>Export PDF</Text></>
                 }
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.exportBtn, styles.exportBtnGreen, exportingExcel && styles.exportBtnDisabled]}
-                onPress={exportExcel}
-                disabled={exportingPdf || exportingExcel}
-                activeOpacity={0.8}
-              >
-                {exportingExcel
-                  ? <ActivityIndicator size="small" color={theme.colors.white} />
-                  : <><FileSpreadsheet size={18} color={theme.colors.white} /><Text style={styles.exportBtnText}>Export Excel</Text></>
-                }
-              </TouchableOpacity>
             </View>
           </>
         )}
