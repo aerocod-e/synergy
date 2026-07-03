@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -14,6 +14,8 @@ import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
 import ScreenTransition from '@/components/ScreenTransition';
 import SlideUpList from '@/components/SlideUpList';
+import SearchBar from '@/components/SearchBar';
+import DateRangeFilter, { getDateRangeParams, type DateRangeValue } from '@/components/DateRangeFilter';
 import { getTrips } from '@/services/api';
 
 type TripStatus = 'created' | 'in_transit' | 'completed' | 'cancelled';
@@ -50,6 +52,8 @@ const STATUS_FILTER_MAP: Record<FilterOption, TripStatus | null> = {
   Completed: 'completed',
   Cancelled: 'cancelled',
 };
+
+const SEARCH_DEBOUNCE_MS = 400;
 
 const STATUS_BADGE: Record<TripStatus, { bg: string; text: string; label: string }> = {
   created:    { bg: '#e8f0fb', text: '#1a6ec8', label: 'Created' },
@@ -122,9 +126,30 @@ export default function StateAdminTrips() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterOption>('All');
+  const [dateRange, setDateRange] = useState<DateRangeValue>({ preset: 'all' });
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+
+  // debounce search input → search
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const buildParams = useCallback((pageNum: number): Record<string, string> => {
+    const statusValue = STATUS_FILTER_MAP[activeFilter];
+    const params: Record<string, string> = {
+      ...getDateRangeParams(dateRange),
+      page: String(pageNum),
+      limit: String(PAGE_LIMIT),
+    };
+    if (statusValue) params.status = statusValue;
+    if (search) params.search = search;
+    return params;
+  }, [activeFilter, dateRange, search]);
 
   const fetchTrips = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -132,9 +157,7 @@ export default function StateAdminTrips() {
     setError(false);
     setPage(1);
     try {
-      const statusValue = STATUS_FILTER_MAP[activeFilter];
-      const params: Record<string, string> = { page: '1', limit: String(PAGE_LIMIT) };
-      if (statusValue) params.status = statusValue;
+      const params = buildParams(1);
       const data = await getTrips(params);
       const list: Trip[] = Array.isArray(data?.trips) ? data.trips as Trip[] : [];
       setTrips(list);
@@ -146,16 +169,14 @@ export default function StateAdminTrips() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [activeFilter]);
+  }, [buildParams]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
     try {
       const nextPage = page + 1;
-      const statusValue = STATUS_FILTER_MAP[activeFilter];
-      const params: Record<string, string> = { page: String(nextPage), limit: String(PAGE_LIMIT) };
-      if (statusValue) params.status = statusValue;
+      const params = buildParams(nextPage);
       const data = await getTrips(params);
       const list: Trip[] = Array.isArray(data?.trips) ? data.trips as Trip[] : [];
       setTrips((prev) => [...prev, ...list]);
@@ -167,7 +188,7 @@ export default function StateAdminTrips() {
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, hasMore, page, activeFilter]);
+  }, [loadingMore, hasMore, page, buildParams]);
 
   useFocusEffect(
     useCallback(() => {
@@ -182,6 +203,16 @@ export default function StateAdminTrips() {
       <TopBar />
       <ScreenTransition style={{ flex: 1 }}>
       <SlideUpList style={{ flex: 1 }}>
+
+        {/* Search */}
+        <SearchBar
+          value={searchInput}
+          onChangeText={setSearchInput}
+          placeholder="Search by trip, vehicle, or driver…"
+        />
+
+        {/* Date range filter */}
+        <DateRangeFilter value={dateRange} onChange={setDateRange} />
 
         {/* Status filter pills */}
         <ScrollView
@@ -238,7 +269,11 @@ export default function StateAdminTrips() {
                 <View>{skeletons.map((k) => <SkeletonCard key={k} />)}</View>
               ) : (
                 <View style={styles.emptyWrap}>
-                  <Text style={styles.emptyText}>No trips found</Text>
+                  <Text style={styles.emptyText}>
+                    {activeFilter === 'All' && dateRange.preset === 'all' && !search
+                      ? 'No trips found'
+                      : 'No trips match your filters'}
+                  </Text>
                 </View>
               )
             }

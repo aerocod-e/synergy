@@ -21,6 +21,7 @@ import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
 import ScreenTransition from '@/components/ScreenTransition';
 import SlideUpList from '@/components/SlideUpList';
+import SearchBar from '@/components/SearchBar';
 import { listTripAdmins, createUser, updateCancellationRights, toggleUserActive, getTripAdminActiveTripsCount, deleteTripAdmin as deleteTripAdminApi } from '@/services/api';
 import { useAuthContext } from '@/app/_layout';
 import { confirmAction } from '@/utils/confirmAction';
@@ -53,6 +54,9 @@ export default function StateAdminTripAdmins() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+
+  // client-side search (filters currently-loaded admins by name or email)
+  const [searchInput, setSearchInput] = useState('');
 
   // toggle error per-card (cancellation rights)
   const [toggleError, setToggleError] = useState<string | null>(null);
@@ -336,6 +340,17 @@ export default function StateAdminTripAdmins() {
     }
   }, [firstName, lastName, email, password, user?.entityId, fetchAdmins]);
 
+  // ── client-side filtering ────────────────────────────────────────────────
+
+  const filteredAdmins = React.useMemo(() => {
+    const q = searchInput.trim().toLowerCase();
+    if (!q) return admins;
+    return admins.filter((a) => {
+      const name = `${a.firstName} ${a.lastName}`.trim().toLowerCase();
+      return name.includes(q) || a.email.toLowerCase().includes(q);
+    });
+  }, [admins, searchInput]);
+
   // ── render item ───────────────────────────────────────────────────────────
 
   const renderAdmin = ({ item }: { item: TripAdmin }) => {
@@ -472,7 +487,7 @@ export default function StateAdminTripAdmins() {
       <ScreenTransition style={{ flex: 1 }}>
       <SlideUpList style={{ flex: 1 }}>
       <FlatList
-        data={admins}
+        data={filteredAdmins}
         keyExtractor={(a) => a.id}
         renderItem={renderAdmin}
         contentContainerStyle={styles.listContent}
@@ -497,6 +512,12 @@ export default function StateAdminTripAdmins() {
                 <Text style={styles.auditBannerText}>Audit Report</Text>
               </TouchableOpacity>
             </View>
+            <SearchBar
+              value={searchInput}
+              onChangeText={setSearchInput}
+              placeholder="Search by name or email…"
+              style={{ marginHorizontal: 0 }}
+            />
             {toggleError && (
               <View style={styles.inlineError}>
                 <AlertCircle size={15} color={theme.colors.error} />
@@ -508,8 +529,12 @@ export default function StateAdminTripAdmins() {
         ListEmptyComponent={
           <View style={styles.empty}>
             <Users size={48} color={theme.colors.inactive} />
-            <Text style={styles.emptyTitle}>No Trip Admins yet</Text>
-            <Text style={styles.emptySubtitle}>Tap + to add the first Trip Admin</Text>
+            <Text style={styles.emptyTitle}>
+              {searchInput.trim() ? 'No matching Trip Admins' : 'No Trip Admins yet'}
+            </Text>
+            <Text style={styles.emptySubtitle}>
+              {searchInput.trim() ? 'Try a different name or email' : 'Tap + to add the first Trip Admin'}
+            </Text>
           </View>
         }
         ListFooterComponent={() => (

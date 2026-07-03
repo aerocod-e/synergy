@@ -14,23 +14,26 @@ import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
 import ScreenTransition from '@/components/ScreenTransition';
 import SlideUpList from '@/components/SlideUpList';
+import SearchBar from '@/components/SearchBar';
+import DateRangeFilter, { getDateRangeParams, type DateRangeValue } from '@/components/DateRangeFilter';
 import { getMyWallet, getMyLedger } from '@/services/api';
 import { formatNaira, formatNairaWithSign } from '@/utils/formatCurrency';
 import type { LedgerEntry } from '@/components/LedgerDetailView';
 
-type FilterKey = '7d' | '30d' | 'all';
+type EntryTypeFilter = 'all' | 'credit' | 'reversal';
 
 interface WalletData {
   totalCollected: number;
 }
 
-const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: '7d',  label: 'Last 7 days' },
-  { key: '30d', label: 'Last 30 days' },
-  { key: 'all', label: 'All time' },
+const ENTRY_TYPE_FILTERS: { key: EntryTypeFilter; label: string }[] = [
+  { key: 'all',      label: 'All' },
+  { key: 'credit',   label: 'Credits' },
+  { key: 'reversal', label: 'Reversals' },
 ];
 
 const PAGE_LIMIT = 20;
+const SEARCH_DEBOUNCE_MS = 400;
 
 function formatWAT(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('en-NG', {
@@ -41,18 +44,6 @@ function formatWAT(dateStr: string): string {
   });
 }
 
-function getFilterParams(filter: FilterKey): Record<string, string> {
-  if (filter === 'all') return {};
-  const days = filter === '7d' ? 7 : 30;
-  const now  = new Date();
-  const past = new Date();
-  past.setDate(now.getDate() - days);
-  return {
-    startDate: past.toISOString().split('T')[0]!,
-    endDate:   now.toISOString().split('T')[0]!,
-  };
-}
-
 export default function StateAdminWallet() {
   const router = useRouter();
 
@@ -61,22 +52,41 @@ export default function StateAdminWallet() {
   const [loading,      setLoading]      = useState(true);
   const [refreshing,   setRefreshing]   = useState(false);
   const [fetchError,   setFetchError]   = useState<string | null>(null);
-  const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
+  const [dateRange,    setDateRange]    = useState<DateRangeValue>({ preset: 'all' });
+  const [entryType,    setEntryType]    = useState<EntryTypeFilter>('all');
+  const [searchInput,  setSearchInput]  = useState('');
+  const [search,       setSearch]       = useState('');
 
   const [page,        setPage]        = useState(1);
   const [hasMore,     setHasMore]     = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
 
+  // debounce search input → search
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const buildParams = useCallback((pageNum: number): Record<string, string> => {
+    const params: Record<string, string> = {
+      ...getDateRangeParams(dateRange),
+      page: String(pageNum),
+      limit: String(PAGE_LIMIT),
+    };
+    if (search) params.search = search;
+    if (entryType !== 'all') params.entryType = entryType;
+    return params;
+  }, [dateRange, entryType, search]);
+
   // ── initial / filter / refresh ────────────────────────────────────────────
 
-  const fetchData = useCallback(async (filter: FilterKey, isRefresh = false) => {
+  const fetchData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else           setLoading(true);
     setFetchError(null);
     setPage(1);
     try {
-      const dateParams = getFilterParams(filter);
-      const params: Record<string, string> = { ...dateParams, page: '1', limit: String(PAGE_LIMIT) };
+      const params = buildParams(1);
       const [walletRes, ledgerRes] = await Promise.all([
         getMyWallet(),
         getMyLedger(params),
@@ -91,15 +101,9 @@ export default function StateAdminWallet() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [buildParams]);
 
-  useEffect(() => { fetchData('all'); }, [fetchData]);
-
-  const handleFilterChange = (filter: FilterKey) => {
-    setActiveFilter(filter);
-    setEntries([]);
-    fetchData(filter);
-  };
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   // ── load more ─────────────────────────────────────────────────────────────
 
@@ -108,12 +112,7 @@ export default function StateAdminWallet() {
     setLoadingMore(true);
     const nextPage = page + 1;
     try {
-      const dateParams = getFilterParams(activeFilter);
-      const params: Record<string, string> = {
-        ...dateParams,
-        page: String(nextPage),
-        limit: String(PAGE_LIMIT),
-      };
+      const params = buildParams(nextPage);
       const ledgerRes = await getMyLedger(params);
       setEntries((prev) => [...prev, ...(ledgerRes.entries ?? [])]);
       const pg = ledgerRes.pagination ?? {};
@@ -124,7 +123,7 @@ export default function StateAdminWallet() {
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, hasMore, page, activeFilter]);
+  }, [loadingMore, hasMore, page, buildParams]);
 
   // ── summary ───────────────────────────────────────────────────────────────
 
@@ -149,7 +148,7 @@ export default function StateAdminWallet() {
         <Text style={styles.errorTitle}>{fetchError}</Text>
         <TouchableOpacity
           style={styles.retryButton}
-          onPress={() => fetchData(activeFilter)}
+          onPress={() => fetchData()}
           activeOpacity={0.8}
         >
           <Text style={styles.retryButtonText}>Retry</Text>
@@ -230,16 +229,26 @@ export default function StateAdminWallet() {
           </Text>
         </View>
 
-        {/* Filter chips */}
+        {/* Search */}
+        <SearchBar
+          value={searchInput}
+          onChangeText={setSearchInput}
+          placeholder="Search by trip, vehicle, or route…"
+        />
+
+        {/* Date range filter */}
+        <DateRangeFilter value={dateRange} onChange={setDateRange} />
+
+        {/* Entry type chips */}
         <View style={styles.filterRow}>
-          {FILTERS.map((f) => (
+          {ENTRY_TYPE_FILTERS.map((f) => (
             <TouchableOpacity
               key={f.key}
-              style={[styles.chip, activeFilter === f.key && styles.chipActive]}
-              onPress={() => handleFilterChange(f.key)}
+              style={[styles.chip, entryType === f.key && styles.chipActive]}
+              onPress={() => setEntryType(f.key)}
               activeOpacity={0.75}
             >
-              <Text style={[styles.chipText, activeFilter === f.key && styles.chipTextActive]}>
+              <Text style={[styles.chipText, entryType === f.key && styles.chipTextActive]}>
                 {f.label}
               </Text>
             </TouchableOpacity>
@@ -276,7 +285,7 @@ export default function StateAdminWallet() {
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
-                onRefresh={() => fetchData(activeFilter, true)}
+                onRefresh={() => fetchData(true)}
                 tintColor={theme.colors.primary}
               />
             }
@@ -285,9 +294,9 @@ export default function StateAdminWallet() {
                 <Receipt size={48} color={theme.colors.inactive} />
                 <Text style={styles.emptyTitle}>No transactions yet</Text>
                 <Text style={styles.emptySubtitle}>
-                  {activeFilter === 'all'
+                  {dateRange.preset === 'all' && entryType === 'all' && !search
                     ? 'Ledger entries will appear here'
-                    : 'No entries in this date range'}
+                    : 'No entries match your filters'}
                 </Text>
               </View>
             }

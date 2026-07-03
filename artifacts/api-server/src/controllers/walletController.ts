@@ -59,7 +59,7 @@ export async function getMyLedger(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const { startDate, endDate, feeType } = req.query as Record<string, string | undefined>;
+  const { startDate, endDate, feeType, search, entryType } = req.query as Record<string, string | undefined>;
   const rawPage  = parseInt((req.query.page  as string) ?? "1",  10);
   const rawLimit = parseInt((req.query.limit as string) ?? "20", 10);
   const page  = Number.isFinite(rawPage)  && rawPage  > 0 ? rawPage  : 1;
@@ -69,6 +69,12 @@ export async function getMyLedger(req: Request, res: Response): Promise<void> {
   const validFeeTypes = ["loading", "unloading", "stakeholder_fee"];
   if (feeType && !validFeeTypes.includes(feeType)) {
     res.status(400).json({ error: "BAD_REQUEST", message: "feeType must be loading, unloading, or stakeholder_fee" });
+    return;
+  }
+
+  const validEntryTypes = ["credit", "reversal"];
+  if (entryType && !validEntryTypes.includes(entryType)) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "entryType must be credit or reversal" });
     return;
   }
 
@@ -98,6 +104,15 @@ export async function getMyLedger(req: Request, res: Response): Promise<void> {
     if (feeType) {
       params.push(feeType);
       filters.push(`tf.fee_type = $${paramIdx++}`);
+    }
+    if (entryType) {
+      params.push(entryType);
+      filters.push(`wl.entry_type = $${paramIdx++}`);
+    }
+    if (search) {
+      params.push(`%${search}%`);
+      filters.push(`(v.registration_number ILIKE $${paramIdx} OR sl.name ILIKE $${paramIdx} OR su.name ILIKE $${paramIdx})`);
+      paramIdx++;
     }
 
     const whereClause = filters.length > 0 ? `AND ${filters.join(" AND ")}` : "";

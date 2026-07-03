@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,7 @@ import { listDrivers, createDriver, updateDriver, deleteDriver as deleteDriverAp
 import { useLogout } from '@/hooks/useLogout';
 import { confirmAction } from '@/utils/confirmAction';
 import DateField from '@/components/DateField';
+import SearchBar from '@/components/SearchBar';
 
 interface DriverItem {
   id: string;
@@ -43,6 +44,10 @@ function isLicenseExpired(licenseExpiryDate: string | null): boolean {
   return expiry < today;
 }
 
+const SEARCH_DEBOUNCE_MS = 400;
+
+type LicenseFilter = 'all' | 'valid' | 'expired';
+
 export default function TripAdminDrivers() {
   const [drivers, setDrivers] = useState<DriverItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,6 +66,10 @@ export default function TripAdminDrivers() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [licenseFilter, setLicenseFilter] = useState<LicenseFilter>('all');
 
   const [editingDriver, setEditingDriver] = useState<DriverItem | null>(null);
   const [editFullName, setEditFullName] = useState('');
@@ -134,12 +143,25 @@ export default function TripAdminDrivers() {
     }, [navigation, openModal, openAuditPicker, handleLogout])
   );
 
+  // debounce search input → search
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const buildParams = useCallback((pageNum: number): Record<string, string> => {
+    const params: Record<string, string> = { page: String(pageNum), limit: String(PAGE_LIMIT) };
+    if (search) params.search = search;
+    if (licenseFilter !== 'all') params.status = licenseFilter;
+    return params;
+  }, [search, licenseFilter]);
+
   const fetchDrivers = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setPage(1);
     try {
-      const data = await listDrivers({ page: '1', limit: String(PAGE_LIMIT) });
+      const data = await listDrivers(buildParams(1));
       setDrivers((data as any).drivers as DriverItem[]);
       const pg = (data as any).pagination ?? {};
       setHasMore((pg.page ?? 1) < (pg.totalPages ?? 1));
@@ -150,14 +172,14 @@ export default function TripAdminDrivers() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [buildParams]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
     try {
       const nextPage = page + 1;
-      const data = await listDrivers({ page: String(nextPage), limit: String(PAGE_LIMIT) });
+      const data = await listDrivers(buildParams(nextPage));
       setDrivers((prev) => [...prev, ...((data as any).drivers as DriverItem[])]);
       const pg = (data as any).pagination ?? {};
       setHasMore((pg.page ?? nextPage) < (pg.totalPages ?? nextPage));
@@ -167,7 +189,7 @@ export default function TripAdminDrivers() {
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, hasMore, page]);
+  }, [loadingMore, hasMore, page, buildParams]);
 
   useFocusEffect(
     useCallback(() => {
@@ -368,17 +390,38 @@ export default function TripAdminDrivers() {
         renderItem={renderDriver}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
-          <View style={styles.listHeaderRow}>
-            <Text style={styles.listHeaderTitle}>Drivers</Text>
-            <TouchableOpacity
-              style={styles.auditBannerBtn}
-              onPress={openAuditPicker}
-              activeOpacity={0.85}
-            >
-              <BarChart2 size={16} color={theme.colors.primary} />
-              <Text style={styles.auditBannerText}>Audit Report</Text>
-            </TouchableOpacity>
-          </View>
+          <>
+            <View style={styles.listHeaderRow}>
+              <Text style={styles.listHeaderTitle}>Drivers</Text>
+              <TouchableOpacity
+                style={styles.auditBannerBtn}
+                onPress={openAuditPicker}
+                activeOpacity={0.85}
+              >
+                <BarChart2 size={16} color={theme.colors.primary} />
+                <Text style={styles.auditBannerText}>Audit Report</Text>
+              </TouchableOpacity>
+            </View>
+            <SearchBar
+              value={searchInput}
+              onChangeText={setSearchInput}
+              placeholder="Search by name, license, or phone…"
+            />
+            <View style={styles.licenseFilterRow}>
+              {(['all', 'valid', 'expired'] as LicenseFilter[]).map((f) => (
+                <TouchableOpacity
+                  key={f}
+                  style={[styles.filterPill, licenseFilter === f && styles.filterPillActive]}
+                  onPress={() => setLicenseFilter(f)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.filterPillText, licenseFilter === f && styles.filterPillTextActive]}>
+                    {f === 'all' ? 'All' : f === 'valid' ? 'Valid' : 'Expired'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
         }
         refreshControl={
           <RefreshControl
@@ -390,8 +433,12 @@ export default function TripAdminDrivers() {
         ListEmptyComponent={
           <View style={styles.empty}>
             <User size={48} color={theme.colors.inactive} />
-            <Text style={styles.emptyTitle}>No drivers yet</Text>
-            <Text style={styles.emptySubtitle}>Tap + to register your first driver</Text>
+            <Text style={styles.emptyTitle}>
+              {search || licenseFilter !== 'all' ? 'No matching drivers' : 'No drivers yet'}
+            </Text>
+            <Text style={styles.emptySubtitle}>
+              {search || licenseFilter !== 'all' ? 'Try a different search or filter' : 'Tap + to register your first driver'}
+            </Text>
           </View>
         }
         ListFooterComponent={() => (
@@ -875,6 +922,31 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: theme.colors.black,
+  },
+  licenseFilterRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  filterPill: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: theme.colors.grey4,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  filterPillActive: {
+    backgroundColor: theme.colors.blueMuted,
+    borderColor: theme.colors.primary,
+  },
+  filterPillText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.colors.grey2,
+  },
+  filterPillTextActive: {
+    color: theme.colors.primary,
   },
   auditBannerBtn: {
     flexDirection: 'row',

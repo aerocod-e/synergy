@@ -21,6 +21,7 @@ import TopBar from '@/components/TopBar';
 import ScreenTransition from '@/components/ScreenTransition';
 import SlideUpList from '@/components/SlideUpList';
 import VehicleSearchInput, { type Vehicle } from '@/components/VehicleSearchInput';
+import SearchBar from '@/components/SearchBar';
 import { listVehicles, createVehicle, updateVehicle, deleteVehicle as deleteVehicleApi, listVehicleTypes, getActivePricingChart } from '@/services/api';
 import { useLogout } from '@/hooks/useLogout';
 import { formatNaira } from '@/utils/formatCurrency';
@@ -59,6 +60,8 @@ interface VehicleWithCount extends Vehicle {
   tripCount: number;
 }
 
+const SEARCH_DEBOUNCE_MS = 400;
+
 export default function TripAdminVehicles() {
   const [vehicles, setVehicles] = useState<VehicleWithCount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,6 +75,10 @@ export default function TripAdminVehicles() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [selectedTypeFilterId, setSelectedTypeFilterId] = useState<string>('');
 
   const [editingVehicle, setEditingVehicle] = useState<VehicleWithCount | null>(null);
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -202,12 +209,25 @@ export default function TripAdminVehicles() {
     }
   }, [navigation, openModal, openAuditPicker, handleLogout]);
 
+  // debounce search input → search
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const buildParams = useCallback((pageNum: number): Record<string, string> => {
+    const params: Record<string, string> = { page: String(pageNum), limit: String(PAGE_LIMIT) };
+    if (search) params.search = search;
+    if (selectedTypeFilterId) params.vehicleTypeId = selectedTypeFilterId;
+    return params;
+  }, [search, selectedTypeFilterId]);
+
   const fetchVehicles = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setPage(1);
     try {
-      const data = await listVehicles({ page: '1', limit: String(PAGE_LIMIT) });
+      const data = await listVehicles(buildParams(1));
       setVehicles((data as any).vehicles as VehicleWithCount[]);
       const pg = (data as any).pagination ?? {};
       setHasMore((pg.page ?? 1) < (pg.totalPages ?? 1));
@@ -218,14 +238,14 @@ export default function TripAdminVehicles() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [buildParams]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
     try {
       const nextPage = page + 1;
-      const data = await listVehicles({ page: String(nextPage), limit: String(PAGE_LIMIT) });
+      const data = await listVehicles(buildParams(nextPage));
       setVehicles((prev) => [...prev, ...((data as any).vehicles as VehicleWithCount[])]);
       const pg = (data as any).pagination ?? {};
       setHasMore((pg.page ?? nextPage) < (pg.totalPages ?? nextPage));
@@ -234,7 +254,7 @@ export default function TripAdminVehicles() {
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, hasMore, page]);
+  }, [loadingMore, hasMore, page, buildParams]);
 
   useFocusEffect(
     useCallback(() => {
@@ -380,17 +400,54 @@ export default function TripAdminVehicles() {
         renderItem={renderVehicle}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
-          <View style={styles.listHeaderRow}>
-            <Text style={styles.listHeaderTitle}>Vehicles</Text>
-            <TouchableOpacity
-              style={styles.auditBannerBtn}
-              onPress={openAuditPicker}
-              activeOpacity={0.8}
-            >
-              <BarChart2 size={16} color={theme.colors.primary} />
-              <Text style={styles.auditBannerText}>Audit Report</Text>
-            </TouchableOpacity>
-          </View>
+          <>
+            <View style={styles.listHeaderRow}>
+              <Text style={styles.listHeaderTitle}>Vehicles</Text>
+              <TouchableOpacity
+                style={styles.auditBannerBtn}
+                onPress={openAuditPicker}
+                activeOpacity={0.8}
+              >
+                <BarChart2 size={16} color={theme.colors.primary} />
+                <Text style={styles.auditBannerText}>Audit Report</Text>
+              </TouchableOpacity>
+            </View>
+            <SearchBar
+              value={searchInput}
+              onChangeText={setSearchInput}
+              placeholder="Search by registration number…"
+            />
+            {vehicleTypes.length > 0 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.typeFilterScroll}
+                contentContainerStyle={styles.typeFilterScrollContent}
+              >
+                <TouchableOpacity
+                  style={[styles.filterPill, selectedTypeFilterId === '' && styles.filterPillActive]}
+                  onPress={() => setSelectedTypeFilterId('')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.filterPillText, selectedTypeFilterId === '' && styles.filterPillTextActive]}>
+                    All Types
+                  </Text>
+                </TouchableOpacity>
+                {vehicleTypes.map((vt) => (
+                  <TouchableOpacity
+                    key={vt.id}
+                    style={[styles.filterPill, selectedTypeFilterId === vt.id && styles.filterPillActive]}
+                    onPress={() => setSelectedTypeFilterId(vt.id)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.filterPillText, selectedTypeFilterId === vt.id && styles.filterPillTextActive]}>
+                      {vt.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+          </>
         }
         refreshControl={
           <RefreshControl
@@ -402,8 +459,12 @@ export default function TripAdminVehicles() {
         ListEmptyComponent={
           <View style={styles.empty}>
             <Car size={48} color={theme.colors.inactive} />
-            <Text style={styles.emptyTitle}>No vehicles yet</Text>
-            <Text style={styles.emptySubtitle}>Tap + to register your first vehicle</Text>
+            <Text style={styles.emptyTitle}>
+              {search || selectedTypeFilterId ? 'No matching vehicles' : 'No vehicles yet'}
+            </Text>
+            <Text style={styles.emptySubtitle}>
+              {search || selectedTypeFilterId ? 'Try a different search or filter' : 'Tap + to register your first vehicle'}
+            </Text>
           </View>
         }
         ListFooterComponent={() => (
@@ -860,6 +921,34 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: theme.colors.black,
+  },
+  typeFilterScroll: {
+    flexGrow: 0,
+    marginBottom: 12,
+  },
+  typeFilterScrollContent: {
+    gap: 8,
+    flexDirection: 'row',
+  },
+  filterPill: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: theme.colors.grey4,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  filterPillActive: {
+    backgroundColor: theme.colors.blueMuted,
+    borderColor: theme.colors.primary,
+  },
+  filterPillText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.colors.grey2,
+  },
+  filterPillTextActive: {
+    color: theme.colors.primary,
   },
   auditBannerBtn: {
     flexDirection: 'row',

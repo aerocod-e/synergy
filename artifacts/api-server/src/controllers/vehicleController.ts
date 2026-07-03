@@ -188,6 +188,21 @@ export async function listVehicles(req: Request, res: Response): Promise<void> {
   const page     = Number.isFinite(rawPage)  && rawPage  > 0 ? rawPage                   : 1;
   const limit    = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100)   : 20;
   const offset   = (page - 1) * limit;
+  const searchQuery    = typeof req.query.search === "string" ? req.query.search.trim() : undefined;
+  const vehicleTypeId  = typeof req.query.vehicleTypeId === "string" ? req.query.vehicleTypeId : undefined;
+
+  const params: unknown[] = [ownerId];
+  let idx = 2;
+  const extraFilters: string[] = [];
+  if (searchQuery) {
+    params.push(`%${searchQuery}%`);
+    extraFilters.push(`v.registration_number ILIKE $${idx++}`);
+  }
+  if (vehicleTypeId) {
+    params.push(vehicleTypeId);
+    extraFilters.push(`v.vehicle_type_id = $${idx++}`);
+  }
+  const extraWhere = extraFilters.length > 0 ? `AND ${extraFilters.join(" AND ")}` : "";
 
   try {
     const [countRes, rowsRes] = await Promise.all([
@@ -196,8 +211,9 @@ export async function listVehicles(req: Request, res: Response): Promise<void> {
          FROM   vehicles v
          WHERE  v.created_by = $1
            AND  v.is_active = true
-           AND  v.deleted_at IS NULL`,
-        [ownerId]
+           AND  v.deleted_at IS NULL
+           ${extraWhere}`,
+        params
       ),
       pool.query<{
         id:               string;
@@ -224,10 +240,11 @@ export async function listVehicles(req: Request, res: Response): Promise<void> {
          WHERE  v.created_by = $1
            AND  v.is_active = true
            AND  v.deleted_at IS NULL
+           ${extraWhere}
          GROUP  BY v.id, vt.name
          ORDER  BY v.created_at DESC
-         LIMIT  $2 OFFSET $3`,
-        [ownerId, limit, offset]
+         LIMIT  $${idx} OFFSET $${idx + 1}`,
+        [...params, limit, offset]
       ),
     ]);
 

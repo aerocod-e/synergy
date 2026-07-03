@@ -23,6 +23,8 @@ import ScreenTransition from '@/components/ScreenTransition';
 import SlideUpList from '@/components/SlideUpList';
 import VehicleSearchInput, { type Vehicle } from '@/components/VehicleSearchInput';
 import DriverSearchInput, { type Driver, isDriverLicenseExpired } from '@/components/DriverSearchInput';
+import SearchBar from '@/components/SearchBar';
+import DateRangeFilter, { getDateRangeParams, type DateRangeValue } from '@/components/DateRangeFilter';
 import { getTrips, createTrip, getActivePricingChart, getStates, requestCancellation, createVehicle, listVehicleTypes } from '@/services/api';
 import { formatNaira } from '@/utils/formatCurrency';
 import { useLogout } from '@/hooks/useLogout';
@@ -92,6 +94,20 @@ const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
   cancellation_pending:  { bg: '#fff4ed',               text: '#ea580c' },
 };
 
+const SEARCH_DEBOUNCE_MS = 400;
+
+type StatusFilterOption = 'All' | 'Created' | 'In Transit' | 'Completed' | 'Cancelled';
+
+const STATUS_FILTER_OPTIONS: StatusFilterOption[] = ['All', 'Created', 'In Transit', 'Completed', 'Cancelled'];
+
+const STATUS_FILTER_MAP: Record<StatusFilterOption, string | null> = {
+  All: null,
+  Created: 'created',
+  'In Transit': 'in_transit',
+  Completed: 'completed',
+  Cancelled: 'cancelled',
+};
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function TripAdminTrips() {
@@ -109,6 +125,12 @@ export default function TripAdminTrips() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+
+  // search / filter
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [dateRange, setDateRange] = useState<DateRangeValue>({ preset: 'all' });
+  const [statusFilter, setStatusFilter] = useState<StatusFilterOption>('All');
 
   // form modal
   const [modalVisible, setModalVisible] = useState(false);
@@ -152,12 +174,30 @@ export default function TripAdminTrips() {
 
   // ── trips fetch ─────────────────────────────────────────────────────────────
 
+  // debounce search input → search
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const buildParams = useCallback((pageNum: number): Record<string, string> => {
+    const statusValue = STATUS_FILTER_MAP[statusFilter];
+    const params: Record<string, string> = {
+      ...getDateRangeParams(dateRange),
+      page: String(pageNum),
+      limit: String(PAGE_LIMIT),
+    };
+    if (statusValue) params.status = statusValue;
+    if (search) params.search = search;
+    return params;
+  }, [statusFilter, dateRange, search]);
+
   const fetchTrips = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setPage(1);
     try {
-      const data = await getTrips({ page: '1', limit: String(PAGE_LIMIT) });
+      const data = await getTrips(buildParams(1));
       setTrips((data as any).trips as TripItem[]);
       const pg = (data as any).pagination ?? {};
       setHasMore((pg.page ?? 1) < (pg.totalPages ?? 1));
@@ -168,14 +208,14 @@ export default function TripAdminTrips() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [buildParams]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
     try {
       const nextPage = page + 1;
-      const data = await getTrips({ page: String(nextPage), limit: String(PAGE_LIMIT) });
+      const data = await getTrips(buildParams(nextPage));
       setTrips((prev) => [...prev, ...((data as any).trips as TripItem[])]);
       const pg = (data as any).pagination ?? {};
       setHasMore((pg.page ?? nextPage) < (pg.totalPages ?? nextPage));
@@ -184,7 +224,7 @@ export default function TripAdminTrips() {
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, hasMore, page]);
+  }, [loadingMore, hasMore, page, buildParams]);
 
   useFocusEffect(
     useCallback(() => {
@@ -462,6 +502,35 @@ export default function TripAdminTrips() {
         keyExtractor={(t) => t.id}
         renderItem={renderTrip}
         contentContainerStyle={styles.listContent}
+        ListHeaderComponent={
+          <>
+            <SearchBar
+              value={searchInput}
+              onChangeText={setSearchInput}
+              placeholder="Search by trip, vehicle, or driver…"
+            />
+            <DateRangeFilter value={dateRange} onChange={setDateRange} />
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.filterScroll}
+              contentContainerStyle={styles.filterScrollContent}
+            >
+              {STATUS_FILTER_OPTIONS.map((f) => (
+                <TouchableOpacity
+                  key={f}
+                  style={[styles.filterPill, statusFilter === f && styles.filterPillActive]}
+                  onPress={() => setStatusFilter(f)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.filterPillText, statusFilter === f && styles.filterPillTextActive]}>
+                    {f}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </>
+        }
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -472,8 +541,16 @@ export default function TripAdminTrips() {
         ListEmptyComponent={
           <View style={styles.empty}>
             <Car size={48} color={theme.colors.inactive} />
-            <Text style={styles.emptyTitle}>No trips yet</Text>
-            <Text style={styles.emptySubtitle}>Tap + to create your first trip</Text>
+            <Text style={styles.emptyTitle}>
+              {statusFilter === 'All' && dateRange.preset === 'all' && !search
+                ? 'No trips yet'
+                : 'No trips match your filters'}
+            </Text>
+            <Text style={styles.emptySubtitle}>
+              {statusFilter === 'All' && dateRange.preset === 'all' && !search
+                ? 'Tap + to create your first trip'
+                : 'Try a different search or filter'}
+            </Text>
           </View>
         }
         ListFooterComponent={() => (
@@ -1105,6 +1182,34 @@ const styles = StyleSheet.create({
   sectionLabel: {
     ...theme.typography.sectionLabel,
     marginBottom: 10,
+  },
+  filterScroll: {
+    flexGrow: 0,
+  },
+  filterScrollContent: {
+    gap: 8,
+    flexDirection: 'row',
+    paddingBottom: 12,
+  },
+  filterPill: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: theme.colors.grey4,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  filterPillActive: {
+    backgroundColor: theme.colors.blueMuted,
+    borderColor: theme.colors.primary,
+  },
+  filterPillText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.colors.grey2,
+  },
+  filterPillTextActive: {
+    color: theme.colors.primary,
   },
   fieldSubLabel: {
     fontSize: 13,

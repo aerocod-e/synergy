@@ -132,6 +132,28 @@ export async function listDrivers(req: Request, res: Response): Promise<void> {
   const page     = Number.isFinite(rawPage)  && rawPage  > 0 ? rawPage                   : 1;
   const limit    = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100)   : 20;
   const offset   = (page - 1) * limit;
+  const searchQuery   = typeof req.query.search === "string" ? req.query.search.trim() : undefined;
+  const statusFilter  = typeof req.query.status === "string" ? req.query.status : undefined;
+
+  if (statusFilter && statusFilter !== "valid" && statusFilter !== "expired") {
+    res.status(400).json({ error: "BAD_REQUEST", message: "status must be valid or expired" });
+    return;
+  }
+
+  const params: unknown[] = [createdBy];
+  let idx = 2;
+  const extraFilters: string[] = [];
+  if (searchQuery) {
+    params.push(`%${searchQuery}%`);
+    extraFilters.push(`(d.full_name ILIKE $${idx} OR d.license_number ILIKE $${idx})`);
+    idx++;
+  }
+  if (statusFilter === "valid") {
+    extraFilters.push(`(d.license_expiry_date IS NULL OR d.license_expiry_date >= CURRENT_DATE)`);
+  } else if (statusFilter === "expired") {
+    extraFilters.push(`(d.license_expiry_date IS NOT NULL AND d.license_expiry_date < CURRENT_DATE)`);
+  }
+  const extraWhere = extraFilters.length > 0 ? `AND ${extraFilters.join(" AND ")}` : "";
 
   try {
     const [countRes, rowsRes] = await Promise.all([
@@ -140,8 +162,9 @@ export async function listDrivers(req: Request, res: Response): Promise<void> {
          FROM   drivers d
          WHERE  d.created_by = $1
            AND  d.is_active = true
-           AND  d.deleted_at IS NULL`,
-        [createdBy]
+           AND  d.deleted_at IS NULL
+           ${extraWhere}`,
+        params
       ),
       pool.query<{
         id: string;
@@ -162,10 +185,11 @@ export async function listDrivers(req: Request, res: Response): Promise<void> {
          WHERE  d.created_by = $1
            AND  d.is_active = true
            AND  d.deleted_at IS NULL
+           ${extraWhere}
          GROUP  BY d.id
          ORDER  BY d.full_name
-         LIMIT  $2 OFFSET $3`,
-        [createdBy, limit, offset]
+         LIMIT  $${idx} OFFSET $${idx + 1}`,
+        [...params, limit, offset]
       ),
     ]);
 

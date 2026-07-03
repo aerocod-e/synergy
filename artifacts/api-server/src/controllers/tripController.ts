@@ -512,6 +512,9 @@ export async function listTrips(req: Request, res: Response): Promise<void> {
   const userId = req.user!.userId;
 
   const statusFilter = typeof req.query.status === "string" ? req.query.status : undefined;
+  const searchQuery  = typeof req.query.search === "string" ? req.query.search.trim() : undefined;
+  const startDate    = typeof req.query.startDate === "string" ? req.query.startDate : undefined;
+  const endDate      = typeof req.query.endDate === "string" ? req.query.endDate : undefined;
   const rawPage  = parseInt((req.query.page  as string) ?? "1",  10);
   const rawLimit = parseInt((req.query.limit as string) ?? "20", 10);
   const page   = Number.isFinite(rawPage)  && rawPage  > 0 ? rawPage            : 1;
@@ -547,6 +550,19 @@ export async function listTrips(req: Request, res: Response): Promise<void> {
     if (statusFilter) {
       params.push(statusFilter);
       conditions.push(`t.status = $${idx++}`);
+    }
+    if (searchQuery) {
+      params.push(`%${searchQuery}%`);
+      conditions.push(`(v.registration_number ILIKE $${idx} OR d.email ILIKE $${idx} OR t.origin_description ILIKE $${idx} OR t.destination_description ILIKE $${idx})`);
+      idx++;
+    }
+    if (startDate) {
+      params.push(startDate);
+      conditions.push(`t.created_at >= $${idx++}::timestamptz`);
+    }
+    if (endDate) {
+      params.push(endDate);
+      conditions.push(`t.created_at < ($${idx++}::date + INTERVAL '1 day')`);
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
