@@ -20,6 +20,18 @@ export interface TripEvent {
   createdAt: string;
 }
 
+export interface TripDriver {
+  id: string;
+  fullName: string | null;
+  licenseNumber: string | null;
+  phoneNumber: string | null;
+}
+
+export interface VehicleTypeStakeholderRate {
+  stakeholderName: string;
+  amount: number;
+}
+
 export interface TripDetail {
   id: string;
   tripCode: string | null;
@@ -29,7 +41,7 @@ export interface TripDetail {
   status: string;
   loadingState: { id: string; name: string; code: string };
   unloadingState: { id: string; name: string; code: string };
-  driver: { id: string; email: string } | null;
+  driver: TripDriver | null;
   originDescription: string | null;
   destinationDescription: string | null;
   createdByName?: string | null;
@@ -38,6 +50,7 @@ export interface TripDetail {
   updatedAt: string;
   fees: TripFee[];
   events: TripEvent[];
+  vehicleTypeStakeholderRates?: VehicleTypeStakeholderRate[];
 }
 
 const STATUS_BADGE: Record<string, { bg: string; text: string; label: string }> = {
@@ -145,7 +158,9 @@ export default function TripDetailView({ trip, footer }: TripDetailViewProps) {
           <View style={styles.rowDivider} />
           <InfoRow label="Unloading State" value={trip.unloadingState.name} />
           <View style={styles.rowDivider} />
-          <InfoRow label="Driver"          value={trip.driver?.email ?? 'No driver assigned'} />
+          <InfoRow label="Driver"          value={trip.driver?.fullName ?? 'No driver assigned'} />
+          <View style={styles.rowDivider} />
+          <InfoRow label="Driver License"  value={trip.driver?.licenseNumber ?? '—'} />
           <View style={styles.rowDivider} />
           <InfoRow label="Origin"          value={trip.originDescription ?? '—'} />
           <View style={styles.rowDivider} />

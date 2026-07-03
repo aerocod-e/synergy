@@ -666,7 +666,9 @@ export async function getTripById(req: Request, res: Response): Promise<void> {
       created_at:            Date;
       updated_at:            Date;
       driver_id:             string | null;
-      driver_email:          string | null;
+      driver_full_name:      string | null;
+      driver_license_number: string | null;
+      driver_phone_number:   string | null;
       loading_state_id:      string;
       loading_state_name:    string;
       loading_state_code:    string;
@@ -688,8 +690,10 @@ export async function getTripById(req: Request, res: Response): Promise<void> {
          t.destination_description,
          t.created_at,
          t.updated_at,
-         d.id    AS driver_id,
-         d.email AS driver_email,
+         d.id             AS driver_id,
+         d.full_name      AS driver_full_name,
+         d.license_number AS driver_license_number,
+         d.phone_number   AS driver_phone_number,
          ls.id   AS loading_state_id,
          ls.name AS loading_state_name,
          ls.code AS loading_state_code,
@@ -704,7 +708,7 @@ export async function getTripById(req: Request, res: Response): Promise<void> {
        LEFT JOIN vehicle_types vt ON vt.id = v.vehicle_type_id
        JOIN states ls ON t.loading_state_id   = ls.id
        JOIN states us ON t.unloading_state_id = us.id
-       LEFT JOIN users d ON t.driver_id = d.id
+       LEFT JOIN drivers d ON d.id = t.driver_id
        LEFT JOIN users u ON u.id = t.created_by
        WHERE t.id = $1
        LIMIT 1`,
@@ -777,6 +781,32 @@ export async function getTripById(req: Request, res: Response): Promise<void> {
       [tripId]
     );
 
+    // Fetch the full list of stakeholder rates for this trip's vehicle type from the
+    // currently active pricing chart, including stakeholders with a zero amount.
+    // NOTE: this reflects the CURRENT active chart, not necessarily the exact rate
+    // that was in effect at trip creation time (actual charged amounts live in trip_fees).
+    let vehicleTypeStakeholderRates: Array<{ stakeholderName: string; amount: number }> = [];
+    if (trip.vehicle_type_id) {
+      const stakeholderRatesRes = await pool.query<{
+        stakeholder_name: string;
+        amount:           number;
+      }>(
+        `SELECT s.name AS stakeholder_name, pcsr.amount
+         FROM pricing_charts pc
+         JOIN pricing_chart_stakeholder_rates pcsr ON pcsr.pricing_chart_id = pc.id
+         JOIN stakeholders s ON s.id = pcsr.stakeholder_id
+         WHERE pc.is_active = true
+           AND pcsr.vehicle_type_id = $1
+           AND s.is_active = true
+         ORDER BY s.name ASC`,
+        [trip.vehicle_type_id]
+      );
+      vehicleTypeStakeholderRates = stakeholderRatesRes.rows.map((r) => ({
+        stakeholderName: r.stakeholder_name,
+        amount:          r.amount,
+      }));
+    }
+
     res.json({
       data: {
         trip: {
@@ -788,7 +818,12 @@ export async function getTripById(req: Request, res: Response): Promise<void> {
           status:          trip.status,
           loadingState:    { id: trip.loading_state_id,   name: trip.loading_state_name,   code: trip.loading_state_code   },
           unloadingState:  { id: trip.unloading_state_id, name: trip.unloading_state_name, code: trip.unloading_state_code },
-          driver:          trip.driver_id ? { id: trip.driver_id, email: trip.driver_email } : null,
+          driver:          trip.driver_id ? {
+            id:            trip.driver_id,
+            fullName:      trip.driver_full_name,
+            licenseNumber: trip.driver_license_number,
+            phoneNumber:   trip.driver_phone_number,
+          } : null,
           originDescription:      trip.origin_description,
           destinationDescription: trip.destination_description,
           unstartedFlag:   trip.unstarted_flag,
@@ -811,6 +846,7 @@ export async function getTripById(req: Request, res: Response): Promise<void> {
             metadata:    e.metadata,
             createdAt:   e.created_at,
           })),
+          vehicleTypeStakeholderRates,
         },
       },
       message: "Trip retrieved",

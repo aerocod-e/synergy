@@ -1,0 +1,30 @@
+Add license expiry tracking and full update history to drivers, and block new trip creation for drivers with an expired license. Follow all steps in order.
+Database
+Add license_expiry_date to drivers, a date column, nullable for now to avoid breaking existing rows, but required going forward on all new registrations.
+Create a new table driver_license_history:
+sqlCREATE TABLE IF NOT EXISTS driver_license_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  driver_id UUID NOT NULL REFERENCES drivers(id),
+  old_license_number VARCHAR(100),
+  new_license_number VARCHAR(100) NOT NULL,
+  old_expiry_date DATE,
+  new_expiry_date DATE NOT NULL,
+  changed_by UUID REFERENCES users(id),
+  changed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+Backend
+Update createDriver to require licenseExpiryDate in the request body going forward, validate it is a valid date.
+Add a new endpoint, PATCH /api/drivers/:id/license, trip admin only, must be created_by. Accepts licenseNumber and licenseExpiryDate, both required together. Before updating the driver row, insert a row into driver_license_history capturing the driver's current license_number and license_expiry_date as the old values, and the newly submitted values as the new ones, along with changed_by set to the calling trip admin. Then update the driver's license_number and license_expiry_date to the new values.
+Keep the existing PATCH /api/drivers/:id for name and phone number only, unchanged, license fields must not be updatable through that endpoint anymore.
+Add GET /api/drivers/:id/license-history, trip admin only, must be created_by, returns all driver_license_history rows for that driver ordered by changed_at descending.
+In createTrip, after resolving the selected driver, check whether license_expiry_date is in the past. If so, return 422 with a message clearly directed at the trip admin, for example "This driver's license expired on [date]. Please update their license details before creating a new trip." This check only applies at the moment of trip creation, existing trips already in progress are never affected.
+Frontend
+Create artifacts/mobile/app/(tripadmin)/driver-detail.tsx, a new screen showing full driver information, current license number and expiry date, a clear valid or expired badge based on today's date, and the full license history list below, each entry showing old number, old expiry, new number, new expiry, and when the change happened.
+Register it as a hidden screen with href: null in (tripadmin)/_layout.tsx, add driver-detail to HIDDEN_ROUTES in PillTabBar.tsx.
+Make each driver card on (tripadmin)/drivers.tsx tappable, navigating to this new detail screen. Add a valid or expired badge directly on the card as well.
+On the driver detail screen, add an "Update License" button, separate from the existing edit action for name and phone, opening a modal with license number and expiry date fields, calling the new PATCH /api/drivers/:id/license endpoint.
+In the trip creation form's driver selection, if the selected driver's license is expired, show a clear inline warning before the trip admin attempts to submit, in addition to the backend block which is the actual enforcement.
+TypeScript check.
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors. Report every file changed.

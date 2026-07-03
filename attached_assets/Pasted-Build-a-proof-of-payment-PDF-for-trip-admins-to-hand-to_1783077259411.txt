@@ -1,0 +1,19 @@
+Build a proof of payment PDF for trip admins to hand to drivers. Follow all steps in order.
+Backend
+In tripController.ts, extend getTripById to also return, for the trip's vehicle type, the full list of stakeholder rates from the active pricing chart, including stakeholders with a zero amount. Add this as vehicleTypeStakeholderRates, an array of { stakeholderName, amount }, sourced from pricing_chart_stakeholder_rates joined to stakeholders for that vehicle type on the currently active chart. Note in a code comment that this reflects current rates, not necessarily the exact rates at the moment this specific trip was created, since zero-rate allocations are never stored historically. This is an accepted limitation, do not attempt to solve it with a schema change.
+Confirm the existing response already includes driver full name, license number, vehicle registration, vehicle type name, loading state name, unloading state name, trip code, status, and all actual trip_fees rows with recipient names and amounts.
+Frontend
+On artifacts/mobile/app/(tripadmin)/trip-detail.tsx, add a "Download Proof of Payment" button. Above it, add a toggle labeled "Include zero-fee parties" defaulting to off.
+Build the PDF using the same expo-print and expo-sharing pattern already working correctly for audit report PDFs. Do not use expo-file-system for this, mirror the audit PDF export exactly.
+PDF contents:
+Header: "Proof of Payment", trip code, date, current status badge.
+Trip details: driver full name, driver license number, vehicle registration, vehicle type, loading state, unloading state.
+Payment breakdown table: one row per party. For loading state and unloading state, always show as Paid with their amount, sourced from actual trip_fees. For each stakeholder with a nonzero amount in trip_fees, show as Paid with their amount. For stakeholders with a zero rate, only include them if the toggle is on, and label them clearly as "No Fee" or "Not Applicable", never as Paid, since they were not actually paid anything.
+Total row summing only the actual paid amounts.
+If the trip status is cancelled, replace the payment breakdown entirely with a clear banner stating this trip was cancelled and all fees have been reversed, and do not claim any party is currently paid.
+Footer line: a short formal statement that this document confirms fee allocation status as of trip creation.
+Keep the layout simple and easy to read quickly, this document may be shown to a road official.
+TypeScript check.
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Both must return zero errors. Report every file changed.

@@ -1,10 +1,129 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { AlertCircle, ChevronLeft, ChevronRight, Search } from 'lucide-react-native';
+import { AlertCircle, ChevronLeft, ChevronRight, Download, Search } from 'lucide-react-native';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { theme } from '@/constants/theme';
 import { getTripById, startTrip, completeTrip } from '@/services/api';
 import TripDetailView, { type TripDetail } from '@/components/TripDetailView';
+import { formatNaira } from '@/utils/formatCurrency';
+
+// ── Share helpers ────────────────────────────────────────────────────────────
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/**
+ * On iOS, `Sharing.shareAsync` can fail to resolve/reject when the native
+ * share sheet is dismissed without the user picking a share option. This
+ * races the real share promise against a timeout so UI loading state is
+ * never left stuck. The real promise is still allowed to settle in the
+ * background afterwards; any late result/error is only logged, not surfaced.
+ */
+const shareWithTimeout = async (
+  sharePromise: Promise<unknown>,
+  timeoutMs = 3000,
+  label = 'Share'
+): Promise<void> => {
+  let timedOut = false;
+  await Promise.race([sharePromise, sleep(timeoutMs).then(() => { timedOut = true; })]);
+  if (timedOut) {
+    sharePromise.catch((error) => {
+      console.error(`${label} settled after timeout with an error:`, error);
+    });
+  }
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  created:              'Created',
+  in_transit:           'In Transit',
+  completed:            'Completed',
+  cancelled:            'Cancelled',
+  cancellation_pending: 'Pending Cancel',
+};
+
+function fmtDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+// ── Proof of Payment PDF builder ─────────────────────────────────────────────
+
+function buildProofOfPaymentHtml(trip: TripDetail, includeZeroFee: boolean): string {
+  const statusLabel = STATUS_LABELS[trip.status] ?? trip.status;
+  const isCancelled = trip.status === 'cancelled';
+
+  const paidFees = trip.fees.filter((f) => f.feeType !== 'cancellation_reversal');
+  const total = paidFees.reduce((sum, f) => sum + f.amount, 0);
+
+  const paidRows = paidFees.map((f) => `
+    <tr>
+      <td>${f.recipientName ?? '—'}</td>
+      <td class="status-paid">Paid</td>
+      <td>${formatNaira(f.amount)}</td>
+    </tr>`).join('');
+
+  const paidStakeholderNames = new Set(
+    paidFees.filter((f) => f.recipientType === 'stakeholder').map((f) => f.recipientName)
+  );
+  const zeroFeeRows = includeZeroFee
+    ? (trip.vehicleTypeStakeholderRates ?? [])
+        .filter((r) => r.amount === 0 && !paidStakeholderNames.has(r.stakeholderName))
+        .map((r) => `
+    <tr>
+      <td>${r.stakeholderName}</td>
+      <td class="status-nofee">Not Applicable</td>
+      <td>—</td>
+    </tr>`).join('')
+    : '';
+
+  const breakdownSection = isCancelled
+    ? `<div class="cancel-banner">
+        This trip was cancelled. Any fees previously allocated for this trip have been reversed.
+      </div>`
+    : `<table class="fees">
+        <thead><tr><th>Party</th><th>Status</th><th>Amount</th></tr></thead>
+        <tbody>
+          ${paidRows}
+          ${zeroFeeRows}
+        </tbody>
+        <tfoot><tr><td>Total Paid</td><td></td><td><b>${formatNaira(total)}</b></td></tr></tfoot>
+      </table>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
+  <style>
+    body{font-family:sans-serif;padding:24px;color:#111;}
+    h1{font-size:20px;margin-bottom:4px;}
+    p{margin:2px 0 8px;}
+    .meta{color:#666;font-size:13px;margin-bottom:16px;}
+    .badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;background:#e8f0fb;color:#1a6ec8;}
+    table{width:100%;border-collapse:collapse;margin-bottom:12px;}
+    table.details td{padding:6px 10px;font-size:13px;border:1px solid #eee;}
+    table.details td:nth-child(odd){background:#f8f8f8;color:#666;width:35%;}
+    table.fees th{background:#1a6ec8;color:#fff;padding:7px 8px;font-size:12px;text-align:left;}
+    table.fees td{padding:6px 8px;font-size:12px;border-bottom:1px solid #eee;}
+    table.fees tfoot td{font-size:13px;padding:8px;border-top:2px solid #111;}
+    .status-paid{color:#059669;font-weight:600;}
+    .status-nofee{color:#999;}
+    .cancel-banner{background:#fef2f2;color:#991b1b;padding:14px;border-radius:8px;font-size:13px;margin-bottom:16px;}
+    .footer{color:#666;font-size:11px;margin-top:24px;border-top:1px solid #eee;padding-top:12px;}
+  </style></head><body>
+  <h1>Proof of Payment</h1>
+  <p class="meta">Trip Code: <b>${trip.tripCode ?? '—'}</b> &nbsp;|&nbsp; Generated: ${new Date().toLocaleString('en-NG')} &nbsp;|&nbsp; <span class="badge">${statusLabel}</span></p>
+
+  <table class="details">
+    <tr><td>Driver</td><td>${trip.driver?.fullName ?? 'No driver assigned'}</td></tr>
+    <tr><td>Driver License</td><td>${trip.driver?.licenseNumber ?? '—'}</td></tr>
+    <tr><td>Vehicle Registration</td><td>${trip.vehicleNumber}</td></tr>
+    <tr><td>Vehicle Type</td><td>${trip.vehicleTypeName ?? '—'}</td></tr>
+    <tr><td>Loading State</td><td>${trip.loadingState.name}</td></tr>
+    <tr><td>Unloading State</td><td>${trip.unloadingState.name}</td></tr>
+  </table>
+
+  ${breakdownSection}
+
+  <p class="footer">This document confirms the fee allocation status for this trip as of trip creation. It is not a receipt of physical cash handling and does not reflect any pricing changes made after the trip was created.</p>
+  </body></html>`;
+}
 
 export default function TripAdminTripDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -14,6 +133,8 @@ export default function TripAdminTripDetail() {
   const [error, setError] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [includeZeroFee, setIncludeZeroFee] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   const fetchTrip = useCallback(async () => {
     if (!id) return;
@@ -85,6 +206,35 @@ export default function TripAdminTripDetail() {
     );
   };
 
+  const exportProofOfPayment = async () => {
+    if (!trip) return;
+    setExportingPdf(true);
+    try {
+      const html = buildProofOfPaymentHtml(trip, includeZeroFee);
+      if (Platform.OS === 'web') {
+        const win = window.open('', '_blank');
+        if (win) {
+          win.document.write(html);
+          win.document.close();
+          win.print();
+        }
+      } else {
+        const { uri } = await Print.printToFileAsync({ html });
+        const sharePromise = Sharing.shareAsync(uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: 'Share Proof of Payment PDF',
+          UTI: 'com.adobe.pdf',
+        });
+        await shareWithTimeout(sharePromise, 3000, 'PDF share');
+      }
+    } catch (error) {
+      console.error('Proof of payment export failed:', error);
+      Alert.alert('Export failed', 'Could not generate PDF. Please try again.');
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
   const header = (
     <View style={styles.header}>
       <TouchableOpacity
@@ -125,17 +275,49 @@ export default function TripAdminTripDetail() {
     );
   }
 
-  const verifyFooter = trip.tripCode ? (
-    <TouchableOpacity
-      style={styles.verifyRow}
-      onPress={() => router.push(`/(public)/lookup?q=${encodeURIComponent(trip.tripCode!)}`)}
-      activeOpacity={0.7}
-    >
-      <Search size={18} color={theme.colors.primary} />
-      <Text style={styles.verifyRowText}>Verify this trip's payment status</Text>
-      <ChevronRight size={16} color={theme.colors.grey1} />
-    </TouchableOpacity>
-  ) : undefined;
+  const verifyFooter = (
+    <>
+      {trip.tripCode && (
+        <TouchableOpacity
+          style={styles.verifyRow}
+          onPress={() => router.push(`/(public)/lookup?q=${encodeURIComponent(trip.tripCode!)}`)}
+          activeOpacity={0.7}
+        >
+          <Search size={18} color={theme.colors.primary} />
+          <Text style={styles.verifyRowText}>Verify this trip's payment status</Text>
+          <ChevronRight size={16} color={theme.colors.grey1} />
+        </TouchableOpacity>
+      )}
+
+      <View style={styles.pdfSection}>
+        <View style={styles.pdfToggleRow}>
+          <Text style={styles.pdfToggleLabel}>Include zero-fee parties</Text>
+          <Switch
+            value={includeZeroFee}
+            onValueChange={setIncludeZeroFee}
+            trackColor={{ false: theme.colors.separator, true: theme.colors.primary }}
+            thumbColor={theme.colors.white}
+          />
+        </View>
+        <TouchableOpacity
+          style={[styles.pdfButton, exportingPdf && styles.actionBtnDisabled]}
+          onPress={exportProofOfPayment}
+          disabled={exportingPdf}
+          activeOpacity={0.8}
+        >
+          {exportingPdf
+            ? <ActivityIndicator size="small" color={theme.colors.primary} />
+            : (
+              <>
+                <Download size={18} color={theme.colors.primary} />
+                <Text style={styles.pdfButtonText}>Download Proof of Payment</Text>
+              </>
+            )
+          }
+        </TouchableOpacity>
+      </View>
+    </>
+  );
 
   const showActions = trip.status === 'created' || trip.status === 'in_transit';
 
@@ -235,6 +417,40 @@ const styles = StyleSheet.create({
   },
   verifyRowText: {
     flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.primary,
+  },
+  pdfSection: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    backgroundColor: theme.colors.white,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.separator,
+    padding: 14,
+    gap: 12,
+  },
+  pdfToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  pdfToggleLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.colors.black,
+  },
+  pdfButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 10,
+    paddingVertical: 12,
+    backgroundColor: '#f0f4ff',
+  },
+  pdfButtonText: {
     fontSize: 14,
     fontWeight: '600',
     color: theme.colors.primary,
