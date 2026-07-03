@@ -11,11 +11,9 @@ import {
   Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft, CloudOff, FileText, FileSpreadsheet } from 'lucide-react-native';
+import { ChevronLeft, CloudOff, FileText } from 'lucide-react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import * as XLSX from 'xlsx';
-import { File, Paths } from 'expo-file-system';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
 import { getDriverAudit, getTripAdminAudit, getVehicleAudit } from '@/services/api';
@@ -295,90 +293,6 @@ function buildHtml(data: AuditData, title: string, isSingle: boolean, entityType
   </body></html>`;
 }
 
-// ── Excel builder ─────────────────────────────────────────────────────────────
-
-function buildWorkbook(data: AuditData, isSingle: boolean, entityType: 'vehicle' | 'driver' | 'trip-admin'): XLSX.WorkBook {
-  const wb        = XLSX.utils.book_new();
-  const isDriver    = entityType === 'driver';
-  const isTripAdmin = entityType === 'trip-admin';
-
-  const summaryRows = (s: EntitySummary): (string | number)[][] => [
-    ['SUMMARY'],
-    ['Total Trips',          s.totalTrips],
-    ['Completed',            s.completed],
-    ['In Transit',           s.inTransit],
-    ['Created',              s.created],
-    ['Cancelled',            s.cancelled],
-    ['Cancellation Pending', s.cancellationPending],
-    ['Total Revenue (₦)',    s.totalRevenue / 100],
-    ...(isTripAdmin ? [
-      ['Direct Cancellations',   s.directCancellations   ?? 0],
-      ['Via Approval Workflow',  s.approvalCancellations ?? 0],
-      ['Approval Approved',      s.approvalApproved      ?? 0],
-      ['Approval Rejected',      s.approvalRejected      ?? 0],
-    ] : []),
-    [],
-  ];
-
-  const secondaryHeader = (isDriver || isTripAdmin) ? 'Vehicle' : 'Driver';
-  const tripHeaders = ['Trip Code', 'Date', 'Loading State', 'Unloading State', 'Status', secondaryHeader, 'Total Fees (₦)'];
-  const tripRow = (t: TripEntry): (string | number)[] => [
-    t.tripCode ?? '',
-    fmtDate(t.date),
-    t.loadingState ?? '',
-    t.unloadingState ?? '',
-    STATUS_LABELS[t.status] ?? t.status,
-    ((isDriver || isTripAdmin) ? t.vehicleReg : t.driverName) ?? '',
-    t.totalFees / 100,
-  ];
-
-  const entities = isSingle ? data.entities.slice(0, 1) : data.entities;
-
-  for (const e of entities) {
-    const sheetName = e.displayName
-      .replace(/[:\\\/?*[\]]/g, '_')
-      .slice(0, 31);
-    const typeLabel = isTripAdmin ? 'Email' : isDriver ? 'License' : 'Vehicle Type';
-    const regLabel  = isTripAdmin ? 'Date Onboarded' : 'Date Registered';
-    const wsData: (string | number)[][] = [
-      [`Audit — ${e.displayName}`],
-      [typeLabel, e.subLabel ?? ''],
-      [regLabel, fmtDate(e.dateRegistered)],
-      [],
-      ...summaryRows(e.summary),
-      ['TRIPS'],
-      tripHeaders,
-      ...e.trips.map(tripRow),
-    ];
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    XLSX.utils.book_append_sheet(wb, ws, sheetName);
-  }
-
-  if (!isSingle && data.entities.length > 1) {
-    const entityLabel   = isTripAdmin ? 'Trip Admin' : isDriver ? 'Driver' : 'Vehicle';
-    const allSheetLabel = isTripAdmin ? 'All Trip Admins' : isDriver ? 'All Drivers' : 'All Vehicles';
-    const subLabel      = isTripAdmin ? 'Email' : isDriver ? 'License' : 'Type';
-    const wsData: (string | number)[][] = [
-      [`Combined Summary — ${allSheetLabel}`],
-      [],
-      ...summaryRows(data.summary),
-      [entityLabel, subLabel, 'Registered', 'Trips', 'Completed', 'Revenue (₦)'],
-      ...data.entities.map((e) => [
-        e.displayName,
-        e.subLabel ?? '',
-        fmtDate(e.dateRegistered),
-        e.summary.totalTrips,
-        e.summary.completed,
-        e.summary.totalRevenue / 100,
-      ]),
-    ];
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    XLSX.utils.book_append_sheet(wb, ws, allSheetLabel);
-  }
-
-  return wb;
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function AuditReportScreen() {
@@ -413,7 +327,6 @@ export default function AuditReportScreen() {
   const [error,   setError]   = useState<string | null>(null);
 
   const [exportingPdf,   setExportingPdf]   = useState(false);
-  const [exportingExcel, setExportingExcel] = useState(false);
 
   const fetchAudit = useCallback(async (
     p: Preset,
@@ -473,35 +386,6 @@ export default function AuditReportScreen() {
       Alert.alert('Export failed', 'Could not generate PDF. Please try again.');
     } finally {
       setExportingPdf(false);
-    }
-  };
-
-  // ── Excel export ────────────────────────────────────────────────────────────
-  const exportExcel = async () => {
-    if (!data) return;
-    setExportingExcel(true);
-    try {
-      const wb = buildWorkbook(data, isSingle, entityType);
-      if (Platform.OS === 'web') {
-        XLSX.writeFile(wb, `audit-report-${Date.now()}.xlsx`);
-      } else {
-        const base64: string = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
-        const file = new File(Paths.cache, `audit-${Date.now()}.xlsx`);
-        file.write(base64, { encoding: 'base64' });
-        const sharePromise = Sharing.shareAsync(file.uri, {
-          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          dialogTitle: 'Share Audit Report Excel',
-          UTI: 'com.microsoft.excel.xlsx',
-        }).finally(() => {
-          try { file.delete(); } catch { /* ignore cleanup errors */ }
-        });
-        await shareWithTimeout(sharePromise, 3000, 'Excel share');
-      }
-    } catch (error) {
-      console.error('Excel export failed:', error);
-      Alert.alert('Export failed', 'Could not generate Excel file. Please try again.');
-    } finally {
-      setExportingExcel(false);
     }
   };
 
@@ -798,7 +682,7 @@ export default function AuditReportScreen() {
               <TouchableOpacity
                 style={[styles.exportBtn, exportingPdf && styles.exportBtnDisabled]}
                 onPress={exportPdf}
-                disabled={exportingPdf || exportingExcel}
+                disabled={exportingPdf}
                 activeOpacity={0.8}
               >
                 {exportingPdf
