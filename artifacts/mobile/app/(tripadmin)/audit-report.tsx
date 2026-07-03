@@ -459,9 +459,9 @@ export default function AuditReportScreen() {
       if (Platform.OS === 'web') {
         XLSX.writeFile(wb, `audit-report-${Date.now()}.xlsx`);
       } else {
-        const bytes: Uint8Array = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+        const base64: string = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
         const file = new File(Paths.cache, `audit-${Date.now()}.xlsx`);
-        file.write(bytes);
+        file.write(base64, { encoding: 'base64' });
         try {
           await Sharing.shareAsync(file.uri, {
             mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

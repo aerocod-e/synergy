@@ -1,0 +1,11 @@
+Fix the Excel export write call to match the actual API of the installed expo-file-system version 19.0.23, based on the exact runtime error captured on device.
+The error confirms the native write function rejects a raw Uint8Array as its first argument, it expects either a plain string or a specific typed array format it recognizes, neither of which the current Uint8Array satisfies as passed.
+Open artifacts/mobile/app/(tripadmin)/audit-report.tsx, find the exportExcel function, specifically the native path.
+Change the xlsx output type from array to base64, so the workbook is generated as a base64 encoded string rather than raw bytes.
+const base64: string = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
+Then write this base64 string to the file using the correct API for expo-file-system 19.0.23. Confirm the exact class based File.write signature accepts an options object specifying encoding, and pass the appropriate base64 encoding option if the API requires one to be explicitly declared, rather than assuming plain string writing by default. If the installed version's File.write only accepts a plain string without an encoding option and writes it as raw text rather than decoding it from base64 first, then instead use the correct lower level write method for this version that explicitly supports base64 decoding on write, check the actual exported API surface of expo-file-system 19.0.23 rather than assuming, since the correct method name and options shape must match exactly what this version provides.
+After identifying the correct method, apply it, then run
+pnpm --filter @workspace/mobile exec tsc --noEmit
+Must return zero errors.
+Report the exact code change made, the exact method and options used to write the base64 content, and confirm this matches the real exported API of the installed expo-file-system version rather than an assumption.
+Testing note, this can only be verified on a physical device, since the previous failure only reproduced there. After this fix lands, test on your iPhone again, tap Export Excel on any audit report, confirm the native share sheet opens without the FunctionCallException error, and confirm the resulting file actually opens with correct data.
