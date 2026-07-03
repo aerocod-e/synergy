@@ -1,0 +1,17 @@
+Continue verification of a previous testing pass. Backend tests already passed fully and do not need to be repeated. Tests 1 through 13 already passed on frontend and do not need to be repeated. Only run tests 14 through 24 below, using a fresh browser session.
+App URL for all testing
+https://2f2a3156-e178-45fc-95e3-f3726442355f-00-2f9hl4ag0p8j2.expo.kirk.replit.dev
+Set the browser viewport to 390 by 844 pixels before starting.
+Login as Lagos Trip Admin, email lagos.ta1@synergy.com, password Demo@1234.
+Test 14, go to the Trips tab, tap into any completed trip to open its detail screen. Confirm a Download Proof of Payment button is visible. Confirm a toggle labeled Include zero-fee parties is visible above it, defaulting to off.
+Test 15, tap Download Proof of Payment with the toggle off, confirm the share flow completes with no JavaScript error, confirm a PDF file is generated.
+Test 16, find or open a cancelled trip's detail screen, confirm it still renders correctly with no crash or blank screen.
+Test 17, go to the Drivers tab, confirm each driver card shows a Valid or Expired badge.
+Test 18, tap any driver card, confirm the driver detail screen actually loads correctly now, showing the driver's current license number and expiry date, rather than showing Failed to load driver. This is the specific bug that was just fixed, confirm it is genuinely resolved.
+Test 19, if a driver with an expired license is available, confirm their badge clearly shows Expired, and confirm attempting to select them in a new trip creation form shows a warning.
+Test 20, on the driver detail screen from Test 18, confirm a license history section appears below the current details, confirm any existing history rows display old license number, old expiry, new license number, new expiry, and a timestamp.
+Test 21, tap Update License on the driver detail screen, submit a new license number and a new future expiry date, confirm success, confirm the screen now shows these as the current values, and confirm a new row appears in the license history reflecting this exact change.
+Test 22, go to an audit report screen for a vehicle, a driver, or a trip admin, confirm there is no Excel export button anywhere on the screen, only PDF export should be visible.
+Test 23, tap Export PDF on that audit report screen, confirm the export completes with no JavaScript error.
+Test 24, confirm the browser console is clean throughout every test above, no errors, no warnings.
+Report each test individually with a clear pass or fail. For any failure, include the exact error message or exact behavior observed, so it can be fixed precisely.
