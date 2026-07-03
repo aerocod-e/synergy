@@ -396,7 +396,28 @@ async function migrate(): Promise<void> {
     `);
     console.log('✓ Trigger created: stakeholder_delete_guard (prevents hard-delete of stakeholder with wallet)');
 
-    console.log('\n✅ Migration complete: 14 tables + vehicle_type_id columns + vehicle-type-based pricing + clearing flag + wallet integrity triggers.');
+    // drivers.license_expiry_date — required going forward for new drivers, nullable for legacy rows
+    await client.query(`
+      ALTER TABLE drivers ADD COLUMN IF NOT EXISTS license_expiry_date DATE
+    `);
+    console.log('✓ drivers: license_expiry_date column added');
+
+    // driver_license_history — audit trail of license number/expiry changes
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS driver_license_history (
+        id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        driver_id           UUID NOT NULL REFERENCES drivers(id),
+        old_license_number  VARCHAR(100),
+        new_license_number  VARCHAR(100) NOT NULL,
+        old_expiry_date     DATE,
+        new_expiry_date     DATE NOT NULL,
+        changed_by          UUID REFERENCES users(id),
+        changed_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )
+    `);
+    console.log('✓ Table created: driver_license_history');
+
+    console.log('\n✅ Migration complete: 15 tables + vehicle_type_id columns + vehicle-type-based pricing + clearing flag + wallet integrity triggers + driver license history.');
   } finally {
     client.release();
     await pool.end();

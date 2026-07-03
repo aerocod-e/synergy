@@ -22,7 +22,7 @@ import TopBar from '@/components/TopBar';
 import ScreenTransition from '@/components/ScreenTransition';
 import SlideUpList from '@/components/SlideUpList';
 import VehicleSearchInput, { type Vehicle } from '@/components/VehicleSearchInput';
-import DriverSearchInput, { type Driver } from '@/components/DriverSearchInput';
+import DriverSearchInput, { type Driver, isDriverLicenseExpired } from '@/components/DriverSearchInput';
 import { getTrips, createTrip, getActivePricingChart, getStates, requestCancellation, createVehicle, listVehicleTypes } from '@/services/api';
 import { formatNaira } from '@/utils/formatCurrency';
 import { useLogout } from '@/hooks/useLogout';
@@ -301,6 +301,12 @@ export default function TripAdminTrips() {
     }
     if (!selectedDriver) {
       setSubmitError('Please select a driver.');
+      return;
+    }
+    if (isDriverLicenseExpired(selectedDriver.licenseExpiryDate)) {
+      setSubmitError(
+        `This driver's license expired on ${selectedDriver.licenseExpiryDate}. Please update their license details before creating a new trip.`
+      );
       return;
     }
     if (!loadingStateId) {
@@ -651,6 +657,14 @@ export default function TripAdminTrips() {
                 }}
                 placeholder="Search by name, license, or phone…"
               />
+              {selectedDriver && isDriverLicenseExpired(selectedDriver.licenseExpiryDate) && (
+                <View style={styles.errorBox}>
+                  <AlertCircle size={16} color={theme.colors.error} />
+                  <Text style={styles.errorText}>
+                    This driver's license expired on {selectedDriver.licenseExpiryDate}. Please update their license details before creating a new trip.
+                  </Text>
+                </View>
+              )}
 
               {/* ROUTE */}
               <Text style={[styles.sectionLabel, { marginTop: 20 }]}>ROUTE</Text>

@@ -211,11 +211,20 @@ export const listDrivers = (params?: Record<string, string>) =>
 export const searchDrivers = (q: string) =>
   apiRequest('/api/drivers/search?' + new URLSearchParams({ q }).toString());
 
-export const createDriver = (body: { full_name: string; license_number: string; phone_number: string }) =>
+export const createDriver = (body: { full_name: string; license_number: string; phone_number: string; license_expiry_date: string }) =>
   apiRequest('/api/drivers', { method: 'POST', body: JSON.stringify(body) });
 
 export const updateDriver = (id: string, body: { full_name?: string; phone_number?: string }) =>
   apiRequest(`/api/drivers/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+
+export const getDriver = (id: string) =>
+  apiRequest(`/api/drivers/${id}`);
+
+export const updateDriverLicense = (id: string, body: { license_number: string; license_expiry_date: string }) =>
+  apiRequest(`/api/drivers/${id}/license`, { method: 'PATCH', body: JSON.stringify(body) });
+
+export const getDriverLicenseHistory = (id: string) =>
+  apiRequest(`/api/drivers/${id}/license-history`);
 
 export const updateVehicle = (id: string, body: { registrationNumber: string; vehicleTypeId?: string }) =>
   apiRequest(`/api/vehicles/${id}`, { method: 'PATCH', body: JSON.stringify(body) });

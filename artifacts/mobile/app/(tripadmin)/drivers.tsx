@@ -30,6 +30,16 @@ interface DriverItem {
   isActive: boolean;
   createdAt: string;
   tripCount: number;
+  licenseExpiryDate: string | null;
+}
+
+function isLicenseExpired(licenseExpiryDate: string | null): boolean {
+  if (!licenseExpiryDate) return false;
+  const expiry = new Date(licenseExpiryDate);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  expiry.setHours(0, 0, 0, 0);
+  return expiry < today;
 }
 
 export default function TripAdminDrivers() {
@@ -44,6 +54,7 @@ export default function TripAdminDrivers() {
   const [fullName, setFullName] = useState('');
   const [licenseNumber, setLicenseNumber] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [licenseExpiryDate, setLicenseExpiryDate] = useState('');
 
   const PAGE_LIMIT = 20;
   const [page, setPage] = useState(1);
@@ -87,6 +98,7 @@ export default function TripAdminDrivers() {
     setFullName('');
     setLicenseNumber('');
     setPhoneNumber('');
+    setLicenseExpiryDate('');
     setRegisterError(null);
     setModalVisible(true);
   }, []);
@@ -175,6 +187,10 @@ export default function TripAdminDrivers() {
       setRegisterError('Phone number is required.');
       return;
     }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(licenseExpiryDate.trim())) {
+      setRegisterError('License expiry date is required (YYYY-MM-DD).');
+      return;
+    }
     setRegisterError(null);
     setRegistering(true);
     try {
@@ -182,6 +198,7 @@ export default function TripAdminDrivers() {
         full_name: fullName.trim(),
         license_number: licenseNumber.trim(),
         phone_number: phoneNumber.trim(),
+        license_expiry_date: licenseExpiryDate.trim(),
       });
       setModalVisible(false);
       fetchDrivers();
@@ -257,52 +274,68 @@ export default function TripAdminDrivers() {
     );
   }, []);
 
-  const renderDriver = ({ item }: { item: DriverItem }) => (
-    <View style={styles.card}>
-      <View style={styles.cardMain}>
-        <View style={styles.cardLeft}>
-          <Text style={styles.driverName}>{item.fullName}</Text>
-          <View style={styles.detailRow}>
-            <CreditCard size={13} color={theme.colors.grey1} />
-            <Text style={styles.detailText}>{item.licenseNumber}</Text>
+  const renderDriver = ({ item }: { item: DriverItem }) => {
+    const expired = isLicenseExpired(item.licenseExpiryDate);
+    return (
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => router.push(`/(tripadmin)/driver-detail?id=${item.id}`)}
+        activeOpacity={0.85}
+      >
+        <View style={styles.cardMain}>
+          <View style={styles.cardLeft}>
+            <View style={styles.nameRow}>
+              <Text style={styles.driverName}>{item.fullName}</Text>
+              {item.licenseExpiryDate && (
+                <View style={[styles.licenseBadge, expired ? styles.licenseBadgeExpired : styles.licenseBadgeValid]}>
+                  <Text style={[styles.licenseBadgeText, expired ? styles.licenseBadgeTextExpired : styles.licenseBadgeTextValid]}>
+                    {expired ? 'Expired' : 'Valid'}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <View style={styles.detailRow}>
+              <CreditCard size={13} color={theme.colors.grey1} />
+              <Text style={styles.detailText}>{item.licenseNumber}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Phone size={13} color={theme.colors.grey1} />
+              <Text style={styles.detailText}>{item.phoneNumber}</Text>
+            </View>
+            <Text style={styles.tripCount}>
+              {item.tripCount} {item.tripCount === 1 ? 'trip' : 'trips'}
+            </Text>
           </View>
-          <View style={styles.detailRow}>
-            <Phone size={13} color={theme.colors.grey1} />
-            <Text style={styles.detailText}>{item.phoneNumber}</Text>
+          <View style={styles.cardActions}>
+            <TouchableOpacity
+              onPress={() => openEditModal(item)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityLabel="Edit driver"
+            >
+              <Pencil size={22} color={theme.colors.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => handleDeleteDriver(item)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              disabled={!!deleting[item.id]}
+              accessibilityLabel="Remove driver"
+            >
+              {deleting[item.id]
+                ? <ActivityIndicator size="small" color={theme.colors.error} />
+                : <Trash2 size={22} color={theme.colors.error} />
+              }
+            </TouchableOpacity>
           </View>
-          <Text style={styles.tripCount}>
-            {item.tripCount} {item.tripCount === 1 ? 'trip' : 'trips'}
-          </Text>
         </View>
-        <View style={styles.cardActions}>
-          <TouchableOpacity
-            onPress={() => openEditModal(item)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            accessibilityLabel="Edit driver"
-          >
-            <Pencil size={22} color={theme.colors.primary} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => handleDeleteDriver(item)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            disabled={!!deleting[item.id]}
-            accessibilityLabel="Remove driver"
-          >
-            {deleting[item.id]
-              ? <ActivityIndicator size="small" color={theme.colors.error} />
-              : <Trash2 size={22} color={theme.colors.error} />
-            }
-          </TouchableOpacity>
-        </View>
-      </View>
-      {deleteError[item.id] ? (
-        <View style={styles.cardError}>
-          <AlertCircle size={13} color={theme.colors.error} />
-          <Text style={styles.cardErrorText}>{deleteError[item.id]}</Text>
-        </View>
-      ) : null}
-    </View>
-  );
+        {deleteError[item.id] ? (
+          <View style={styles.cardError}>
+            <AlertCircle size={13} color={theme.colors.error} />
+            <Text style={styles.cardErrorText}>{deleteError[item.id]}</Text>
+          </View>
+        ) : null}
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (
@@ -529,6 +562,16 @@ export default function TripAdminDrivers() {
               autoCorrect={false}
             />
 
+            <Text style={[styles.fieldLabel, { marginTop: 16 }]}>LICENSE EXPIRY DATE</Text>
+            <TextInput
+              style={styles.textField}
+              value={licenseExpiryDate}
+              onChangeText={setLicenseExpiryDate}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor={theme.colors.grey1}
+              autoCorrect={false}
+            />
+
             {registerError && (
               <View style={styles.errorBox}>
                 <AlertCircle size={16} color={theme.colors.error} />
@@ -687,11 +730,37 @@ const styles = StyleSheet.create({
     color: theme.colors.error,
     flex: 1,
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 2,
+  },
   driverName: {
     fontSize: 16,
     fontWeight: '700',
     color: theme.colors.black,
-    marginBottom: 2,
+  },
+  licenseBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  licenseBadgeValid: {
+    backgroundColor: '#E3F5E9',
+  },
+  licenseBadgeExpired: {
+    backgroundColor: '#FBE4E4',
+  },
+  licenseBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  licenseBadgeTextValid: {
+    color: '#1E8E4E',
+  },
+  licenseBadgeTextExpired: {
+    color: theme.colors.error,
   },
   detailRow: {
     flexDirection: 'row',

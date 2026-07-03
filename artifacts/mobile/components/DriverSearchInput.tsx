@@ -18,6 +18,16 @@ export interface Driver {
   createdBy: string;
   isActive: boolean;
   createdAt: string;
+  licenseExpiryDate: string | null;
+}
+
+export function isDriverLicenseExpired(licenseExpiryDate: string | null): boolean {
+  if (!licenseExpiryDate) return false;
+  const expiry = new Date(licenseExpiryDate);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  expiry.setHours(0, 0, 0, 0);
+  return expiry < today;
 }
 
 interface Props {
@@ -35,6 +45,7 @@ export default function DriverSearchInput({ value, onSelect, placeholder }: Prop
   const [regName, setRegName] = useState('');
   const [regLicense, setRegLicense] = useState('');
   const [regPhone, setRegPhone] = useState('');
+  const [regExpiry, setRegExpiry] = useState('');
   const [registering, setRegistering] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -85,11 +96,16 @@ export default function DriverSearchInput({ value, onSelect, placeholder }: Prop
     setRegName('');
     setRegLicense('');
     setRegPhone('');
+    setRegExpiry('');
   };
 
   const handleSubmitRegister = async () => {
     if (!regName.trim() || !regLicense.trim() || !regPhone.trim()) {
-      setRegisterError('All three fields are required.');
+      setRegisterError('All fields are required.');
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(regExpiry.trim())) {
+      setRegisterError('License expiry date is required (YYYY-MM-DD).');
       return;
     }
     setRegistering(true);
@@ -99,6 +115,7 @@ export default function DriverSearchInput({ value, onSelect, placeholder }: Prop
         full_name: regName.trim(),
         license_number: regLicense.trim(),
         phone_number: regPhone.trim(),
+        license_expiry_date: regExpiry.trim(),
       });
       const driver = created as Driver;
       setQuery(driver.fullName);
@@ -185,6 +202,14 @@ export default function DriverSearchInput({ value, onSelect, placeholder }: Prop
                 placeholder="Phone Number"
                 placeholderTextColor={theme.colors.grey1}
                 keyboardType="phone-pad"
+                autoCorrect={false}
+              />
+              <TextInput
+                style={styles.formInput}
+                value={regExpiry}
+                onChangeText={setRegExpiry}
+                placeholder="License Expiry Date (YYYY-MM-DD)"
+                placeholderTextColor={theme.colors.grey1}
                 autoCorrect={false}
               />
 

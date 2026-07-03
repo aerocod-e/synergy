@@ -20,7 +20,7 @@ const TAB_ICONS: Record<string, IconComponent> = {
 const PILL_PADDING = 6;
 const SLIDER_VERTICAL_INSET = 6;
 
-const HIDDEN_ROUTES = new Set(['create-trip', 'trip-detail', 'user-detail', 'ledger-detail', 'audit-report']);
+const HIDDEN_ROUTES = new Set(['create-trip', 'trip-detail', 'user-detail', 'ledger-detail', 'audit-report', 'driver-detail']);
 
 export default function PillTabBar(props: any) {
   const { state, descriptors, navigation } = props as {

@@ -12,6 +12,7 @@ export default function TripAdminLayout() {
       <Tabs.Screen name="drivers"     options={{ title: 'Drivers',  tabBarLabel: 'Drivers' }} />
       <Tabs.Screen name="trip-detail"   options={{ title: 'Trip Detail',   href: null }} />
       <Tabs.Screen name="audit-report"  options={{ title: 'Audit Report',  href: null }} />
+      <Tabs.Screen name="driver-detail" options={{ title: 'Driver Detail', href: null }} />
     </Tabs>
   );
 }

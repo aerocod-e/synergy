@@ -126,8 +126,8 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
 
     // Run remaining existence checks in parallel
     const [driverRes, loadingRes, unloadingRes] = await Promise.all([
-      client.query<{ id: string }>(
-        `SELECT id FROM drivers WHERE id = $1 AND is_active = true AND deleted_at IS NULL LIMIT 1`,
+      client.query<{ id: string; license_expiry_date: Date | null }>(
+        `SELECT id, license_expiry_date FROM drivers WHERE id = $1 AND is_active = true AND deleted_at IS NULL LIMIT 1`,
         [driverId]
       ),
       client.query<{ id: string }>(
@@ -143,6 +143,22 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
     if (driverRes.rows.length === 0) {
       res.status(400).json({ error: "BAD_REQUEST", message: "driverId does not reference an active driver" });
       return;
+    }
+
+    const driverRow = driverRes.rows[0]!;
+    if (driverRow.license_expiry_date !== null) {
+      const expiry = new Date(driverRow.license_expiry_date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      expiry.setHours(0, 0, 0, 0);
+      if (expiry < today) {
+        const formattedDate = new Date(driverRow.license_expiry_date).toISOString().slice(0, 10);
+        res.status(422).json({
+          error: "UNPROCESSABLE",
+          message: `This driver's license expired on ${formattedDate}. Please update their license details before creating a new trip.`,
+        });
+        return;
+      }
     }
     if (loadingRes.rows.length === 0) {
       res.status(400).json({ error: "BAD_REQUEST", message: "loadingStateId does not reference an existing state" });
