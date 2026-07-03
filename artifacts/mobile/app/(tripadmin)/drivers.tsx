@@ -10,7 +10,6 @@ import {
   RefreshControl,
   TextInput,
   Platform,
-  Alert,
 } from 'react-native';
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import { AlertCircle, BarChart2, CloudOff, CreditCard, LogOut, Pencil, Phone, Plus, PlusCircle, Trash2, User, X } from 'lucide-react-native';
@@ -20,6 +19,7 @@ import ScreenTransition from '@/components/ScreenTransition';
 import SlideUpList from '@/components/SlideUpList';
 import { listDrivers, createDriver, updateDriver, deleteDriver as deleteDriverApi } from '@/services/api';
 import { useLogout } from '@/hooks/useLogout';
+import { confirmAction } from '@/utils/confirmAction';
 
 interface DriverItem {
   id: string;
@@ -246,32 +246,27 @@ export default function TripAdminDrivers() {
   };
 
   const handleDeleteDriver = useCallback((item: DriverItem) => {
-    Alert.alert(
-      `Remove ${item.fullName}?`,
-      'This cannot be undone. Drivers with active trips cannot be removed.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            setDeleting((prev) => ({ ...prev, [item.id]: true }));
-            setDeleteError((prev) => { const n = { ...prev }; delete n[item.id]; return n; });
-            try {
-              await deleteDriverApi(item.id);
-              setDrivers((prev) => prev.filter((d) => d.id !== item.id));
-            } catch (err: any) {
-              setDeleteError((prev) => ({
-                ...prev,
-                [item.id]: err?.message ?? 'Failed to remove driver.',
-              }));
-            } finally {
-              setDeleting((prev) => { const n = { ...prev }; delete n[item.id]; return n; });
-            }
-          },
-        },
-      ]
-    );
+    confirmAction({
+      title: `Remove ${item.fullName}?`,
+      message: 'This cannot be undone. Drivers with active trips cannot be removed.',
+      confirmText: 'Remove',
+      destructive: true,
+      onConfirm: async () => {
+        setDeleting((prev) => ({ ...prev, [item.id]: true }));
+        setDeleteError((prev) => { const n = { ...prev }; delete n[item.id]; return n; });
+        try {
+          await deleteDriverApi(item.id);
+          setDrivers((prev) => prev.filter((d) => d.id !== item.id));
+        } catch (err: any) {
+          setDeleteError((prev) => ({
+            ...prev,
+            [item.id]: err?.message ?? 'Failed to remove driver.',
+          }));
+        } finally {
+          setDeleting((prev) => { const n = { ...prev }; delete n[item.id]; return n; });
+        }
+      },
+    });
   }, []);
 
   const renderDriver = ({ item }: { item: DriverItem }) => {

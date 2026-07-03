@@ -1,6 +1,5 @@
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   LayoutAnimation,
   Modal,
@@ -33,6 +32,7 @@ import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
 import ScreenTransition from '@/components/ScreenTransition';
 import SlideUpList from '@/components/SlideUpList';
+import { confirmAction, notifyAction } from '@/utils/confirmAction';
 import { formatNaira } from '@/utils/formatCurrency';
 
 if (Platform.OS === 'android') {
@@ -364,40 +364,24 @@ export default function ConfigScreen() {
               setPageLoading(true);
               await loadData();
             } catch (e: any) {
-              if (Platform.OS === 'web') {
-                window.alert(e?.message ?? 'Failed to deactivate vehicle type.');
-              } else {
-                Alert.alert('Error', e?.message ?? 'Failed to deactivate vehicle type.');
-              }
+              notifyAction('Error', e?.message ?? 'Failed to deactivate vehicle type.');
             } finally {
               setTogglingVtId(null);
             }
           };
 
-          if (Platform.OS === 'web') {
-            if (window.confirm(`Deactivate Vehicle Type\n\n${message}`)) {
-              doDeactivate();
-            } else {
-              setTogglingVtId(null);
-            }
-          } else {
-            Alert.alert(
-              'Deactivate Vehicle Type',
-              message,
-              [
-                { text: 'Cancel', style: 'cancel', onPress: () => setTogglingVtId(null) },
-                { text: 'Deactivate', style: 'destructive', onPress: doDeactivate },
-              ]
-            );
-          }
+          confirmAction({
+            title: 'Deactivate Vehicle Type',
+            message,
+            confirmText: 'Deactivate',
+            destructive: true,
+            onConfirm: doDeactivate,
+            onCancel: () => setTogglingVtId(null),
+          });
         })
         .catch((e: any) => {
           setTogglingVtId(null);
-          if (Platform.OS === 'web') {
-            window.alert(e?.message ?? 'Failed to retrieve vehicle count.');
-          } else {
-            Alert.alert('Error', e?.message ?? 'Failed to retrieve vehicle count.');
-          }
+          notifyAction('Error', e?.message ?? 'Failed to retrieve vehicle count.');
         });
     } else {
       setTogglingVtId(vtr.vehicleTypeId);
@@ -407,7 +391,7 @@ export default function ConfigScreen() {
           await loadData();
         })
         .catch((e: any) => {
-          Alert.alert('Error', e?.message ?? 'Failed to reactivate vehicle type.');
+          notifyAction('Error', e?.message ?? 'Failed to reactivate vehicle type.');
         })
         .finally(() => setTogglingVtId(null));
     }

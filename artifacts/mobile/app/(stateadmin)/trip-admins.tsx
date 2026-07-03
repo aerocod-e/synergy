@@ -14,7 +14,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
 } from 'react-native';
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import { AlertCircle, AlertTriangle, Ban, BarChart2, CheckCircle, CloudOff, Eye, EyeOff, Plus, PlusCircle, Trash2, UserCircle, Users, X } from 'lucide-react-native';
@@ -24,6 +23,7 @@ import ScreenTransition from '@/components/ScreenTransition';
 import SlideUpList from '@/components/SlideUpList';
 import { listTripAdmins, createUser, updateCancellationRights, toggleUserActive, getTripAdminActiveTripsCount, deleteTripAdmin as deleteTripAdminApi } from '@/services/api';
 import { useAuthContext } from '@/app/_layout';
+import { confirmAction } from '@/utils/confirmAction';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -220,32 +220,27 @@ export default function StateAdminTripAdmins() {
     const displayName = (admin.firstName || admin.lastName)
       ? `${admin.firstName} ${admin.lastName}`.trim()
       : admin.email;
-    Alert.alert(
-      `Delete ${displayName}'s account?`,
-      'This cannot be undone. Trip Admins with active trips cannot be deleted.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setDeleting((prev) => ({ ...prev, [admin.id]: true }));
-            setDeleteError((prev) => { const n = { ...prev }; delete n[admin.id]; return n; });
-            try {
-              await deleteTripAdminApi(admin.id);
-              setAdmins((prev) => prev.filter((a) => a.id !== admin.id));
-            } catch (err: any) {
-              setDeleteError((prev) => ({
-                ...prev,
-                [admin.id]: err?.message ?? 'Failed to delete account.',
-              }));
-            } finally {
-              setDeleting((prev) => { const n = { ...prev }; delete n[admin.id]; return n; });
-            }
-          },
-        },
-      ]
-    );
+    confirmAction({
+      title: `Delete ${displayName}'s account?`,
+      message: 'This cannot be undone. Trip Admins with active trips cannot be deleted.',
+      confirmText: 'Delete',
+      destructive: true,
+      onConfirm: async () => {
+        setDeleting((prev) => ({ ...prev, [admin.id]: true }));
+        setDeleteError((prev) => { const n = { ...prev }; delete n[admin.id]; return n; });
+        try {
+          await deleteTripAdminApi(admin.id);
+          setAdmins((prev) => prev.filter((a) => a.id !== admin.id));
+        } catch (err: any) {
+          setDeleteError((prev) => ({
+            ...prev,
+            [admin.id]: err?.message ?? 'Failed to delete account.',
+          }));
+        } finally {
+          setDeleting((prev) => { const n = { ...prev }; delete n[admin.id]; return n; });
+        }
+      },
+    });
   }, []);
 
   const handleToggleActive = useCallback(async (admin: TripAdmin, isActive: boolean) => {

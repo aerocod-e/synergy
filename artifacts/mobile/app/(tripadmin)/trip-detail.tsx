@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { AlertCircle, ChevronLeft, ChevronRight, Download, Search } from 'lucide-react-native';
 import * as Print from 'expo-print';
@@ -8,6 +8,7 @@ import { theme } from '@/constants/theme';
 import { getTripById, startTrip, completeTrip } from '@/services/api';
 import TripDetailView, { type TripDetail } from '@/components/TripDetailView';
 import { formatNaira } from '@/utils/formatCurrency';
+import { confirmAction, notifyAction } from '@/utils/confirmAction';
 
 // ── Share helpers ────────────────────────────────────────────────────────────
 
@@ -155,55 +156,43 @@ export default function TripAdminTripDetail() {
   }, [fetchTrip]);
 
   const handleStart = () => {
-    Alert.alert(
-      'Mark as In Transit',
-      'Are you sure you want to mark this trip as In Transit? This confirms the driver has started the journey.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm',
-          style: 'default',
-          onPress: async () => {
-            setActionLoading(true);
-            setActionError(null);
-            try {
-              await startTrip(id!);
-              await fetchTrip();
-            } catch (err: any) {
-              setActionError(err?.message ?? 'Failed to update trip status. Please try again.');
-            } finally {
-              setActionLoading(false);
-            }
-          },
-        },
-      ]
-    );
+    confirmAction({
+      title: 'Mark as In Transit',
+      message: 'Are you sure you want to mark this trip as In Transit? This confirms the driver has started the journey.',
+      confirmText: 'Confirm',
+      onConfirm: async () => {
+        setActionLoading(true);
+        setActionError(null);
+        try {
+          await startTrip(id!);
+          await fetchTrip();
+        } catch (err: any) {
+          setActionError(err?.message ?? 'Failed to update trip status. Please try again.');
+        } finally {
+          setActionLoading(false);
+        }
+      },
+    });
   };
 
   const handleComplete = () => {
-    Alert.alert(
-      'Mark as Completed',
-      'Are you sure you want to mark this trip as Completed? This confirms the delivery has been made.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm',
-          style: 'default',
-          onPress: async () => {
-            setActionLoading(true);
-            setActionError(null);
-            try {
-              await completeTrip(id!);
-              await fetchTrip();
-            } catch (err: any) {
-              setActionError(err?.message ?? 'Failed to update trip status. Please try again.');
-            } finally {
-              setActionLoading(false);
-            }
-          },
-        },
-      ]
-    );
+    confirmAction({
+      title: 'Mark as Completed',
+      message: 'Are you sure you want to mark this trip as Completed? This confirms the delivery has been made.',
+      confirmText: 'Confirm',
+      onConfirm: async () => {
+        setActionLoading(true);
+        setActionError(null);
+        try {
+          await completeTrip(id!);
+          await fetchTrip();
+        } catch (err: any) {
+          setActionError(err?.message ?? 'Failed to update trip status. Please try again.');
+        } finally {
+          setActionLoading(false);
+        }
+      },
+    });
   };
 
   const exportProofOfPayment = async () => {
@@ -229,7 +218,7 @@ export default function TripAdminTripDetail() {
       }
     } catch (error) {
       console.error('Proof of payment export failed:', error);
-      Alert.alert('Export failed', 'Could not generate PDF. Please try again.');
+      notifyAction('Export failed', 'Could not generate PDF. Please try again.');
     } finally {
       setExportingPdf(false);
     }

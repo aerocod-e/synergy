@@ -1,6 +1,5 @@
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -17,6 +16,7 @@ import { useAuthContext } from '@/app/_layout';
 import { getUser, updateUser, resetUserPassword, toggleUserActive, deleteUser } from '@/services/api';
 import type { User } from '@/types/index';
 import { theme } from '@/constants/theme';
+import { confirmAction } from '@/utils/confirmAction';
 
 function getRoleBadgeColors(role: string): { bg: string; text: string } {
   if (role === 'super_admin') return theme.colors.roleColors.super_admin;
@@ -128,30 +128,25 @@ export default function UserDetailScreen() {
   };
 
   const handleDelete = () => {
-    Alert.alert(
-      'Delete Account',
-      'Are you sure you want to permanently deactivate this account? This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            if (!id) return;
-            setActionLoading(true);
-            setActionMessage(null);
-            setActionError(null);
-            try {
-              await deleteUser(id);
-              router.push('/(superadmin)/users');
-            } catch (e: any) {
-              setActionError(e?.message ?? 'Failed to delete account.');
-              setActionLoading(false);
-            }
-          },
-        },
-      ],
-    );
+    confirmAction({
+      title: 'Delete Account',
+      message: 'Are you sure you want to permanently deactivate this account? This cannot be undone.',
+      confirmText: 'Delete',
+      destructive: true,
+      onConfirm: async () => {
+        if (!id) return;
+        setActionLoading(true);
+        setActionMessage(null);
+        setActionError(null);
+        try {
+          await deleteUser(id);
+          router.push('/(superadmin)/users');
+        } catch (e: any) {
+          setActionError(e?.message ?? 'Failed to delete account.');
+          setActionLoading(false);
+        }
+      },
+    });
   };
 
   if (loading) {

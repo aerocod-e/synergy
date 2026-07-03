@@ -10,7 +10,6 @@ import {
   RefreshControl,
   Platform,
   TextInput,
-  Alert,
   ScrollView,
   LayoutAnimation,
   UIManager,
@@ -25,6 +24,7 @@ import VehicleSearchInput, { type Vehicle } from '@/components/VehicleSearchInpu
 import { listVehicles, createVehicle, updateVehicle, deleteVehicle as deleteVehicleApi, listVehicleTypes, getActivePricingChart } from '@/services/api';
 import { useLogout } from '@/hooks/useLogout';
 import { formatNaira } from '@/utils/formatCurrency';
+import { confirmAction } from '@/utils/confirmAction';
 
 if (Platform.OS === 'android') {
   UIManager.setLayoutAnimationEnabledExperimental?.(true);
@@ -278,32 +278,27 @@ export default function TripAdminVehicles() {
   };
 
   const handleDeleteVehicle = useCallback((item: VehicleWithCount) => {
-    Alert.alert(
-      `Remove ${item.registrationNumber}?`,
-      'This cannot be undone. Vehicles with active trips cannot be removed.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            setDeleting((prev) => ({ ...prev, [item.id]: true }));
-            setDeleteError((prev) => { const n = { ...prev }; delete n[item.id]; return n; });
-            try {
-              await deleteVehicleApi(item.id);
-              setVehicles((prev) => prev.filter((v) => v.id !== item.id));
-            } catch (err: any) {
-              setDeleteError((prev) => ({
-                ...prev,
-                [item.id]: err?.message ?? 'Failed to remove vehicle.',
-              }));
-            } finally {
-              setDeleting((prev) => { const n = { ...prev }; delete n[item.id]; return n; });
-            }
-          },
-        },
-      ]
-    );
+    confirmAction({
+      title: `Remove ${item.registrationNumber}?`,
+      message: 'This cannot be undone. Vehicles with active trips cannot be removed.',
+      confirmText: 'Remove',
+      destructive: true,
+      onConfirm: async () => {
+        setDeleting((prev) => ({ ...prev, [item.id]: true }));
+        setDeleteError((prev) => { const n = { ...prev }; delete n[item.id]; return n; });
+        try {
+          await deleteVehicleApi(item.id);
+          setVehicles((prev) => prev.filter((v) => v.id !== item.id));
+        } catch (err: any) {
+          setDeleteError((prev) => ({
+            ...prev,
+            [item.id]: err?.message ?? 'Failed to remove vehicle.',
+          }));
+        } finally {
+          setDeleting((prev) => { const n = { ...prev }; delete n[item.id]; return n; });
+        }
+      },
+    });
   }, []);
 
   const renderVehicle = ({ item }: { item: VehicleWithCount }) => (

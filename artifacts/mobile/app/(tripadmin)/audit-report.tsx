@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   TextInput,
   Platform,
-  Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft, CloudOff, FileText } from 'lucide-react-native';
@@ -18,6 +17,7 @@ import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
 import { getDriverAudit, getTripAdminAudit, getVehicleAudit } from '@/services/api';
 import { formatNaira } from '@/utils/formatCurrency';
+import { notifyAction } from '@/utils/confirmAction';
 
 // ── Share helpers ────────────────────────────────────────────────────────────
 
@@ -383,7 +383,7 @@ export default function AuditReportScreen() {
       }
     } catch (error) {
       console.error('PDF export failed:', error);
-      Alert.alert('Export failed', 'Could not generate PDF. Please try again.');
+      notifyAction('Export failed', 'Could not generate PDF. Please try again.');
     } finally {
       setExportingPdf(false);
     }
