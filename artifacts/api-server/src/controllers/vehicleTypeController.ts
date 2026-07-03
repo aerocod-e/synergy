@@ -121,10 +121,14 @@ export async function createVehicleType(req: Request, res: Response): Promise<vo
 
 export async function updateVehicleType(req: Request, res: Response): Promise<void> {
   const { id } = req.params as { id: string };
-  const { loadingFee, unloadingFee } = req.body as { loadingFee?: unknown; unloadingFee?: unknown };
+  const { name, loadingFee, unloadingFee } = req.body as { name?: unknown; loadingFee?: unknown; unloadingFee?: unknown };
 
-  if (loadingFee === undefined && unloadingFee === undefined) {
-    res.status(400).json({ error: "BAD_REQUEST", message: "At least one of loadingFee or unloadingFee is required" });
+  if (name === undefined && loadingFee === undefined && unloadingFee === undefined) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "At least one of name, loadingFee or unloadingFee is required" });
+    return;
+  }
+  if (name !== undefined && (typeof name !== "string" || !name.trim())) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "name must be a non-empty string" });
     return;
   }
   if (loadingFee !== undefined && !isPositiveInt(loadingFee)) {
@@ -146,9 +150,25 @@ export async function updateVehicleType(req: Request, res: Response): Promise<vo
       return;
     }
 
+    const trimmedName = typeof name === "string" ? name.trim() : undefined;
+    if (trimmedName !== undefined) {
+      const collision = await pool.query<{ id: string }>(
+        `SELECT id FROM vehicle_types WHERE LOWER(name) = LOWER($1) AND id != $2 AND is_active = true LIMIT 1`,
+        [trimmedName, id]
+      );
+      if (collision.rows.length > 0) {
+        res.status(409).json({ error: "CONFLICT", message: "A vehicle type with this name already exists" });
+        return;
+      }
+    }
+
     const setParts: string[] = ["updated_at = NOW()"];
     const params: unknown[] = [id];
     let idx = 2;
+    if (trimmedName !== undefined) {
+      setParts.push(`name = $${idx++}`);
+      params.push(trimmedName);
+    }
     if (loadingFee !== undefined) {
       setParts.push(`loading_fee = $${idx++}`);
       params.push(loadingFee);
@@ -187,5 +207,72 @@ export async function updateVehicleType(req: Request, res: Response): Promise<vo
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to update vehicle type" });
+  }
+}
+
+export async function getVehicleTypeVehicleCount(req: Request, res: Response): Promise<void> {
+  const { id } = req.params as { id: string };
+  try {
+    const { rows: countRows } = await pool.query<{ count: string }>(
+      `SELECT COUNT(*) AS count FROM vehicles WHERE vehicle_type_id = $1 AND is_active = true AND deleted_at IS NULL`,
+      [id]
+    );
+    const vehicleCount = Number(countRows[0]?.count ?? 0);
+    res.json({
+      data: { vehicleCount },
+      message: "Vehicle count retrieved",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to retrieve vehicle count" });
+  }
+}
+
+export async function setVehicleTypeActive(req: Request, res: Response): Promise<void> {
+  const { id } = req.params as { id: string };
+  const { isActive } = req.body as { isActive?: unknown };
+
+  if (typeof isActive !== "boolean") {
+    res.status(400).json({ error: "BAD_REQUEST", message: "isActive must be a boolean" });
+    return;
+  }
+
+  try {
+    const { rows } = await pool.query<{
+      id:            string;
+      name:          string;
+      loading_fee:   number;
+      unloading_fee: number;
+      is_active:     boolean;
+      updated_at:    Date;
+    }>(
+      `UPDATE vehicle_types SET is_active = $1, updated_at = NOW()
+       WHERE id = $2
+       RETURNING id, name, loading_fee, unloading_fee, is_active, updated_at`,
+      [isActive, id]
+    );
+
+    if (rows.length === 0) {
+      res.status(404).json({ error: "NOT_FOUND", message: "Vehicle type not found" });
+      return;
+    }
+
+    const updated = rows[0]!;
+    res.json({
+      data: {
+        vehicleType: {
+          id:           updated.id,
+          name:         updated.name,
+          loadingFee:   updated.loading_fee,
+          unloadingFee: updated.unloading_fee,
+          isActive:     updated.is_active,
+          updatedAt:    updated.updated_at,
+        },
+      },
+      message: isActive ? "Vehicle type reactivated" : "Vehicle type deactivated",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to update vehicle type status" });
   }
 }

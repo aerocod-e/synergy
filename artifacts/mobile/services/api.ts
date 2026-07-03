@@ -179,8 +179,14 @@ export const listVehicleTypes = () =>
 export const createVehicleType = (body: { name: string; loadingFee: number; unloadingFee: number }) =>
   apiRequest('/api/vehicle-types', { method: 'POST', body: JSON.stringify(body) });
 
-export const updateVehicleType = (id: string, body: { loadingFee?: number; unloadingFee?: number }) =>
+export const updateVehicleType = (id: string, body: { name?: string; loadingFee?: number; unloadingFee?: number }) =>
   apiRequest(`/api/vehicle-types/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+
+export const getVehicleTypeVehicleCount = (id: string) =>
+  apiRequest(`/api/vehicle-types/${id}/vehicle-count`);
+
+export const setVehicleTypeActive = (id: string, isActive: boolean) =>
+  apiRequest(`/api/vehicle-types/${id}/active`, { method: 'PATCH', body: JSON.stringify({ isActive }) });
 
 export const updateStakeholderRate = (chartId: string, body: { stakeholderId: string; vehicleTypeId: string; amount: number }) =>
   apiRequest(`/api/pricing/${chartId}/stakeholder-rates`, { method: 'PATCH', body: JSON.stringify(body) });

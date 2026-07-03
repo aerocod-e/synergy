@@ -1,5 +1,6 @@
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   LayoutAnimation,
   Modal,
@@ -15,7 +16,7 @@ import {
   View,
 } from 'react-native';
 
-import { ChevronDown, ChevronRight, ChevronUp, Pencil, Plus, Search, X } from 'lucide-react-native';
+import { Ban, ChevronDown, ChevronRight, ChevronUp, Pencil, Plus, RotateCcw, Search, X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
@@ -25,6 +26,8 @@ import {
   updateStakeholderRate,
   createVehicleType,
   getAllWallets,
+  getVehicleTypeVehicleCount,
+  setVehicleTypeActive,
 } from '@/services/api';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
@@ -47,6 +50,7 @@ interface VehicleTypeRate {
   vehicleTypeName: string;
   loadingFee: number;
   unloadingFee: number;
+  isActive: boolean;
   stakeholderRates: VehicleTypeStakeholderRate[];
 }
 
@@ -88,9 +92,11 @@ function isValidAmount(val: string): boolean {
 function ActiveChartCard({
   chart,
   onEdit,
+  onToggleActive,
 }: {
   chart: PricingChart;
   onEdit: (vtr: VehicleTypeRate) => void;
+  onToggleActive: (vtr: VehicleTypeRate) => void;
 }) {
   const [expandedTypeId, setExpandedTypeId] = useState<string | null>(null);
 
@@ -108,7 +114,7 @@ function ActiveChartCard({
         chart.vehicleTypeRates.map((vtr, idx) => {
           const expanded = expandedTypeId === vtr.vehicleTypeId;
           return (
-            <View key={vtr.vehicleTypeId}>
+            <View key={vtr.vehicleTypeId} style={!vtr.isActive && styles.inactiveTypeRow}>
               {idx > 0 && <View style={styles.divider} />}
               <View style={styles.typeRateHeaderRow}>
                 <TouchableOpacity
@@ -119,8 +125,15 @@ function ActiveChartCard({
                   }}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.typeRateName}>{vtr.vehicleTypeName}</Text>
-                  <Text style={styles.vehicleTypeTotal}>{formatNaira(
+                  <View style={styles.typeRateNameRow}>
+                    <Text style={[styles.typeRateName, !vtr.isActive && styles.mutedText]}>{vtr.vehicleTypeName}</Text>
+                    {!vtr.isActive && (
+                      <View style={styles.inactiveBadge}>
+                        <Text style={styles.inactiveBadgeText}>INACTIVE</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={[styles.vehicleTypeTotal, !vtr.isActive && styles.mutedText]}>{formatNaira(
                     vtr.loadingFee + vtr.unloadingFee +
                     vtr.stakeholderRates.reduce((sum, sr) => sum + sr.amount, 0)
                   )}</Text>
@@ -130,10 +143,23 @@ function ActiveChartCard({
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => onEdit(vtr)}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
                   style={styles.editIconBtn}
+                  accessibilityLabel="Edit vehicle type"
+                  accessibilityRole="button"
                 >
                   <Pencil size={15} color={theme.colors.primary} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => onToggleActive(vtr)}
+                  hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+                  style={[styles.editIconBtn, styles.toggleIconBtn]}
+                  accessibilityLabel={vtr.isActive ? 'Deactivate vehicle type' : 'Reactivate vehicle type'}
+                  accessibilityRole="button"
+                >
+                  {vtr.isActive
+                    ? <Ban size={15} color={theme.colors.error} />
+                    : <RotateCcw size={15} color={theme.colors.greenText} />}
                 </TouchableOpacity>
               </View>
               {expanded && (
@@ -184,12 +210,14 @@ export default function ConfigScreen() {
   const [editVtModal, setEditVtModal] = useState<{
     vehicleTypeId: string;
     vehicleTypeName: string;
+    name: string;
     loadingFee: string;
     unloadingFee: string;
     stakeholderRates: EditSrEntry[];
   } | null>(null);
   const [editVtSubmitting, setEditVtSubmitting] = useState(false);
   const [editVtError, setEditVtError] = useState<string | null>(null);
+  const [togglingVtId, setTogglingVtId] = useState<string | null>(null);
 
   const [addVtVisible, setAddVtVisible] = useState(false);
   const [addVtName, setAddVtName] = useState('');
@@ -259,6 +287,7 @@ export default function ConfigScreen() {
     setEditVtModal({
       vehicleTypeId: vtr.vehicleTypeId,
       vehicleTypeName: vtr.vehicleTypeName,
+      name: vtr.vehicleTypeName,
       loadingFee: (vtr.loadingFee / 100).toFixed(2),
       unloadingFee: (vtr.unloadingFee / 100).toFixed(2),
       stakeholderRates: vtr.stakeholderRates.map((sr) => ({
@@ -272,6 +301,10 @@ export default function ConfigScreen() {
 
   const handleSubmitEditVt = async () => {
     if (!editVtModal || !activeChart) return;
+    if (!editVtModal.name.trim()) {
+      setEditVtError('Vehicle type name is required.');
+      return;
+    }
     if (!isValidNaira(editVtModal.loadingFee)) {
       setEditVtError('Enter a valid loading fee greater than zero.');
       return;
@@ -291,6 +324,7 @@ export default function ConfigScreen() {
     try {
       await Promise.all([
         updateVehicleType(editVtModal.vehicleTypeId, {
+          name: editVtModal.name.trim(),
           loadingFee: nairaToKobo(editVtModal.loadingFee),
           unloadingFee: nairaToKobo(editVtModal.unloadingFee),
         }),
@@ -306,9 +340,76 @@ export default function ConfigScreen() {
       setPageLoading(true);
       await loadData();
     } catch (e: any) {
-      setEditVtError(e?.message ?? 'Failed to save changes.');
+      if ((e as any)?.error === 'CONFLICT') {
+        setEditVtError('A vehicle type with this name already exists.');
+      } else {
+        setEditVtError(e?.message ?? 'Failed to save changes.');
+      }
     } finally {
       setEditVtSubmitting(false);
+    }
+  };
+
+  const handleToggleVtActive = (vtr: VehicleTypeRate) => {
+    if (vtr.isActive) {
+      setTogglingVtId(vtr.vehicleTypeId);
+      getVehicleTypeVehicleCount(vtr.vehicleTypeId)
+        .then((res: any) => {
+          const count = res?.vehicleCount ?? 0;
+          const message = `This vehicle type is currently assigned to ${count} vehicle${count === 1 ? '' : 's'}. Deactivating it will prevent those vehicles from being used in new trips until reassigned. Continue?`;
+
+          const doDeactivate = async () => {
+            try {
+              await setVehicleTypeActive(vtr.vehicleTypeId, false);
+              setPageLoading(true);
+              await loadData();
+            } catch (e: any) {
+              if (Platform.OS === 'web') {
+                window.alert(e?.message ?? 'Failed to deactivate vehicle type.');
+              } else {
+                Alert.alert('Error', e?.message ?? 'Failed to deactivate vehicle type.');
+              }
+            } finally {
+              setTogglingVtId(null);
+            }
+          };
+
+          if (Platform.OS === 'web') {
+            if (window.confirm(`Deactivate Vehicle Type\n\n${message}`)) {
+              doDeactivate();
+            } else {
+              setTogglingVtId(null);
+            }
+          } else {
+            Alert.alert(
+              'Deactivate Vehicle Type',
+              message,
+              [
+                { text: 'Cancel', style: 'cancel', onPress: () => setTogglingVtId(null) },
+                { text: 'Deactivate', style: 'destructive', onPress: doDeactivate },
+              ]
+            );
+          }
+        })
+        .catch((e: any) => {
+          setTogglingVtId(null);
+          if (Platform.OS === 'web') {
+            window.alert(e?.message ?? 'Failed to retrieve vehicle count.');
+          } else {
+            Alert.alert('Error', e?.message ?? 'Failed to retrieve vehicle count.');
+          }
+        });
+    } else {
+      setTogglingVtId(vtr.vehicleTypeId);
+      setVehicleTypeActive(vtr.vehicleTypeId, true)
+        .then(async () => {
+          setPageLoading(true);
+          await loadData();
+        })
+        .catch((e: any) => {
+          Alert.alert('Error', e?.message ?? 'Failed to reactivate vehicle type.');
+        })
+        .finally(() => setTogglingVtId(null));
     }
   };
 
@@ -428,6 +529,7 @@ export default function ConfigScreen() {
           <ActiveChartCard
             chart={activeChart}
             onEdit={handleOpenEditVt}
+            onToggleActive={handleToggleVtActive}
           />
         ) : (
           <View style={styles.emptyCard}>
@@ -531,7 +633,16 @@ export default function ConfigScreen() {
             </TouchableOpacity>
           </View>
           <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="handled">
-            <Text style={styles.fieldLabel}>Loading Fee (₦)</Text>
+            <Text style={styles.fieldLabel}>Vehicle Type Name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. Flatbed Truck"
+              placeholderTextColor={theme.colors.placeholder}
+              autoCapitalize="words"
+              value={editVtModal?.name ?? ''}
+              onChangeText={(v) => setEditVtModal((prev) => prev ? { ...prev, name: v } : null)}
+            />
+            <Text style={[styles.fieldLabel, { marginTop: 14 }]}>Loading Fee (₦)</Text>
             <TextInput
               style={styles.input}
               placeholder="e.g. 2800.00"
@@ -738,11 +849,37 @@ const styles = StyleSheet.create({
     paddingLeft: 10,
     paddingVertical: 12,
   },
+  toggleIconBtn: {
+    paddingLeft: 16,
+  },
+  inactiveTypeRow: {
+    opacity: 0.55,
+  },
+  typeRateNameRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  mutedText: {
+    color: theme.colors.grey1,
+  },
+  inactiveBadge: {
+    backgroundColor: theme.colors.grey3,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  inactiveBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: theme.colors.grey1,
+    letterSpacing: 0.5,
+  },
   typeRateName: {
     fontSize: 14,
     fontWeight: '600',
     color: theme.colors.black,
-    flex: 1,
   },
   vehicleTypeTotal: {
     fontSize: 14,

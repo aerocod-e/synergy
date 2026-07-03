@@ -79,6 +79,7 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
       loading_fee: number | null;
       unloading_fee: number | null;
       vehicle_type_name: string | null;
+      vehicle_type_is_active: boolean | null;
     }>(
       `SELECT
          v.id,
@@ -86,7 +87,8 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
          v.vehicle_type_id,
          vt.loading_fee,
          vt.unloading_fee,
-         vt.name AS vehicle_type_name
+         vt.name AS vehicle_type_name,
+         vt.is_active AS vehicle_type_is_active
        FROM vehicles v
        LEFT JOIN vehicle_types vt ON vt.id = v.vehicle_type_id
        WHERE v.id = $1 AND v.is_active = true AND v.deleted_at IS NULL
@@ -105,6 +107,14 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
       res.status(422).json({
         error: "UNPROCESSABLE",
         message: "Vehicle has no type assigned. Please contact your administrator.",
+      });
+      return;
+    }
+
+    if (vehicle.vehicle_type_is_active === false) {
+      res.status(422).json({
+        error: "UNPROCESSABLE",
+        message: "This vehicle's type is no longer active. Please reassign this vehicle to a different vehicle type before creating a trip.",
       });
       return;
     }

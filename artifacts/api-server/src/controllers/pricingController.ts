@@ -83,6 +83,7 @@ export async function getActivePricingChart(_req: Request, res: Response): Promi
       vehicle_type_name: string;
       loading_fee:       number;
       unloading_fee:     number;
+      vehicle_type_is_active: boolean;
       stakeholder_id:    string;
       stakeholder_name:  string;
       amount:            number;
@@ -92,6 +93,7 @@ export async function getActivePricingChart(_req: Request, res: Response): Promi
          vt.name AS vehicle_type_name,
          vt.loading_fee,
          vt.unloading_fee,
+         vt.is_active AS vehicle_type_is_active,
          s.id    AS stakeholder_id,
          s.name  AS stakeholder_name,
          pcsr.amount
@@ -99,7 +101,6 @@ export async function getActivePricingChart(_req: Request, res: Response): Promi
        JOIN vehicle_types  vt ON vt.id = pcsr.vehicle_type_id
        JOIN stakeholders   s  ON s.id  = pcsr.stakeholder_id
        WHERE pcsr.pricing_chart_id = $1
-         AND vt.is_active = true
          AND s.is_active = true
        ORDER BY vt.loading_fee ASC, s.name ASC`,
       [chart.id],
@@ -111,6 +112,7 @@ export async function getActivePricingChart(_req: Request, res: Response): Promi
       vehicleTypeName: string;
       loadingFee:      number;
       unloadingFee:    number;
+      isActive:        boolean;
       stakeholderRates: Array<{ stakeholderId: string; stakeholderName: string; amount: number }>;
     }>();
 
@@ -121,6 +123,7 @@ export async function getActivePricingChart(_req: Request, res: Response): Promi
           vehicleTypeName: row.vehicle_type_name,
           loadingFee:      row.loading_fee,
           unloadingFee:    row.unloading_fee,
+          isActive:        row.vehicle_type_is_active,
           stakeholderRates: [],
         });
       }
