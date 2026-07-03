@@ -677,6 +677,37 @@ export async function updateUser(req: Request, res: Response): Promise<void> {
   }
 }
 
+export async function updateMyPreferences(req: Request, res: Response): Promise<void> {
+  try {
+    const { hideTripsTab } = req.body as { hideTripsTab?: unknown };
+
+    if (typeof hideTripsTab !== "boolean") {
+      res.status(400).json({ error: "BAD_REQUEST", message: "hideTripsTab (boolean) is required" });
+      return;
+    }
+
+    const { rows } = await pool.query<{ hide_trips_tab: boolean }>(
+      `UPDATE users SET hide_trips_tab=$1, updated_at=NOW()
+       WHERE id=$2 AND deleted_at IS NULL
+       RETURNING hide_trips_tab`,
+      [hideTripsTab, req.user!.userId],
+    );
+
+    if (rows.length === 0) {
+      res.status(404).json({ error: "NOT_FOUND", message: "User not found" });
+      return;
+    }
+
+    res.json({
+      data: { hideTripsTab: rows[0]!.hide_trips_tab },
+      message: "Preferences updated",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to update preferences" });
+  }
+}
+
 export async function deleteUser(req: Request, res: Response): Promise<void> {
   try {
     const { id } = req.params;

@@ -10,6 +10,7 @@ import {
   toggleUserActive,
   getTripAdminActiveTripsCount,
   resetUserPassword,
+  updateMyPreferences,
 } from "../controllers/userController.js";
 import { updateCancellationRights } from "../controllers/cancellationController.js";
 import { authenticateToken } from "../middleware/auth.js";
@@ -17,6 +18,7 @@ import { requireRole } from "../middleware/roleGuard.js";
 
 const router = Router();
 
+router.patch( "/me/preferences",          authenticateToken,                                                     updateMyPreferences);
 router.get(   "/",                        authenticateToken, requireRole("super_admin"),                         listUsers);
 router.get(   "/trip-admins",             authenticateToken, requireRole("state_admin"),                         listTripAdmins);
 router.post(  "/",                        authenticateToken, requireRole("super_admin", "state_admin"),          createUser);

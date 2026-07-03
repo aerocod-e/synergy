@@ -77,6 +77,9 @@ export const logout = (rt: string) =>
 
 export const getMe = () => apiRequest('/api/auth/me');
 
+export const updateMyPreferences = (body: { hideTripsTab: boolean }) =>
+  apiRequest('/api/users/me/preferences', { method: 'PATCH', body: JSON.stringify(body) });
+
 // ── Trips ───────────────────────────────────────────────────────────────────
 export const getTrips = (params?: Record<string, string>) =>
   apiRequest('/api/trips' + (params ? '?' + new URLSearchParams(params).toString() : ''));

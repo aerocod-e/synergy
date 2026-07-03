@@ -24,6 +24,7 @@ interface AuthContextValue {
   isInitializing: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  updateUser: (patch: Partial<AuthUser>) => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextValue>({
@@ -33,6 +34,7 @@ export const AuthContext = createContext<AuthContextValue>({
   isInitializing: true,
   login: async () => {},
   logout: async () => {},
+  updateUser: async () => {},
 });
 
 export const useAuthContext = () => useContext(AuthContext);

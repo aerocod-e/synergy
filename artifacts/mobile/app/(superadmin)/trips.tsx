@@ -16,6 +16,7 @@ import TopBar from '@/components/TopBar';
 import ScreenTransition from '@/components/ScreenTransition';
 import SlideUpList from '@/components/SlideUpList';
 import { getTrips } from '@/services/api';
+import { useAuthContext } from '@/app/_layout';
 
 type TripStatus = 'created' | 'in_transit' | 'completed' | 'cancelled';
 
@@ -115,6 +116,8 @@ function TripCard({ trip, onPress }: { trip: Trip; onPress: () => void }) {
 
 export default function SuperAdminTripsList() {
   const router = useRouter();
+  const { user } = useAuthContext();
+  const hideTripsTab = user?.hideTripsTab === true;
   const PAGE_LIMIT = 20;
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
@@ -222,6 +225,16 @@ export default function SuperAdminTripsList() {
     setDateFrom('');
     setDateTo('');
     setActiveFilter('All');
+  }
+
+  useEffect(() => {
+    if (hideTripsTab) {
+      router.replace('/(superadmin)');
+    }
+  }, [hideTripsTab, router]);
+
+  if (hideTripsTab) {
+    return null;
   }
 
   return (

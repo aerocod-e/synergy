@@ -25,7 +25,22 @@ export function useAuth() {
         if (accessToken && refreshToken && userJson) {
           api.setTokens(accessToken, refreshToken);
           setTokensState({ accessToken, refreshToken });
-          setUser(JSON.parse(userJson) as AuthUser);
+          const storedUser = JSON.parse(userJson) as AuthUser;
+          setUser(storedUser);
+
+          // Refresh from server so latest preferences (e.g. hideTripsTab) are picked up on load.
+          try {
+            const freshUser = (await api.getMe()) as Partial<AuthUser> & { userId?: string };
+            const mergedUser: AuthUser = {
+              ...storedUser,
+              ...freshUser,
+              id: storedUser.id,
+            };
+            setUser(mergedUser);
+            await AsyncStorage.setItem(USER_KEY, JSON.stringify(mergedUser));
+          } catch {
+            // Non-fatal — keep using the cached user if the refresh fails.
+          }
         }
       } catch {
       } finally {
@@ -74,5 +89,14 @@ export function useAuth() {
     }
   };
 
-  return { user, tokens, isLoading, isInitializing, login, logout };
+  const updateUser = async (patch: Partial<AuthUser>): Promise<void> => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const merged = { ...prev, ...patch };
+      AsyncStorage.setItem(USER_KEY, JSON.stringify(merged)).catch(() => {});
+      return merged;
+    });
+  };
+
+  return { user, tokens, isLoading, isInitializing, login, logout, updateUser };
 }

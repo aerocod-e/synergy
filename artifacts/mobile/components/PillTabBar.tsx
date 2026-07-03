@@ -23,16 +23,21 @@ const SLIDER_VERTICAL_INSET = 6;
 const HIDDEN_ROUTES = new Set(['create-trip', 'trip-detail', 'user-detail', 'ledger-detail', 'audit-report', 'driver-detail']);
 
 export default function PillTabBar(props: any) {
-  const { state, descriptors, navigation } = props as {
+  const { state, descriptors, navigation, extraHiddenRoutes } = props as {
     state: { index: number; routes: Array<{ key: string; name: string }> };
     descriptors: Record<string, { options: { tabBarLabel?: any; title?: string; tabBarAccessibilityLabel?: string } }>;
     navigation: { emit: (e: any) => any; navigate: (name: string) => void };
+    extraHiddenRoutes?: string[];
   };
 
   const insets = useSafeAreaInsets();
   const [pillWidth, setPillWidth] = useState(0);
 
-  const visibleRoutes = state.routes.filter((r) => !HIDDEN_ROUTES.has(r.name));
+  const effectiveHiddenRoutes = extraHiddenRoutes?.length
+    ? new Set([...HIDDEN_ROUTES, ...extraHiddenRoutes])
+    : HIDDEN_ROUTES;
+
+  const visibleRoutes = state.routes.filter((r) => !effectiveHiddenRoutes.has(r.name));
   const tabCount = visibleRoutes.length;
 
   const focusedVisibleIndex = visibleRoutes.findIndex(
@@ -53,7 +58,7 @@ export default function PillTabBar(props: any) {
   }, [focusedVisibleIndex, sliderAnim]);
 
   const currentRouteName = state.routes[state.index]?.name;
-  if (HIDDEN_ROUTES.has(currentRouteName)) return null;
+  if (effectiveHiddenRoutes.has(currentRouteName)) return null;
 
   const slotWidth = pillWidth > 0 ? (pillWidth - PILL_PADDING * 2) / tabCount : 0;
 

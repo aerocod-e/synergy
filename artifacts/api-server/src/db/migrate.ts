@@ -61,6 +61,13 @@ async function migrate(): Promise<void> {
     `);
     console.log('✓ Table created: users');
 
+    // hide_trips_tab — super_admin-only preference to hide the Trips tab on their own account
+    await client.query(`
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS hide_trips_tab BOOLEAN NOT NULL DEFAULT false
+    `);
+    console.log('✓ users: hide_trips_tab column added');
+
     // pricing_charts — reusable rate schedule; amounts in kobo
     await client.query(`
       CREATE TABLE IF NOT EXISTS pricing_charts (

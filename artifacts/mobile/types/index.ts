@@ -10,6 +10,7 @@ export interface AuthUser {
   entityId: string | null;
   firstName: string;
   lastName: string;
+  hideTripsTab?: boolean;
 }
 
 export interface AuthTokens {

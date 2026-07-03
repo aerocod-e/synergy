@@ -8,13 +8,14 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Switch,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthContext } from '@/app/_layout';
 import { theme } from '@/constants/theme';
-import { changePassword } from '@/services/api';
+import { changePassword, updateMyPreferences } from '@/services/api';
 
 function roleBadgeLabel(role: string): string {
   const labels: Record<string, string> = {
@@ -36,7 +37,7 @@ function roleBadgeColors(role: string): { bg: string; text: string } {
 }
 
 export default function ProfileScreen() {
-  const { user, logout } = useAuthContext();
+  const { user, logout, updateUser } = useAuthContext();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -50,6 +51,24 @@ export default function ProfileScreen() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [savingTripsTab, setSavingTripsTab] = useState(false);
+
+  const isSuperAdmin = user?.role === 'super_admin';
+  const showTripsTab = !(user?.hideTripsTab === true);
+
+  const handleToggleTripsTab = async (nextShowTripsTab: boolean) => {
+    if (savingTripsTab) return;
+    const nextHideTripsTab = !nextShowTripsTab;
+    setSavingTripsTab(true);
+    try {
+      await updateMyPreferences({ hideTripsTab: nextHideTripsTab });
+      await updateUser({ hideTripsTab: nextHideTripsTab });
+    } catch {
+      // Non-fatal — the switch will simply reflect the last confirmed value on next render.
+    } finally {
+      setSavingTripsTab(false);
+    }
+  };
 
   const fullName =
     [user?.firstName, user?.lastName].filter(Boolean).join(' ');
@@ -116,6 +135,27 @@ export default function ProfileScreen() {
             {roleBadgeLabel(role)}
           </Text>
         </View>
+
+        {isSuperAdmin && (
+          <>
+            <View style={styles.divider} />
+            <View style={styles.settingRow}>
+              <View style={styles.settingTextWrap}>
+                <Text style={styles.settingLabel}>Show Trips Tab</Text>
+                <Text style={styles.settingSubLabel}>
+                  Show or hide the Trips tab on your account only
+                </Text>
+              </View>
+              <Switch
+                value={showTripsTab}
+                onValueChange={handleToggleTripsTab}
+                disabled={savingTripsTab}
+                trackColor={{ false: theme.colors.separator, true: theme.colors.primary }}
+                thumbColor={theme.colors.white}
+              />
+            </View>
+          </>
+        )}
 
         <View style={styles.divider} />
 
@@ -264,6 +304,26 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   roleBadgeText: { fontSize: 12, fontWeight: '600' },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  settingTextWrap: {
+    flex: 1,
+    marginRight: 12,
+  },
+  settingLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.colors.black,
+    marginBottom: 2,
+  },
+  settingSubLabel: {
+    fontSize: 12,
+    color: theme.colors.grey1,
+  },
   divider: {
     height: 1,
     backgroundColor: theme.colors.separator,

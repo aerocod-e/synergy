@@ -36,9 +36,10 @@ export async function login(req: Request, res: Response): Promise<void> {
       deleted_at: Date | null;
       first_name: string;
       last_name: string;
+      hide_trips_tab: boolean;
     }>(
       `SELECT id, email, password_hash, role, entity_type, entity_id, is_active, deleted_at,
-              first_name, last_name
+              first_name, last_name, hide_trips_tab
        FROM users WHERE email = $1 LIMIT 1`,
       [email]
     );
@@ -89,6 +90,7 @@ export async function login(req: Request, res: Response): Promise<void> {
           entityId: user.entity_id,
           firstName: user.first_name,
           lastName: user.last_name,
+          hideTripsTab: user.hide_trips_tab,
         },
       },
       message: "Login successful",
@@ -177,8 +179,9 @@ export async function me(req: Request, res: Response): Promise<void> {
       role: string;
       entity_type: string | null;
       entity_id: string | null;
+      hide_trips_tab: boolean;
     }>(
-      `SELECT id, email, first_name, last_name, role, entity_type, entity_id
+      `SELECT id, email, first_name, last_name, role, entity_type, entity_id, hide_trips_tab
        FROM users WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
       [req.user!.userId]
     );
@@ -196,6 +199,7 @@ export async function me(req: Request, res: Response): Promise<void> {
         role: u.role,
         entityType: u.entity_type,
         entityId: u.entity_id,
+        hideTripsTab: u.hide_trips_tab,
       },
       message: "Authenticated user",
     });
