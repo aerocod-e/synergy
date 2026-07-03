@@ -20,6 +20,7 @@ import SlideUpList from '@/components/SlideUpList';
 import { listDrivers, createDriver, updateDriver, deleteDriver as deleteDriverApi } from '@/services/api';
 import { useLogout } from '@/hooks/useLogout';
 import { confirmAction } from '@/utils/confirmAction';
+import DateField from '@/components/DateField';
 
 interface DriverItem {
   id: string;
@@ -558,13 +559,10 @@ export default function TripAdminDrivers() {
             />
 
             <Text style={[styles.fieldLabel, { marginTop: 16 }]}>LICENSE EXPIRY DATE</Text>
-            <TextInput
-              style={styles.textField}
+            <DateField
               value={licenseExpiryDate}
-              onChangeText={setLicenseExpiryDate}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={theme.colors.grey1}
-              autoCorrect={false}
+              onChange={setLicenseExpiryDate}
+              placeholder="Select expiry date"
             />
 
             {registerError && (

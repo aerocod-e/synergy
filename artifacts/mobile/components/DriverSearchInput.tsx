@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { theme } from '@/constants/theme';
 import { searchDrivers, createDriver } from '@/services/api';
+import DateField from '@/components/DateField';
 
 export interface Driver {
   id: string;
@@ -204,13 +205,11 @@ export default function DriverSearchInput({ value, onSelect, placeholder }: Prop
                 keyboardType="phone-pad"
                 autoCorrect={false}
               />
-              <TextInput
-                style={styles.formInput}
+              <DateField
                 value={regExpiry}
-                onChangeText={setRegExpiry}
-                placeholder="License Expiry Date (YYYY-MM-DD)"
-                placeholderTextColor={theme.colors.grey1}
-                autoCorrect={false}
+                onChange={setRegExpiry}
+                placeholder="License Expiry Date"
+                style={styles.formInput}
               />
 
               {registerError && (

@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { AlertCircle, ChevronLeft, CreditCard, Phone, History } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
 import { getDriver, getDriverLicenseHistory, updateDriverLicense } from '@/services/api';
+import DateField from '@/components/DateField';
 
 interface DriverDetail {
   id: string;
@@ -250,13 +251,10 @@ export default function TripAdminDriverDetail() {
             />
 
             <Text style={[styles.fieldLabel, { marginTop: 16 }]}>LICENSE EXPIRY DATE</Text>
-            <TextInput
-              style={styles.textField}
+            <DateField
               value={expiryDate}
-              onChangeText={setExpiryDate}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={theme.colors.grey1}
-              autoCorrect={false}
+              onChange={setExpiryDate}
+              placeholder="Select expiry date"
             />
 
             {saveError && (
