@@ -37,3 +37,6 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.shared]
+
+[userenv.production]
+EXPO_PUBLIC_API_URL = "https://cargo-ledger-pro.replit.app"
