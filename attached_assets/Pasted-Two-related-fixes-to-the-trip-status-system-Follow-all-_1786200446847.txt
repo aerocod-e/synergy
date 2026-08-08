@@ -1,0 +1,40 @@
+Two related fixes to the trip status system. Follow all steps in order.
+
+Backend
+
+Fix 1, allow cancellation from Breakdown and Transshipment In Transit
+
+In tripController.ts's request-cancellation logic, extend the set of source statuses that may transition into cancellation to also include breakdown and transshipment_in_transit, in addition to the existing created and in_transit. Use the exact same downstream logic already in place, immediate reversal and cancelled status if the Trip Admin has can_cancel_without_approval, otherwise cancellation_pending and routed to State Admin. No other change to the cancellation flow itself.
+
+Fix 2, undo the most recent status action
+
+Add three new endpoints, all guarded authenticateToken, requireRole("trip_admin"), all requiring created_by to match the caller, all row-locking the trip with SELECT FOR UPDATE before acting.
+
+PATCH /trips/:id/undo-start, only valid if the trip's current status is exactly in_transit and no other action has happened since it was started, meaning no trip_events row of any other type exists after the most recent start event. Reverts status to created. Insert a trip_events row with event_type undo_start.
+
+PATCH /trips/:id/undo-breakdown, only valid if current status is exactly breakdown. Look up the most recent trip_events row with event_type breakdown_marked for this trip, read its previousStatus from metadata, revert the trip's status to that value. If markTripBreakdown does not currently store previousStatus in its trip_events metadata, update it to do so now, this is required for this undo to know what to revert to. Insert a trip_events row with event_type undo_breakdown.
+
+PATCH /trips/:id/undo-transshipment, only valid if current status is exactly transshipment_in_transit, and only for the single most recent row in trip_transshipment_history for this trip, an older swap further back in history can never be undone once a newer one has happened. Before reverting, if the history row's old_vehicle_id is not null, verify that vehicle is not currently assigned to any other trip with an active status, if it is, reject with a clear message and do not proceed. If the history row's old_driver_id is not null, verify that driver still belongs to this trip admin, is active, and has a non-expired license, if not, reject with a clear message and do not proceed. If both checks pass, or there is nothing to check because a field was never changed in that swap, inside a transaction: update the trip's vehicle_id and/or driver_id back to the old values from that history row, insert a new trip_transshipment_history row recording this as the undo itself, with old values equal to what was just reverted from and new values equal to what was restored, so the history remains a complete, honest, append-only log rather than deleting the record of the original swap. Set the trip's status back to breakdown. Insert a trip_events row with event_type undo_transshipment. Never touch trip_fees, wallet_ledger, or wallets, exactly as with the original transshipment.
+
+Frontend
+
+On app/(tripadmin)/trip-detail.tsx, add a small Undo action, visually secondary to the primary action buttons, for example a text link rather than a full button, shown only when the trip's current state actually qualifies for one of the three undo endpoints above. Tapping it shows a confirmation with a clear description of exactly what will happen, for example "Revert this trip to Created status" or "Restore the previous vehicle and driver," calling the correct endpoint based on current status. On the transshipment undo specifically, if the backend rejects it because the old vehicle or driver is no longer available, show that exact message clearly rather than a generic error.
+
+Update the Request Cancellation option so it is now also visible and functional when the trip's status is breakdown or transshipment_in_transit, using the exact same UI and confirmation flow already used from created and in_transit.
+
+Add undoTripStart, undoTripBreakdown, undoTripTransshipment helpers to services/api.ts.
+
+TypeScript check
+
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+
+Both must return zero errors.
+
+Testing
+
+Backend tests: start a trip, undo it, confirm status returns to created. Start it again, mark breakdown, undo the breakdown, confirm it returns to in_transit correctly. Mark breakdown again, complete a transshipment with a new vehicle, undo it, confirm the original vehicle is restored and a new history row records the undo itself alongside the original swap, confirm status returns to breakdown. Attempt to undo an older transshipment after a second one has already happened, confirm it is rejected. Put the original vehicle from an undoable transshipment onto a different active trip, then attempt the undo, confirm it is blocked with a clear message and nothing changes. Cancel a trip directly from breakdown status, confirm reversal logic runs correctly exactly as it would from created or in_transit. Confirm a Trip Admin cannot undo or cancel a trip they do not own.
+
+Frontend tests, 390x844px, tap only: as Trip Admin, start a trip, confirm an Undo option appears, tap it, confirm the trip returns to created and the option disappears. Mark a trip broken down, confirm Request Cancellation is now available and works. Complete a transshipment, confirm an Undo option appears, tap it, confirm the previous vehicle and driver are restored and shown correctly, confirm the Vehicle and Driver History section shows both the original swap and the undo as separate entries. Console clean throughout.
+
+Report every file changed and every test result.

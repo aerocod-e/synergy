@@ -5,7 +5,7 @@ import { AlertCircle, ChevronLeft, ChevronRight, Download, Search } from 'lucide
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { theme } from '@/constants/theme';
-import { getTripById, startTrip, completeTrip, markTripBreakdown, markTransshipment } from '@/services/api';
+import { getTripById, startTrip, completeTrip, markTripBreakdown, markTransshipment, undoTripStart, undoTripBreakdown, undoTripTransshipment } from '@/services/api';
 import TripDetailView, { type TripDetail } from '@/components/TripDetailView';
 import { formatNaira } from '@/utils/formatCurrency';
 import { confirmAction, notifyAction } from '@/utils/confirmAction';
@@ -140,6 +140,7 @@ export default function TripAdminTripDetail() {
   const [driverInputValue, setDriverInputValue] = useState('');
   const [transshipmentLoading, setTransshipmentLoading] = useState(false);
   const [transshipmentError, setTransshipmentError] = useState<string | null>(null);
+  const [undoBreakdownLoading, setUndoBreakdownLoading] = useState(false);
 
   const fetchTrip = useCallback(async () => {
     if (!id) return;
@@ -242,6 +243,66 @@ export default function TripAdminTripDetail() {
           setTransshipmentError(err?.message ?? 'Failed to record transshipment. Please try again.');
         } finally {
           setTransshipmentLoading(false);
+        }
+      },
+    });
+  };
+
+  const handleUndoStart = () => {
+    confirmAction({
+      title: 'Undo Start',
+      message: 'Revert this trip to Created status?',
+      confirmText: 'Undo',
+      onConfirm: async () => {
+        setActionLoading(true);
+        setActionError(null);
+        try {
+          await undoTripStart(id!);
+          await fetchTrip();
+        } catch (err: any) {
+          setActionError(err?.message ?? 'Failed to undo. Please try again.');
+        } finally {
+          setActionLoading(false);
+        }
+      },
+    });
+  };
+
+  const handleUndoBreakdown = () => {
+    confirmAction({
+      title: 'Undo Breakdown',
+      message: "This will undo the breakdown and restore the trip's previous status.",
+      confirmText: 'Undo',
+      onConfirm: async () => {
+        setUndoBreakdownLoading(true);
+        setTransshipmentError(null);
+        try {
+          await undoTripBreakdown(id!);
+          await fetchTrip();
+        } catch (err: any) {
+          setTransshipmentError(err?.message ?? 'Failed to undo. Please try again.');
+        } finally {
+          setUndoBreakdownLoading(false);
+        }
+      },
+    });
+  };
+
+  const handleUndoTransshipment = () => {
+    confirmAction({
+      title: 'Undo Transshipment',
+      message: 'Restore the previous vehicle and driver?',
+      confirmText: 'Undo',
+      onConfirm: async () => {
+        setActionLoading(true);
+        setActionError(null);
+        try {
+          await undoTripTransshipment(id!);
+          await fetchTrip();
+        } catch (err: any) {
+          setActionError(err?.message ?? 'Failed to undo. Please try again.');
+        } finally {
+          setActionLoading(false);
         }
       },
     });
@@ -428,6 +489,28 @@ export default function TripAdminTripDetail() {
               : <Text style={styles.actionBtnText}>Mark as Breakdown</Text>
             }
           </TouchableOpacity>
+
+          {trip.status === TRIP_STATUS.IN_TRANSIT && (
+            <TouchableOpacity
+              style={styles.undoLink}
+              onPress={handleUndoStart}
+              disabled={actionLoading}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={styles.undoLinkText}>Undo Start</Text>
+            </TouchableOpacity>
+          )}
+
+          {trip.status === TRIP_STATUS.TRANSSHIPMENT_IN_TRANSIT && (
+            <TouchableOpacity
+              style={styles.undoLink}
+              onPress={handleUndoTransshipment}
+              disabled={actionLoading}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={styles.undoLinkText}>Undo Transshipment</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
@@ -446,6 +529,15 @@ export default function TripAdminTripDetail() {
             <Text style={styles.replacementCurrentLabel}>Current driver</Text>
             <Text style={styles.replacementCurrentValue}>{trip.driver?.fullName ?? 'No driver assigned'}</Text>
           </View>
+
+          <TouchableOpacity
+            style={styles.undoLink}
+            onPress={handleUndoBreakdown}
+            disabled={undoBreakdownLoading}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.undoLinkText}>Undo Breakdown</Text>
+          </TouchableOpacity>
 
           <Text style={styles.replacementFieldLabel}>REPLACEMENT VEHICLE</Text>
           <VehicleSearchInput
@@ -651,6 +743,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: theme.colors.error,
     fontWeight: '500',
+  },
+  undoLink: {
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  undoLinkText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.grey1,
+    textDecorationLine: 'underline',
   },
   replacementContainer: {
     paddingHorizontal: 16,

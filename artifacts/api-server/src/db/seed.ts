@@ -446,6 +446,11 @@ async function seed(): Promise<void> {
       return r.rows[0].id;
     };
 
+    type TransshipmentStep = {
+      vehicleReg?: string; // new vehicle reg for this swap (undefined = vehicle unchanged)
+      driverLic?: string;  // new driver lic for this swap (undefined = driver unchanged)
+    };
+
     type TripSpec = {
       code: string;
       vehicleReg: string;
@@ -458,6 +463,12 @@ async function seed(): Promise<void> {
       creatorEmail: string;
       isCancelled?: boolean;
       isCancellationPending?: boolean;
+      // Breakdown/transshipment demo scenarios — never touch trip_fees/wallets,
+      // only trip_events, trip_transshipment_history, and the trip's current
+      // vehicle_id/driver_id (fees stay locked to the ORIGINAL vehicle above).
+      breakdownFirst?: boolean;
+      transshipmentSteps?: TransshipmentStep[];
+      undoLastTransshipment?: boolean;
     };
 
     const insertDemoTrip = async (spec: TripSpec): Promise<void> => {
@@ -670,7 +681,10 @@ async function seed(): Promise<void> {
           `INSERT INTO trip_events (trip_id, event_type, performed_by) VALUES ($1, 'created', $2)`,
           [tripId, creatorId],
         );
-        if (spec.status === 'in_transit' || spec.status === 'completed') {
+        const hasBreakdownActivity = Boolean(
+          spec.breakdownFirst || (spec.transshipmentSteps && spec.transshipmentSteps.length > 0),
+        );
+        if (spec.status === 'in_transit' || spec.status === 'completed' || hasBreakdownActivity) {
           await client.query(
             `INSERT INTO trip_events (trip_id, event_type, performed_by) VALUES ($1, 'started', $2)`,
             [tripId, creatorId],
@@ -682,6 +696,125 @@ async function seed(): Promise<void> {
             [tripId, creatorId],
           );
         }
+
+        // ── Breakdown / transshipment demo history ────────────────────────
+        // Mirrors markTripBreakdown / markTransshipment / undoTripTransshipment
+        // exactly, but writes directly since this is synthetic seed history.
+        // trip_fees are NEVER touched here — only trip_events,
+        // trip_transshipment_history, and the trip's current vehicle_id/driver_id.
+        if (spec.breakdownFirst) {
+          await client.query(
+            `INSERT INTO trip_events (trip_id, event_type, performed_by, metadata)
+             VALUES ($1, 'breakdown_marked', $2, $3::jsonb)`,
+            [tripId, creatorId, JSON.stringify({ previousStatus: 'in_transit' })],
+          );
+        }
+
+        let curVehicleReg = spec.vehicleReg;
+        let curDriverLic = spec.driverLic;
+
+        type StepRecord = {
+          beforeVehicleReg: string; afterVehicleReg: string;
+          beforeDriverLic: string; afterDriverLic: string;
+          vehicleSwapped: boolean; driverSwapped: boolean;
+          historyId: string;
+        };
+        const stepRecords: StepRecord[] = [];
+
+        if (spec.transshipmentSteps && spec.transshipmentSteps.length > 0) {
+          for (let i = 0; i < spec.transshipmentSteps.length; i++) {
+            const step = spec.transshipmentSteps[i]!;
+            const beforeVehicleReg = curVehicleReg;
+            const beforeDriverLic  = curDriverLic;
+            const vehicleSwapped = Boolean(step.vehicleReg);
+            const driverSwapped  = Boolean(step.driverLic);
+            const afterVehicleReg = vehicleSwapped ? step.vehicleReg! : beforeVehicleReg;
+            const afterDriverLic  = driverSwapped  ? step.driverLic!  : beforeDriverLic;
+
+            const histRes = await client.query<{ id: string }>(
+              `INSERT INTO trip_transshipment_history
+                 (trip_id, old_vehicle_id, new_vehicle_id, old_driver_id, new_driver_id, changed_by)
+               VALUES ($1, $2, $3, $4, $5, $6)
+               RETURNING id`,
+              [
+                tripId,
+                vehicleSwapped ? vehicleIdMap[beforeVehicleReg] : null,
+                vehicleSwapped ? vehicleIdMap[afterVehicleReg]  : null,
+                driverSwapped  ? driverIdMap[beforeDriverLic]   : null,
+                driverSwapped  ? driverIdMap[afterDriverLic]    : null,
+                creatorId,
+              ],
+            );
+
+            await client.query(
+              `INSERT INTO trip_events (trip_id, event_type, performed_by, metadata)
+               VALUES ($1, 'transshipment', $2, $3::jsonb)`,
+              [
+                tripId, creatorId,
+                JSON.stringify({ previousStatus: 'breakdown', vehicleSwapped, driverSwapped }),
+              ],
+            );
+
+            stepRecords.push({
+              beforeVehicleReg, afterVehicleReg, beforeDriverLic, afterDriverLic,
+              vehicleSwapped, driverSwapped, historyId: histRes.rows[0]!.id,
+            });
+
+            curVehicleReg = afterVehicleReg;
+            curDriverLic  = afterDriverLic;
+
+            // A further step means the trip broke down again before that next swap.
+            if (i < spec.transshipmentSteps.length - 1) {
+              await client.query(
+                `INSERT INTO trip_events (trip_id, event_type, performed_by, metadata)
+                 VALUES ($1, 'breakdown_marked', $2, $3::jsonb)`,
+                [tripId, creatorId, JSON.stringify({ previousStatus: 'transshipment_in_transit' })],
+              );
+            }
+          }
+        }
+
+        if (spec.undoLastTransshipment && stepRecords.length > 0) {
+          const last = stepRecords[stepRecords.length - 1]!;
+          await client.query(
+            `INSERT INTO trip_transshipment_history
+               (trip_id, old_vehicle_id, new_vehicle_id, old_driver_id, new_driver_id, changed_by)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [
+              tripId,
+              last.vehicleSwapped ? vehicleIdMap[last.afterVehicleReg]  : null,
+              last.vehicleSwapped ? vehicleIdMap[last.beforeVehicleReg] : null,
+              last.driverSwapped  ? driverIdMap[last.afterDriverLic]    : null,
+              last.driverSwapped  ? driverIdMap[last.beforeDriverLic]   : null,
+              creatorId,
+            ],
+          );
+          await client.query(
+            `INSERT INTO trip_events (trip_id, event_type, performed_by, metadata)
+             VALUES ($1, 'undo_transshipment', $2, $3::jsonb)`,
+            [
+              tripId, creatorId,
+              JSON.stringify({
+                previousStatus: 'transshipment_in_transit',
+                historyId: last.historyId,
+                vehicleRestored: last.vehicleSwapped,
+                driverRestored: last.driverSwapped,
+              }),
+            ],
+          );
+          curVehicleReg = last.beforeVehicleReg;
+          curDriverLic  = last.beforeDriverLic;
+        }
+
+        // Apply the final current vehicle/driver if any swap moved it away from
+        // the original (fees above were already computed off the ORIGINAL vehicle).
+        if (curVehicleReg !== spec.vehicleReg || curDriverLic !== spec.driverLic) {
+          await client.query(
+            `UPDATE trips SET vehicle_id = $2, driver_id = $3, updated_at = NOW() WHERE id = $1`,
+            [tripId, vehicleIdMap[curVehicleReg], driverIdMap[curDriverLic]],
+          );
+        }
+
         if (spec.isCancelled) {
           await client.query(
             `INSERT INTO trip_events (trip_id, event_type, performed_by) VALUES ($1, 'cancelled', $2)`,
@@ -771,6 +904,60 @@ async function seed(): Promise<void> {
         status: 'cancellation_pending', creatorEmail: 'lagos.ta2@synergy.com',
         isCancellationPending: true,
       },
+      // Trip 10 – Lagos→Kano, breakdown (no replacement selected yet)
+      {
+        code: 'DEMO-2026-000010', vehicleReg: 'LAG-001-AA', driverLic: 'LG-2021-001',
+        loadCode: 'LG', unloadCode: 'KN',
+        originDesc: 'Lagos (Apapa Port)', destDesc: 'Kano (Bello Road Terminal)',
+        status: 'breakdown', creatorEmail: 'lagos.ta1@synergy.com',
+        breakdownFirst: true,
+      },
+      // Trip 11 – Lagos→Rivers, transshipment (vehicle-only swap)
+      {
+        code: 'DEMO-2026-000011', vehicleReg: 'LAG-002-BB', driverLic: 'LG-2021-002',
+        loadCode: 'LG', unloadCode: 'RI',
+        originDesc: 'Lagos (Tin Can Island Port)', destDesc: 'Rivers (Trans-Amadi Industrial)',
+        status: 'transshipment_in_transit', creatorEmail: 'lagos.ta1@synergy.com',
+        breakdownFirst: true,
+        transshipmentSteps: [{ vehicleReg: 'LAG-003-CC' }],
+      },
+      // Trip 12 – Rivers→Lagos, transshipment (vehicle + driver swap)
+      {
+        code: 'DEMO-2026-000012', vehicleReg: 'RIV-001-AA', driverLic: 'KN-2021-001',
+        loadCode: 'RI', unloadCode: 'LG',
+        originDesc: 'Rivers (Trans-Amadi Industrial)', destDesc: 'Lagos (Oshodi Terminal)',
+        status: 'transshipment_in_transit', creatorEmail: 'rivers.ta1@synergy.com',
+        breakdownFirst: true,
+        transshipmentSteps: [{ vehicleReg: 'KAN-001-AA', driverLic: 'LG-2021-001' }],
+      },
+      // Trip 13 – Kano→FCT, broke down twice, swapped twice
+      {
+        code: 'DEMO-2026-000013', vehicleReg: 'KAN-002-BB', driverLic: 'LG-2022-001',
+        loadCode: 'KN', unloadCode: 'FCT',
+        originDesc: 'Kano (Sabon Gari)', destDesc: 'Abuja (Area 1 Depot)',
+        status: 'transshipment_in_transit', creatorEmail: 'kano.ta1@synergy.com',
+        breakdownFirst: true,
+        transshipmentSteps: [{ vehicleReg: 'LAG-004-DD' }, { vehicleReg: 'LAG-005-EE' }],
+      },
+      // Trip 14 – Lagos→Rivers, transshipment then undone (back to breakdown)
+      {
+        code: 'DEMO-2026-000014', vehicleReg: 'LAG-004-DD', driverLic: 'LG-2022-001',
+        loadCode: 'LG', unloadCode: 'RI',
+        originDesc: 'Lagos (Ikeja Industrial Area)', destDesc: 'Rivers (Mile 1 Market)',
+        status: 'breakdown', creatorEmail: 'lagos.ta2@synergy.com',
+        breakdownFirst: true,
+        transshipmentSteps: [{ vehicleReg: 'LAG-005-EE' }],
+        undoLastTransshipment: true,
+      },
+      // Trip 15 – Lagos→Ogun, cancelled directly from breakdown (fees reversed)
+      {
+        code: 'DEMO-2026-000015', vehicleReg: 'LAG-002-BB', driverLic: 'LG-2021-002',
+        loadCode: 'LG', unloadCode: 'OG',
+        originDesc: 'Lagos (Tin Can Island Port)', destDesc: 'Ogun (Sagamu Interchange)',
+        status: 'cancelled', creatorEmail: 'lagos.ta1@synergy.com',
+        breakdownFirst: true,
+        isCancelled: true,
+      },
     ];
 
     console.log('\n── Demo trips ──');
@@ -778,6 +965,156 @@ async function seed(): Promise<void> {
       await insertDemoTrip(spec);
     }
     console.log(`✓ Demo trips processed: ${DEMO_TRIPS.length}`);
+
+    // ── Demo bulk payments ───────────────────────────────────────────────────
+    console.log('\n── Demo bulk payments ──');
+
+    type BulkShareSpec = { recipientType: 'state' | 'stakeholder'; recipientId: string; percentage: number };
+    type BulkPaymentSpec = {
+      companyName: string;
+      totalAmountKobo: number;
+      expiryDate: string;
+      shares: BulkShareSpec[];
+      backdatedHoursAgo?: number;   // pushes created_at/reversal_deadline into the past (already elapsed)
+      reverseImmediately?: boolean; // insert reversal ledger rows + mark status='reversed'
+    };
+
+    // Same largest-remainder allocation as bulkPaymentController.createBulkPayment,
+    // so seeded share amounts sum EXACTLY to totalAmountKobo.
+    const allocateKoboByLargestRemainder = (totalKobo: number, percentages: number[]): number[] => {
+      const raw = percentages.map((p) => (p / 100) * totalKobo);
+      const base = raw.map((v) => Math.floor(v));
+      const remainders = raw.map((v, i) => ({ i, frac: v - base[i]! }));
+      let distributed = base.reduce((sum, v) => sum + v, 0);
+      let leftover = totalKobo - distributed;
+      remainders.sort((a, b) => b.frac - a.frac || a.i - b.i);
+      const amounts = [...base];
+      for (let k = 0; k < remainders.length && leftover > 0; k++, leftover--) {
+        amounts[remainders[k]!.i]! += 1;
+      }
+      return amounts;
+    };
+
+    const dateOffset = (days: number): string => {
+      const d = new Date();
+      d.setDate(d.getDate() + days);
+      return d.toISOString().slice(0, 10);
+    };
+
+    const BULK_PAYMENTS_DEMO: BulkPaymentSpec[] = [
+      {
+        // Active, permanent record — reversal window doesn't need to still be open.
+        companyName: 'Lagos Freight Alliance',
+        totalAmountKobo: 200_000_000, // ₦2,000,000.00
+        expiryDate: dateOffset(60),
+        shares: [
+          { recipientType: 'state', recipientId: stateIdMap['LG']!, percentage: 40 },
+          { recipientType: 'state', recipientId: stateIdMap['KN']!, percentage: 30 },
+          { recipientType: 'stakeholder', recipientId: stakeholderIdByName['Consultant']!, percentage: 30 },
+        ],
+      },
+      {
+        // Expiry date in the past so it displays as Expired in the demo.
+        companyName: 'Northern Logistics Co',
+        totalAmountKobo: 500_000_000, // ₦5,000,000.00
+        expiryDate: dateOffset(-10),
+        shares: [
+          { recipientType: 'state', recipientId: stateIdMap['RI']!, percentage: 60 },
+          { recipientType: 'stakeholder', recipientId: stakeholderIdByName['Vendor']!, percentage: 40 },
+        ],
+      },
+      {
+        // Single 100% share, reversed immediately after creation.
+        companyName: 'Quick Transit Ltd',
+        totalAmountKobo: 75_000_000, // ₦750,000.00
+        expiryDate: dateOffset(30),
+        shares: [
+          { recipientType: 'stakeholder', recipientId: stakeholderIdByName['Integrator']!, percentage: 100 },
+        ],
+        reverseImmediately: true,
+      },
+    ];
+
+    for (const bp of BULK_PAYMENTS_DEMO) {
+      const existing = await client.query<{ id: string }>(
+        `SELECT id FROM bulk_payments WHERE company_name = $1 LIMIT 1`,
+        [bp.companyName],
+      );
+      if (existing.rows.length > 0) {
+        console.log(`  ↷ Bulk payment "${bp.companyName}" already exists — skipping`);
+        continue;
+      }
+
+      await client.query('BEGIN');
+      try {
+        const createdAtExpr = bp.backdatedHoursAgo
+          ? `NOW() - INTERVAL '${bp.backdatedHoursAgo} hours'`
+          : 'NOW()';
+        const reversalDeadlineExpr = bp.backdatedHoursAgo
+          ? `NOW() - INTERVAL '${bp.backdatedHoursAgo - 2} hours'`
+          : `NOW() + INTERVAL '2 hours'`;
+
+        const bpRes = await client.query<{ id: string }>(
+          `INSERT INTO bulk_payments (company_name, total_amount, expiry_date, created_by, created_at, reversal_deadline)
+           VALUES ($1, $2, $3, $4, ${createdAtExpr}, ${reversalDeadlineExpr})
+           RETURNING id`,
+          [bp.companyName, bp.totalAmountKobo, bp.expiryDate, superAdminId],
+        );
+        const bulkPaymentId = bpRes.rows[0]!.id;
+
+        const allocated = allocateKoboByLargestRemainder(bp.totalAmountKobo, bp.shares.map(s => s.percentage));
+
+        for (let i = 0; i < bp.shares.length; i++) {
+          const share = bp.shares[i]!;
+          const amount = allocated[i]!;
+
+          await client.query(
+            `INSERT INTO bulk_payment_shares (bulk_payment_id, recipient_type, recipient_id, percentage, amount)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [bulkPaymentId, share.recipientType, share.recipientId, share.percentage, amount],
+          );
+
+          const walletRes = await client.query<{ id: string }>(
+            `SELECT id FROM wallets WHERE owner_type = $1 AND owner_id = $2`,
+            [share.recipientType, share.recipientId],
+          );
+          const walletId = walletRes.rows[0]!.id;
+          touchedWalletIds.add(walletId);
+
+          await client.query(
+            `UPDATE wallets SET total_collected = total_collected + $1, updated_at = NOW() WHERE id = $2`,
+            [amount, walletId],
+          );
+          await client.query(
+            `INSERT INTO wallet_ledger (wallet_id, trip_id, trip_fee_id, amount, entry_type, cleared, bulk_payment_id)
+             VALUES ($1, NULL, NULL, $2, 'credit', false, $3)`,
+            [walletId, amount, bulkPaymentId],
+          );
+
+          if (bp.reverseImmediately) {
+            await client.query(
+              `INSERT INTO wallet_ledger (wallet_id, trip_id, trip_fee_id, amount, entry_type, cleared, bulk_payment_id)
+               VALUES ($1, NULL, NULL, $2, 'reversal', false, $3)`,
+              [walletId, -amount, bulkPaymentId],
+            );
+            await client.query(
+              `UPDATE wallets SET total_collected = total_collected - $1, updated_at = NOW() WHERE id = $2`,
+              [amount, walletId],
+            );
+          }
+        }
+
+        if (bp.reverseImmediately) {
+          await client.query(`UPDATE bulk_payments SET status = 'reversed' WHERE id = $1`, [bulkPaymentId]);
+        }
+
+        await client.query('COMMIT');
+        console.log(`  ✓ Bulk payment "${bp.companyName}" seeded${bp.reverseImmediately ? ' (reversed)' : ''}`);
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      }
+    }
 
     // ── Wallet reconciliation ──────────────────────────────────────────────
     console.log('\n── Wallet reconciliation ──');

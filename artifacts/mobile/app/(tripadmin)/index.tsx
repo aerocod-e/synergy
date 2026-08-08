@@ -438,7 +438,10 @@ export default function TripAdminTrips() {
         ) : item.createdByName ? (
           <Text style={styles.createdByText} numberOfLines={1}>{item.createdByName}</Text>
         ) : null}
-        {(item.status === TRIP_STATUS.CREATED || item.status === TRIP_STATUS.IN_TRANSIT) && (
+        {(item.status === TRIP_STATUS.CREATED ||
+          item.status === TRIP_STATUS.IN_TRANSIT ||
+          item.status === TRIP_STATUS.BREAKDOWN ||
+          item.status === TRIP_STATUS.TRANSSHIPMENT_IN_TRANSIT) && (
           <TouchableOpacity
             style={styles.cancelRequestBtn}
             onPress={() => {

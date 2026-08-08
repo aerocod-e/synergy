@@ -862,6 +862,370 @@ export async function getTripTransshipmentHistory(req: Request, res: Response): 
   }
 }
 
+// ── Undo actions ─────────────────────────────────────────────────────────────
+// Each undo endpoint reverses the single most recent action of its kind,
+// guarded so it is only available while nothing has happened since.
+
+export async function undoTripStart(req: Request, res: Response): Promise<void> {
+  const { tripId } = req.params as { tripId: string };
+  const callerId = req.user!.userId;
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const { rows } = await client.query<{
+      id: string;
+      created_by: string;
+      status: string;
+    }>(
+      `SELECT id, created_by, status FROM trips WHERE id = $1 AND deleted_at IS NULL LIMIT 1 FOR UPDATE`,
+      [tripId]
+    );
+
+    if (rows.length === 0) {
+      await client.query("ROLLBACK");
+      res.status(404).json({ error: "NOT_FOUND", message: "Trip not found" });
+      return;
+    }
+
+    const trip = rows[0]!;
+
+    if (trip.created_by !== callerId) {
+      await client.query("ROLLBACK");
+      res.status(403).json({ error: "FORBIDDEN", message: "You did not create this trip" });
+      return;
+    }
+
+    if (trip.status !== TRIP_STATUS.IN_TRANSIT) {
+      await client.query("ROLLBACK");
+      res.status(409).json({ error: "CONFLICT", message: "This trip can no longer be undone" });
+      return;
+    }
+
+    const { rows: startEventRows } = await client.query<{ id: string; created_at: Date }>(
+      `SELECT id, created_at FROM trip_events
+       WHERE trip_id = $1 AND event_type = 'started'
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [tripId]
+    );
+    const startEvent = startEventRows[0];
+
+    if (!startEvent) {
+      await client.query("ROLLBACK");
+      res.status(409).json({ error: "CONFLICT", message: "This trip can no longer be undone" });
+      return;
+    }
+
+    const { rows: laterEvents } = await client.query<{ id: string }>(
+      `SELECT id FROM trip_events
+       WHERE trip_id = $1 AND created_at > $2 AND id != $3
+       LIMIT 1`,
+      [tripId, startEvent.created_at, startEvent.id]
+    );
+
+    if (laterEvents.length > 0) {
+      await client.query("ROLLBACK");
+      res.status(409).json({
+        error: "CONFLICT",
+        message: "This trip has had further activity since it was started and can no longer be undone",
+      });
+      return;
+    }
+
+    await client.query(
+      `UPDATE trips SET status = '${TRIP_STATUS.CREATED}', updated_at = NOW() WHERE id = $1`,
+      [tripId]
+    );
+
+    const { rows: [event] } = await client.query<{ created_at: Date }>(
+      `INSERT INTO trip_events (trip_id, event_type, performed_by, metadata)
+       VALUES ($1, 'undo_start', $2, $3::jsonb)
+       RETURNING created_at`,
+      [tripId, callerId, JSON.stringify({ previousStatus: TRIP_STATUS.IN_TRANSIT })]
+    );
+
+    await client.query("COMMIT");
+
+    res.json({
+      data: {
+        tripId,
+        status: TRIP_STATUS.CREATED,
+        undoneAt: event!.created_at,
+      },
+      message: "Trip start undone",
+    });
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to undo trip start" });
+  } finally {
+    client.release();
+  }
+}
+
+export async function undoTripBreakdown(req: Request, res: Response): Promise<void> {
+  const { tripId } = req.params as { tripId: string };
+  const callerId = req.user!.userId;
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const { rows } = await client.query<{
+      id: string;
+      created_by: string;
+      status: string;
+    }>(
+      `SELECT id, created_by, status FROM trips WHERE id = $1 AND deleted_at IS NULL LIMIT 1 FOR UPDATE`,
+      [tripId]
+    );
+
+    if (rows.length === 0) {
+      await client.query("ROLLBACK");
+      res.status(404).json({ error: "NOT_FOUND", message: "Trip not found" });
+      return;
+    }
+
+    const trip = rows[0]!;
+
+    if (trip.created_by !== callerId) {
+      await client.query("ROLLBACK");
+      res.status(403).json({ error: "FORBIDDEN", message: "You did not create this trip" });
+      return;
+    }
+
+    if (trip.status !== TRIP_STATUS.BREAKDOWN) {
+      await client.query("ROLLBACK");
+      res.status(409).json({ error: "CONFLICT", message: "This trip can no longer be undone" });
+      return;
+    }
+
+    const { rows: breakdownEventRows } = await client.query<{
+      id: string;
+      metadata: { previousStatus?: string } | null;
+    }>(
+      `SELECT id, metadata FROM trip_events
+       WHERE trip_id = $1 AND event_type = 'breakdown_marked'
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [tripId]
+    );
+    const breakdownEvent = breakdownEventRows[0];
+    const previousStatus = breakdownEvent?.metadata?.previousStatus;
+
+    if (!breakdownEvent || !previousStatus) {
+      await client.query("ROLLBACK");
+      res.status(409).json({ error: "CONFLICT", message: "This trip can no longer be undone" });
+      return;
+    }
+
+    await client.query(
+      `UPDATE trips SET status = $2, updated_at = NOW() WHERE id = $1`,
+      [tripId, previousStatus]
+    );
+
+    const { rows: [event] } = await client.query<{ created_at: Date }>(
+      `INSERT INTO trip_events (trip_id, event_type, performed_by, metadata)
+       VALUES ($1, 'undo_breakdown', $2, $3::jsonb)
+       RETURNING created_at`,
+      [tripId, callerId, JSON.stringify({ previousStatus: TRIP_STATUS.BREAKDOWN, revertedTo: previousStatus })]
+    );
+
+    await client.query("COMMIT");
+
+    res.json({
+      data: {
+        tripId,
+        status: previousStatus,
+        undoneAt: event!.created_at,
+      },
+      message: "Trip breakdown undone",
+    });
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to undo trip breakdown" });
+  } finally {
+    client.release();
+  }
+}
+
+export async function undoTripTransshipment(req: Request, res: Response): Promise<void> {
+  const { tripId } = req.params as { tripId: string };
+  const callerId = req.user!.userId;
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const { rows } = await client.query<{
+      id: string;
+      created_by: string;
+      status: string;
+    }>(
+      `SELECT id, created_by, status FROM trips WHERE id = $1 AND deleted_at IS NULL LIMIT 1 FOR UPDATE`,
+      [tripId]
+    );
+
+    if (rows.length === 0) {
+      await client.query("ROLLBACK");
+      res.status(404).json({ error: "NOT_FOUND", message: "Trip not found" });
+      return;
+    }
+
+    const trip = rows[0]!;
+
+    if (trip.created_by !== callerId) {
+      await client.query("ROLLBACK");
+      res.status(403).json({ error: "FORBIDDEN", message: "You did not create this trip" });
+      return;
+    }
+
+    if (trip.status !== TRIP_STATUS.TRANSSHIPMENT_IN_TRANSIT) {
+      await client.query("ROLLBACK");
+      res.status(409).json({ error: "CONFLICT", message: "This trip can no longer be undone" });
+      return;
+    }
+
+    const { rows: historyRows } = await client.query<{
+      id: string;
+      old_vehicle_id: string | null;
+      new_vehicle_id: string | null;
+      old_driver_id: string | null;
+      new_driver_id: string | null;
+    }>(
+      `SELECT id, old_vehicle_id, new_vehicle_id, old_driver_id, new_driver_id
+       FROM trip_transshipment_history
+       WHERE trip_id = $1
+       ORDER BY changed_at DESC
+       LIMIT 1`,
+      [tripId]
+    );
+    const history = historyRows[0];
+
+    if (!history) {
+      await client.query("ROLLBACK");
+      res.status(409).json({ error: "CONFLICT", message: "This trip can no longer be undone" });
+      return;
+    }
+
+    const vehicleWasSwapped = history.old_vehicle_id !== null;
+    const driverWasSwapped = history.old_driver_id !== null;
+
+    if (vehicleWasSwapped) {
+      const activeVehicleTrip = await client.query<{ id: string }>(
+        `SELECT id FROM trips
+         WHERE vehicle_id = $1
+           AND id != $2
+           AND status IN (${ACTIVE_TRIP_STATUS_SQL_LIST})
+           AND deleted_at IS NULL
+         LIMIT 1`,
+        [history.old_vehicle_id, tripId]
+      );
+      if (activeVehicleTrip.rows.length > 0) {
+        await client.query("ROLLBACK");
+        res.status(409).json({
+          error: "CONFLICT",
+          message: "The original vehicle is now on another active trip and cannot be restored",
+        });
+        return;
+      }
+    }
+
+    if (driverWasSwapped) {
+      const driverRes = await client.query<{ id: string; created_by: string; is_active: boolean; license_expiry_date: Date | null }>(
+        `SELECT id, created_by, is_active, license_expiry_date FROM drivers WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+        [history.old_driver_id]
+      );
+      const driver = driverRes.rows[0];
+      if (!driver || driver.created_by !== callerId || !driver.is_active) {
+        await client.query("ROLLBACK");
+        res.status(409).json({
+          error: "CONFLICT",
+          message: "The original driver is no longer available and cannot be restored",
+        });
+        return;
+      }
+      if (driver.license_expiry_date !== null) {
+        const expiry = new Date(driver.license_expiry_date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        expiry.setHours(0, 0, 0, 0);
+        if (expiry < today) {
+          const formattedDate = new Date(driver.license_expiry_date).toISOString().slice(0, 10);
+          await client.query("ROLLBACK");
+          res.status(409).json({
+            error: "CONFLICT",
+            message: `The original driver's license expired on ${formattedDate} and cannot be restored`,
+          });
+          return;
+        }
+      }
+    }
+
+    await client.query(
+      `UPDATE trips
+       SET vehicle_id = CASE WHEN $2 THEN $3 ELSE vehicle_id END,
+           driver_id  = CASE WHEN $4 THEN $5 ELSE driver_id END,
+           status     = '${TRIP_STATUS.BREAKDOWN}',
+           updated_at = NOW()
+       WHERE id = $1`,
+      [tripId, vehicleWasSwapped, history.old_vehicle_id, driverWasSwapped, history.old_driver_id]
+    );
+
+    await client.query(
+      `INSERT INTO trip_transshipment_history
+         (trip_id, old_vehicle_id, new_vehicle_id, old_driver_id, new_driver_id, changed_by)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        tripId,
+        vehicleWasSwapped ? history.new_vehicle_id : null,
+        vehicleWasSwapped ? history.old_vehicle_id : null,
+        driverWasSwapped ? history.new_driver_id : null,
+        driverWasSwapped ? history.old_driver_id : null,
+        callerId,
+      ]
+    );
+
+    const { rows: [event] } = await client.query<{ created_at: Date }>(
+      `INSERT INTO trip_events (trip_id, event_type, performed_by, metadata)
+       VALUES ($1, 'undo_transshipment', $2, $3::jsonb)
+       RETURNING created_at`,
+      [
+        tripId,
+        callerId,
+        JSON.stringify({
+          previousStatus: TRIP_STATUS.TRANSSHIPMENT_IN_TRANSIT,
+          historyId: history.id,
+          vehicleRestored: vehicleWasSwapped,
+          driverRestored: driverWasSwapped,
+        }),
+      ]
+    );
+
+    await client.query("COMMIT");
+
+    res.json({
+      data: {
+        tripId,
+        status: TRIP_STATUS.BREAKDOWN,
+        vehicleRestored: vehicleWasSwapped,
+        driverRestored: driverWasSwapped,
+        undoneAt: event!.created_at,
+      },
+      message: "Transshipment undone",
+    });
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to undo transshipment" });
+  } finally {
+    client.release();
+  }
+}
+
 export async function listTrips(req: Request, res: Response): Promise<void> {
   const role   = req.user!.role;
   const userId = req.user!.userId;

@@ -1,0 +1,66 @@
+Two things in this task: add demo seed data for today's features, then run a full regression test across everything built today. Follow all steps in order.
+
+PART 1, seed data for the demo
+
+Add a new idempotent block to the seed script, safe to re-run without creating duplicates, following the same pattern already used for the rest of the seed data.
+
+Bulk Payment Records, create three:
+
+1. "Lagos Freight Alliance", total amount ₦2,000,000, expiry date 60 days from today, split three ways: Lagos state 40%, Kano state 30%, Consultant stakeholder 30%. Status active, well within its reversal window at seed time is not required, this can be older than the reversal window so it displays as a normal permanent record in the demo.
+2. "Northern Logistics Co", total amount ₦5,000,000, expiry date 10 days ago so it displays as Expired in the demo, split two ways: Rivers state 60%, Vendor stakeholder 40%.
+3. "Quick Transit Ltd", total amount ₦750,000, expiry date 30 days from today, a single 100% share to Integrator stakeholder, then immediately reversed after creation so this record demonstrates the reversed state in the history list.
+
+Trips demonstrating Breakdown and Transshipment, using existing demo vehicles, drivers, and Trip Admin accounts already in the seed, create these in addition to existing demo trips, do not remove or alter any existing trip:
+
+1. One trip currently sitting in Breakdown status, no replacement selected yet, so the demo can show the Select Replacement screen live.
+2. One trip that completed a single transshipment, vehicle swapped only, currently in Transshipment In Transit status, with one history row.
+3. One trip that completed a transshipment with both vehicle and driver swapped, currently in Transshipment In Transit status.
+4. One trip that broke down twice and was swapped twice, currently in Transshipment In Transit status, with two separate history rows, to demonstrate the repeat cycle.
+5. One trip that had a transshipment, then had that transshipment undone, currently back in Breakdown status, with its history showing both the original swap and the undo as two separate entries.
+6. One trip that was cancelled directly from Breakdown status, to demonstrate the newly extended cancellation flow, with its fees correctly reversed.
+
+Confirm every trip's fees in trip_fees remain exactly as originally calculated at creation, untouched by any of the swaps above, this is the single most important thing to verify about this seed data, since it is the core guarantee of the whole feature.
+
+Run the seed and report the exact trip codes, statuses, and bulk payment company names created, so these can be found easily during the demo.
+
+PART 2, full regression test across everything built today
+
+Use the app at https://2f2a3156-e178-45fc-95e3-f3726442355f-00-2f9hl4ag0p8j2.expo.kirk.replit.dev, viewport 390x844px for all frontend tests.
+
+Backend tests:
+
+Test 1, confirm listTrips?status=breakdown and ?status=transshipment_in_transit both return correctly for trip_admin, state_admin, and super_admin, and that cancellation_pending filtering is unaffected.
+
+Test 2, confirm active-trip blocking still correctly blocks deleting a vehicle or driver currently on a trip in breakdown or transshipment_in_transit status.
+
+Test 3, create a bulk payment with three shares summing to exactly 100, confirm all three wallets credited correctly with a largest-remainder split leaving no kobo drift. Attempt one summing to 99.99, confirm rejection.
+
+Test 4, reverse a bulk payment within its window, confirm wallets decrement correctly. Attempt to reverse one outside its window, confirm 409. Archive a bulk payment, confirm wallets are completely untouched.
+
+Test 5, mark a trip as breakdown, confirm only the owning trip_admin can do it. Complete a transshipment with only a driver changed, confirm the vehicle is unchanged and fees are byte for byte identical to before.
+
+Test 6, cancel a trip directly from breakdown status, confirm reversal logic runs exactly as it does from created or in_transit.
+
+Test 7, undo a trip start, confirm it reverts to created. Undo a breakdown, confirm it reverts correctly. Undo a transshipment, confirm the original vehicle and driver are restored and a new history row records the undo alongside the original swap. Attempt to undo an older transshipment after a newer one has already happened, confirm rejection. Attempt to undo a transshipment where the original vehicle is now on another active trip, confirm it is blocked with a clear message and nothing changes.
+
+Test 8, as a Trip Admin, reload the app fully, confirm you land on your own home screen, not the profile screen. Repeat as State Admin, Super Admin, and Stakeholder.
+
+Frontend tests, tap only:
+
+Test 9, login as lagos.ta1@synergy.com, open the Trips tab, find the seeded trip in Breakdown status, confirm the amber badge and the Select Replacement section are visible.
+
+Test 10, open the seeded trip with two transshipment history rows, confirm both swap events display correctly in the Vehicle and Driver History section, oldest first.
+
+Test 11, open the seeded trip that had a transshipment undone, confirm the history section shows both the original swap and the undo as separate, clearly distinguishable entries.
+
+Test 12, on the trip currently in_transit, confirm an Undo option is visible and works. On the trip in breakdown, confirm Request Cancellation is now available and works.
+
+Test 13, login as superadmin@synergy.com, open Config, confirm the Bulk Payments section shows all three seeded records, confirm the expired one shows an Expired label, confirm the reversed one shows as reversed, confirm the active one shows its Reverse Payment option only if still within its window.
+
+Test 14, as the recipients of the active bulk payment, Lagos state admin and the Consultant stakeholder, open their wallet ledger, confirm the bulk payment credit appears distinctly labeled with the company name, tap it, confirm the breakdown shows every recipient's share with their own highlighted.
+
+Test 15, confirm the Trips tab icon is visible and distinct for both State Admin and Super Admin, whether active or not.
+
+Test 16, console clean throughout every test above.
+
+Report every test individually with a clear pass or fail, and for any failure include the exact error or behavior observed. Report the final list of seeded trip codes and bulk payment names for use in the demo.

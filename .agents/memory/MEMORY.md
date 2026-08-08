@@ -13,3 +13,5 @@
 - [Wallet ledger shared across entity types](wallet-ledger-shared-across-entity-types.md) — trip joins in getMyLedger must be LEFT JOIN or non-trip credits (e.g. bulk payments) vanish from history.
 - [Expo Router root path collision](expo-router-root-path-collision.md) — multiple (group)/index.tsx files all map to "/"; fix via first-resolution-forces-role-redirect, not by renaming every group.
 - [Breakdown/transshipment status flow](breakdown-transshipment-status-flow.md) — breakdown/transshipment_in_transit are treated as active/in-progress, not terminal: repeat breakdowns and completion from either status are both allowed.
+- [Trip undo actions pattern](trip-undo-actions-pattern.md) — undo-* endpoints gate on current status only, not event history; requestCancellation uses a deny-list so new statuses are cancellable by default.
+- [PillTabBar testing quirks](pill-tab-bar-testing.md) — inactive tabs are icon-only (no text/accessibility label); superadmin@synergy.com has hideTripsTab=true by design, not a bug.
