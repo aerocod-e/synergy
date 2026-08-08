@@ -1,5 +1,5 @@
 import { BlurView } from 'expo-blur';
-import { Car, Circle, List, Receipt, Settings, User, Users, Wallet } from 'lucide-react-native';
+import { Car, Circle, List, Receipt, Settings, Truck, User, Users, Wallet } from 'lucide-react-native';
 import { ComponentType, useEffect, useRef, useState } from 'react';
 import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,6 +15,7 @@ const TAB_ICONS: Record<string, IconComponent> = {
   vehicles: Car,
   'trip-admins': User,
   wallet: Wallet,
+  trips: Truck,
 };
 
 const PILL_PADDING = 6;
