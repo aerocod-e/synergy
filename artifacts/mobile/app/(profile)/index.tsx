@@ -13,7 +13,7 @@ import {
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuthContext } from '@/app/_layout';
+import { getRoleHomePath, useAuthContext } from '@/app/_layout';
 import { theme } from '@/constants/theme';
 import { changePassword, updateMyPreferences } from '@/services/api';
 
@@ -52,6 +52,17 @@ export default function ProfileScreen() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [savingTripsTab, setSavingTripsTab] = useState(false);
+
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      // No navigation history to pop (e.g. the profile screen was the
+      // ambiguous "/" landing screen on a fresh session) — send the user to
+      // their own role home instead of doing nothing or logging a warning.
+      router.replace(getRoleHomePath(user?.role));
+    }
+  };
 
   const isSuperAdmin = user?.role === 'super_admin';
   const showTripsTab = !(user?.hideTripsTab === true);
@@ -118,7 +129,7 @@ export default function ProfileScreen() {
     >
         {/* Back */}
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
+          <TouchableOpacity onPress={handleBack} style={styles.backBtn} activeOpacity={0.7}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
         </View>

@@ -39,11 +39,50 @@ export const AuthContext = createContext<AuthContextValue>({
 
 export const useAuthContext = () => useContext(AuthContext);
 
+// ── Role → home route mapping ────────────────────────────────────────────────
+// Six top-level groups — (profile), (stakeholder), (stateadmin), (superadmin),
+// (tripadmin), (tabs) — each have their own index screen, and Expo Router
+// strips group-name parentheses when generating routes, so all six resolve to
+// the exact same bare path "/". On a cold start or full reload, the router
+// can't tell these apart and deterministically resolves "/" to whichever
+// candidate wins its own internal ordering (observed: "(profile)"), regardless
+// of the logged-in user's role. See the first-resolution handling below for
+// how this is neutralized without relying on which group happens to win.
+type RoleHomeGroup = "(superadmin)" | "(stateadmin)" | "(tripadmin)" | "(stakeholder)";
+type RoleHomePath = "/(superadmin)" | "/(stateadmin)" | "/(tripadmin)" | "/(stakeholder)";
+
+const ROLE_GROUP_MAP: Record<string, RoleHomeGroup> = {
+  super_admin: "(superadmin)",
+  state_admin: "(stateadmin)",
+  trip_admin:  "(tripadmin)",
+  stakeholder: "(stakeholder)",
+};
+
+export function getRoleGroup(role: string | undefined): RoleHomeGroup {
+  return ROLE_GROUP_MAP[role ?? ""] ?? "(stakeholder)";
+}
+
+export function getRoleHomePath(role: string | undefined): RoleHomePath {
+  switch (getRoleGroup(role)) {
+    case "(superadmin)": return "/(superadmin)";
+    case "(stateadmin)": return "/(stateadmin)";
+    case "(tripadmin)":  return "/(tripadmin)";
+    default:             return "/(stakeholder)";
+  }
+}
+
 // ── Root navigator with auth-based redirect ─────────────────────────────────
 function RootLayoutNav() {
   const { user, isLoading, isInitializing } = useContext(AuthContext);
   const segments = useSegments();
   const router = useRouter();
+  // Tracks whether we've handled the very first route resolution after this
+  // app instance mounted (cold start / full reload). That first resolution is
+  // the one subject to the "/" ambiguity described above, so it must always be
+  // forced to the user's correct role group. Once settled, normal in-app
+  // navigation (e.g. tapping the avatar to visit the profile screen) is left
+  // alone.
+  const hasSettledInitialRouteRef = React.useRef(false);
 
   useEffect(() => {
     if (isInitializing) return;
@@ -52,28 +91,34 @@ function RootLayoutNav() {
     const currentGroup = segments[0] as string | undefined;
     const inAuthGroup = currentGroup === "(auth)";
     const inPublicGroup = currentGroup === "(public)";
+    const isFirstResolution = !hasSettledInitialRouteRef.current;
+    hasSettledInitialRouteRef.current = true;
 
     if (!user) {
       if (!inAuthGroup && !inPublicGroup) {
         router.replace("/(auth)/login");
       }
-    } else {
-      const role = user.role;
-      const roleGroupMap: Record<string, string> = {
-        super_admin: "(superadmin)",
-        state_admin: "(stateadmin)",
-        trip_admin:  "(tripadmin)",
-        stakeholder: "(stakeholder)",
-      };
-      const roleGroup = roleGroupMap[role] ?? "(stakeholder)";
+      return;
+    }
 
-      const inProfileGroup = currentGroup === "(profile)";
-      if (currentGroup !== roleGroup && !inPublicGroup && !inProfileGroup) {
-        if (role === "super_admin")      router.replace("/(superadmin)");
-        else if (role === "state_admin") router.replace("/(stateadmin)");
-        else if (role === "trip_admin")  router.replace("/(tripadmin)");
-        else                             router.replace("/(stakeholder)");
+    const roleGroup = getRoleGroup(user.role);
+    const inProfileGroup = currentGroup === "(profile)";
+
+    if (isFirstResolution) {
+      // Never trust the ambiguous "/" resolution on a fresh session — always
+      // land on the correct role group, even if the router resolved to
+      // "(profile)" (or any other unrelated group) instead. "(public)" is
+      // still allowed here since it's a legitimate deep-link destination.
+      if (currentGroup !== roleGroup && !inPublicGroup) {
+        router.replace(getRoleHomePath(user.role));
       }
+      return;
+    }
+
+    // For subsequent in-app navigation, "(profile)" is a valid destination
+    // for any role (e.g. the avatar button), so only correct real mismatches.
+    if (currentGroup !== roleGroup && !inPublicGroup && !inProfileGroup) {
+      router.replace(getRoleHomePath(user.role));
     }
   }, [user, isLoading, isInitializing, segments]);
 
