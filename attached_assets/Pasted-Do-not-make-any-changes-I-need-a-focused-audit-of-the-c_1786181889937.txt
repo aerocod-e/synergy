@@ -1,0 +1,35 @@
+Do not make any changes. I need a focused audit of the current codebase before building two new features, Bulk Payment Records and Truck Breakdown & Transshipment. Report the following exactly as it exists in the code today.
+
+1, wallet and ledger structure
+
+Report the exact columns on wallets and wallet_ledger. Confirm how a ledger entry currently links back to its source, specifically the trip_id and trip_fee_id columns, and confirm whether these are nullable, since a bulk payment credit will have no trip behind it at all.
+
+2, the shared ledger detail breakdown component
+
+Find the shared component already used to show a trip's full payment breakdown with the viewer's own share highlighted, used on both the State Admin and Stakeholder ledger detail screens. Report its exact prop shape and how it currently sources its data, since the new Bulk Payment ledger entries need to reuse this same visual pattern with a different data source.
+
+3, trip cancellation reversal logic
+
+Report the exact function that reverses wallet credits on trip cancellation, applyWalletReversal or equivalent. Report exactly how it inserts reversal entries and decrements wallet balances, since the new Bulk Payment reversal action needs to follow the same pattern.
+
+4, driver license history pattern
+
+Report the exact schema and controller logic for driver_license_history, since the new vehicle and driver swap history for Feature B needs to follow the same pattern.
+
+5, trip status enum and every place it is used
+
+List every current trip status value. List every file across both backend and frontend where trip status is read, displayed, or branched on, status badges, filter pills, trip detail screens, the public lookup, and the audit report screens, since two new statuses need to be added consistently everywhere status already appears.
+
+6, vehicle type pricing validation
+
+Report the exact current validation on vehicle_types loading fee, unloading fee, and on pricing_chart_stakeholder_rates amount, confirm where the greater than zero check currently lives, backend, frontend, or both.
+
+7, active stakeholders and states lookup
+
+Report the exact endpoints already used to fetch the full list of active stakeholders and the full list of states, since the new Bulk Payment form needs to list every one of these as a toggleable row.
+
+8, existing role guard pattern for Super Admin only actions
+
+Confirm the exact middleware pattern already used to restrict an endpoint to super_admin, so new endpoints follow the same convention.
+
+Report all findings clearly, file by file. Do not write or modify any code.
