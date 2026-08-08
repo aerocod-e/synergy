@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Platform, StyleSheet, Switch, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { AlertCircle, ChevronLeft, ChevronRight, Download, Search } from 'lucide-react-native';
 import * as Print from 'expo-print';
@@ -12,6 +12,7 @@ import { confirmAction, notifyAction } from '@/utils/confirmAction';
 import { TRIP_ADMIN_STATUS_LABELS, TRIP_STATUS } from '@/constants/tripStatus';
 import VehicleSearchInput, { type Vehicle } from '@/components/VehicleSearchInput';
 import DriverSearchInput, { type Driver } from '@/components/DriverSearchInput';
+import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 
 // ── Share helpers ────────────────────────────────────────────────────────────
 
@@ -367,12 +368,17 @@ export default function TripAdminTripDetail() {
   const canConfirmTransshipment = Boolean(replacementVehicle || replacementDriver);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.root}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <View style={styles.root}>
       {header}
-      <TripDetailView trip={trip} footer={verifyFooter} />
+      <KeyboardAwareScrollViewCompat
+        style={styles.scrollFlex}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        bottomOffset={24}
+      >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <View>
+      <TripDetailView trip={trip} footer={verifyFooter} scrollable={false} />
 
       {showActions && (
         <View style={styles.actionsContainer}>
@@ -488,7 +494,10 @@ export default function TripAdminTripDetail() {
           </TouchableOpacity>
         </View>
       )}
-    </KeyboardAvoidingView>
+      </View>
+      </TouchableWithoutFeedback>
+      </KeyboardAwareScrollViewCompat>
+    </View>
   );
 }
 
@@ -496,6 +505,12 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: theme.colors.background,
+  },
+  scrollFlex: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   header: {
     flexDirection: 'row',

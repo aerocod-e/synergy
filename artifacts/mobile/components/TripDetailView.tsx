@@ -144,21 +144,30 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 interface TripDetailViewProps {
   trip: TripDetail;
   footer?: React.ReactNode;
+  /**
+   * When false, renders the content in a plain View instead of its own
+   * ScrollView. Use this when the parent screen supplies its own scrollable,
+   * keyboard-aware container (e.g. a screen with form inputs below this
+   * content) — nesting two vertical ScrollViews breaks scrolling and
+   * keyboard-avoidance. Defaults to true for standalone usage.
+   */
+  scrollable?: boolean;
 }
 
-export default function TripDetailView({ trip, footer }: TripDetailViewProps) {
+export default function TripDetailView({ trip, footer, scrollable = true }: TripDetailViewProps) {
   const badge = STATUS_BADGE[trip.status] ?? { bg: '#e8f0fb', text: '#1a6ec8', label: trip.status };
 
   const loadingFees  = trip.fees.filter((f) => f.feeType === 'loading');
   const unloadingFees = trip.fees.filter((f) => f.feeType === 'unloading');
   const stakeholderFees = trip.fees.filter((f) => f.feeType === 'stakeholder' || f.feeType === 'stakeholder_fee');
 
+  const Container = scrollable ? ScrollView : View;
+  const containerProps = scrollable
+    ? { style: styles.scroll, contentContainerStyle: styles.content, showsVerticalScrollIndicator: false }
+    : { style: styles.content };
+
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    >
+    <Container {...(containerProps as any)}>
       {/* ── Header ── */}
       <View style={styles.headerCard}>
         <View style={styles.headerRow}>
@@ -307,7 +316,7 @@ export default function TripDetailView({ trip, footer }: TripDetailViewProps) {
       )}
 
       {footer}
-    </ScrollView>
+    </Container>
   );
 }
 
