@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { AlertCircle, ChevronLeft, ChevronRight, Download, Search } from 'lucide-react-native';
 import * as Print from 'expo-print';
@@ -367,7 +367,10 @@ export default function TripAdminTripDetail() {
   const canConfirmTransshipment = Boolean(replacementVehicle || replacementDriver);
 
   return (
-    <View style={styles.root}>
+    <KeyboardAvoidingView
+      style={styles.root}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
       {header}
       <TripDetailView trip={trip} footer={verifyFooter} />
 
@@ -485,7 +488,7 @@ export default function TripAdminTripDetail() {
           </TouchableOpacity>
         </View>
       )}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
