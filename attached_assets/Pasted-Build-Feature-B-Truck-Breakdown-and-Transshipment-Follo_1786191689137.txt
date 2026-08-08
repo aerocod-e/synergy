@@ -1,0 +1,48 @@
+Build Feature B, Truck Breakdown and Transshipment. Follow all steps in order.
+
+Backend
+
+Add two new values to the shared trip status source of truth, breakdown and transshipment_in_transit, in constants/tripStatus.ts. Add both to TRIP_STATUSES and TRIP_STATUS.
+
+Add a new table, trip_transshipment_history, columns: id UUID primary key, trip_id UUID REFERENCES trips(id), old_vehicle_id UUID REFERENCES vehicles(id) nullable, new_vehicle_id UUID REFERENCES vehicles(id) nullable, old_driver_id UUID REFERENCES drivers(id) nullable, new_driver_id UUID REFERENCES drivers(id) nullable, changed_by UUID REFERENCES users(id), changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(). Both old and new columns are nullable since a single swap event may change only the vehicle, only the driver, or both.
+
+In tripController.ts, add two new functions.
+
+markTripBreakdown, accepts a trip id, guarded authenticateToken, requireRole("trip_admin"). Row-locks the trip with SELECT FOR UPDATE, verifies created_by matches the caller, verifies current status is created or in_transit, sets status to breakdown, inserts a trip_events row with event_type breakdown_marked. Return the updated trip.
+
+markTransshipment, accepts a trip id, and in the body newVehicleId optional, newDriverId optional, at least one of the two is required, reject with a clear message if both are missing. Row-locks the trip, verifies created_by matches the caller, verifies current status is breakdown, verifies any provided newVehicleId belongs to this trip admin and is not currently on another active trip, verifies any provided newDriverId belongs to this trip admin and has a valid, non-expired license. Inside a transaction, insert one row into trip_transshipment_history capturing the trip's current vehicle_id and driver_id as old values and whichever new ids were provided as new values, only overwriting the field on the trips row that was actually provided, leaving the other one unchanged if it was not part of this swap. Set trips.status to transshipment_in_transit. Insert a trip_events row with event_type transshipment. Do not touch trip_fees, wallet_ledger, or wallets in any way, the trip's originally recorded fees must remain byte for byte unchanged regardless of this update. Return the updated trip.
+
+Register both under existing trip routes: PATCH /trips/:id/breakdown and PATCH /trips/:id/transshipment, same guard pattern already used for start and complete.
+
+Add getTripTransshipmentHistory, accepts a trip id, guarded authenticateToken, requireRole("trip_admin", "state_admin", "super_admin"), scoped so a trip_admin can only fetch history for a trip they created, returns every row for that trip ordered changed_at ascending, with vehicle registration numbers and driver names resolved rather than raw ids, following the exact resolved-name pattern already used in getDriverLicenseHistory.
+
+Update getTripById to also return this trip's transshipment history array whenever it is non-empty, and to include whichever vehicle and driver are currently assigned, which will already reflect the most recent swap since those columns were updated directly on the trip.
+
+Update every place trip status is currently branched on across the backend that would need to correctly handle these two new values without breaking, specifically the active-trip checks in vehicleController.ts, driverController.ts, and userController.ts, since a trip in breakdown or transshipment_in_transit is still an active trip and must still block deleting or editing its vehicle or driver. Confirm this explicitly by tracing the shared constant rather than assuming.
+
+Frontend
+
+Update artifacts/mobile/constants/tripStatus.ts to add labels and badge colors for breakdown (Broken Down, amber/warning styling) and transshipment_in_transit (Transshipment, distinct color from a normal In Transit badge, this must always be visually distinguishable even though the trip is still moving). Since every screen already reads from this shared file, confirm this alone correctly surfaces the two new statuses everywhere without needing separate edits, then do a quick pass across the same eleven screens from the earlier refactor to sanity check none of them crash or render incorrectly on a trip with either new status, particularly any screen with a hardcoded set of exactly four or five statuses in a filter list, add the two new ones to any status filter row that should reasonably include them, Trips lists on Trip Admin, State Admin, and Super Admin at minimum.
+
+On app/(tripadmin)/trip-detail.tsx, when a trip's status is created or in_transit, add a Mark as Breakdown action alongside the existing status actions already there, with the same confirmation pattern already used for Mark as Completed. When status is breakdown, replace the normal action buttons with a Select Replacement section showing the current vehicle and driver, a searchable vehicle picker and a searchable driver picker each reusing the existing VehicleSearchInput and DriverSearchInput components already used in trip creation, either or both may be filled in, a Confirm Transshipment button disabled until at least one is selected, calling the new endpoint.
+
+Add a Vehicle and Driver History section to the trip detail screen, visible whenever the trip has any transshipment history, showing each swap event with old and new vehicle registration, old and new driver name, and when it happened, following the same visual pattern already used for driver license history.
+
+Add getTripTransshipmentHistory, markTripBreakdown, markTransshipment helpers to services/api.ts.
+
+Confirm the shared TripDetailView.tsx component correctly displays the two new statuses and, where relevant, surfaces that a trip has transshipment history, since this same component is reused across Super Admin and State Admin trip detail screens as well, not just Trip Admin's.
+
+TypeScript check
+
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+
+Both must return zero errors.
+
+Testing
+
+Backend tests: mark a trip as breakdown, confirm status changes and only the creating trip admin can do it, confirm a different trip admin gets 403. Attempt transshipment with neither vehicle nor driver provided, confirm rejection. Complete a transshipment with only a new driver, confirm the vehicle on the trip is unchanged and the driver is updated, confirm the trip's fees in trip_fees are byte for byte identical to before the swap. Confirm history returns the correct old and new values. Attempt to delete a vehicle currently assigned to a trip in transshipment_in_transit status, confirm it is still blocked exactly as it would be for a normal in_transit trip. Mark the same trip broken down a second time after transshipment, confirm it can be swapped again and both events appear separately in history.
+
+Frontend tests, 390x844px, tap only: as Trip Admin, open an in-transit trip, tap Mark as Breakdown, confirm status badge updates and normal action buttons are replaced by the replacement selection UI. Select only a new vehicle, confirm submission works, confirm the trip now shows Transshipment status permanently distinct in color from a normal In Transit trip. Confirm the Vehicle and Driver History section shows the swap correctly. As State Admin and Super Admin, open the same trip's detail screen, confirm the transshipment status and history are visible there too. Console clean throughout.
+
+Report every file changed and every test result.
