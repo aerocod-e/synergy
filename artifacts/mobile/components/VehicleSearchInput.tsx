@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { theme } from '@/constants/theme';
 import { searchVehicles } from '@/services/api';
@@ -106,36 +107,43 @@ export default function VehicleSearchInput({ value, onSelect, onRegisterNew, pla
 
       {showDropdown && (
         <View style={styles.dropdown}>
-          {searchError && (
-            <View style={styles.errorRow}>
-              <Text style={styles.errorRowText}>{searchError}</Text>
-            </View>
-          )}
-          {results.map((vehicle) => (
-            <TouchableOpacity
-              key={vehicle.id}
-              style={styles.dropdownRow}
-              onPress={() => handleSelect(vehicle)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.dropdownText}>{vehicle.registrationNumber}</Text>
-              {vehicle.vehicleTypeName ? (
-                <Text style={styles.dropdownSubText}>{vehicle.vehicleTypeName}</Text>
-              ) : null}
-            </TouchableOpacity>
-          ))}
+          <ScrollView
+            style={styles.dropdownScroll}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+            showsVerticalScrollIndicator={true}
+          >
+            {searchError && (
+              <View style={styles.errorRow}>
+                <Text style={styles.errorRowText}>{searchError}</Text>
+              </View>
+            )}
+            {results.map((vehicle) => (
+              <TouchableOpacity
+                key={vehicle.id}
+                style={styles.dropdownRow}
+                onPress={() => handleSelect(vehicle)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.dropdownText}>{vehicle.registrationNumber}</Text>
+                {vehicle.vehicleTypeName ? (
+                  <Text style={styles.dropdownSubText}>{vehicle.vehicleTypeName}</Text>
+                ) : null}
+              </TouchableOpacity>
+            ))}
 
-          {results.length === 0 && query.trim().length > 0 && (
-            <TouchableOpacity
-              style={[styles.dropdownRow, styles.registerRow]}
-              onPress={handleRegisterNew}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.registerText}>
-                Register "{query.trim().toUpperCase()}" as new vehicle
-              </Text>
-            </TouchableOpacity>
-          )}
+            {results.length === 0 && query.trim().length > 0 && (
+              <TouchableOpacity
+                style={[styles.dropdownRow, styles.registerRow]}
+                onPress={handleRegisterNew}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.registerText}>
+                  Register "{query.trim().toUpperCase()}" as new vehicle
+                </Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
         </View>
       )}
     </View>
@@ -176,7 +184,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: theme.colors.white,
     overflow: 'hidden',
+    maxHeight: 260,
     ...theme.shadows.card,
+  },
+  dropdownScroll: {
+    maxHeight: 260,
   },
   errorRow: {
     paddingHorizontal: 16,

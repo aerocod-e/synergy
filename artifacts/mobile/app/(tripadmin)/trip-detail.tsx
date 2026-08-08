@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Keyboard, Platform, StyleSheet, Switch, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Modal, Platform, StyleSheet, Switch, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { AlertCircle, ChevronLeft, ChevronRight, Download, Search } from 'lucide-react-native';
 import * as Print from 'expo-print';
@@ -370,15 +370,7 @@ export default function TripAdminTripDetail() {
   return (
     <View style={styles.root}>
       {header}
-      <KeyboardAwareScrollViewCompat
-        style={styles.scrollFlex}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        bottomOffset={24}
-      >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <View>
-      <TripDetailView trip={trip} footer={verifyFooter} scrollable={false} />
+      <TripDetailView trip={trip} footer={verifyFooter} />
 
       {showActions && (
         <View style={styles.actionsContainer}>
@@ -431,72 +423,83 @@ export default function TripAdminTripDetail() {
         </View>
       )}
 
-      {showReplacementSection && (
-        <View style={styles.replacementContainer}>
-          <Text style={styles.replacementTitle}>Select Replacement</Text>
-          <Text style={styles.replacementSubtitle}>
-            This trip broke down. Select a replacement vehicle and/or driver to continue.
-          </Text>
+      <Modal
+        visible={showReplacementSection}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => {}}
+      >
+        <KeyboardAwareScrollViewCompat
+          style={styles.replacementModalScroll}
+          contentContainerStyle={styles.replacementModalContent}
+          showsVerticalScrollIndicator={false}
+          bottomOffset={24}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+            <View>
+              <Text style={styles.replacementTitle}>Select Replacement</Text>
+              <Text style={styles.replacementSubtitle}>
+                This trip broke down. Select a replacement vehicle and/or driver to continue.
+              </Text>
 
-          <View style={styles.replacementCurrentRow}>
-            <Text style={styles.replacementCurrentLabel}>Current vehicle</Text>
-            <Text style={styles.replacementCurrentValue}>{trip.vehicleNumber}</Text>
-          </View>
-          <View style={styles.replacementCurrentRow}>
-            <Text style={styles.replacementCurrentLabel}>Current driver</Text>
-            <Text style={styles.replacementCurrentValue}>{trip.driver?.fullName ?? 'No driver assigned'}</Text>
-          </View>
+              <View style={styles.replacementCurrentRow}>
+                <Text style={styles.replacementCurrentLabel}>Current vehicle</Text>
+                <Text style={styles.replacementCurrentValue}>{trip.vehicleNumber}</Text>
+              </View>
+              <View style={styles.replacementCurrentRow}>
+                <Text style={styles.replacementCurrentLabel}>Current driver</Text>
+                <Text style={styles.replacementCurrentValue}>{trip.driver?.fullName ?? 'No driver assigned'}</Text>
+              </View>
 
-          <Text style={styles.replacementFieldLabel}>REPLACEMENT VEHICLE</Text>
-          <VehicleSearchInput
-            value={vehicleInputValue}
-            onSelect={(vehicle) => {
-              setReplacementVehicle(vehicle);
-              setVehicleInputValue(vehicle.registrationNumber);
-            }}
-            onRegisterNew={() => {
-              notifyAction('Vehicle not found', 'Please register new vehicles from the trip creation screen first.');
-            }}
-            placeholder="Search replacement vehicle…"
-          />
+              <Text style={styles.replacementFieldLabel}>REPLACEMENT VEHICLE</Text>
+              <VehicleSearchInput
+                value={vehicleInputValue}
+                onSelect={(vehicle) => {
+                  setReplacementVehicle(vehicle);
+                  setVehicleInputValue(vehicle.registrationNumber);
+                }}
+                onRegisterNew={() => {
+                  notifyAction('Vehicle not found', 'Please register new vehicles from the trip creation screen first.');
+                }}
+                placeholder="Search replacement vehicle…"
+              />
 
-          <Text style={[styles.replacementFieldLabel, { marginTop: 16 }]}>REPLACEMENT DRIVER</Text>
-          <DriverSearchInput
-            value={driverInputValue}
-            onSelect={(driver) => {
-              setReplacementDriver(driver);
-              setDriverInputValue(driver.fullName);
-            }}
-            placeholder="Search replacement driver…"
-          />
+              <Text style={[styles.replacementFieldLabel, { marginTop: 16 }]}>REPLACEMENT DRIVER</Text>
+              <DriverSearchInput
+                value={driverInputValue}
+                onSelect={(driver) => {
+                  setReplacementDriver(driver);
+                  setDriverInputValue(driver.fullName);
+                }}
+                placeholder="Search replacement driver…"
+              />
 
-          {transshipmentError && (
-            <View style={styles.actionErrorBox}>
-              <AlertCircle size={16} color={theme.colors.error} />
-              <Text style={styles.actionErrorText}>{transshipmentError}</Text>
+              {transshipmentError && (
+                <View style={styles.actionErrorBox}>
+                  <AlertCircle size={16} color={theme.colors.error} />
+                  <Text style={styles.actionErrorText}>{transshipmentError}</Text>
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={[
+                  styles.actionBtn,
+                  styles.actionBtnGreen,
+                  (!canConfirmTransshipment || transshipmentLoading) && styles.actionBtnDisabled,
+                ]}
+                onPress={handleConfirmTransshipment}
+                disabled={!canConfirmTransshipment || transshipmentLoading}
+                activeOpacity={0.8}
+              >
+                {transshipmentLoading
+                  ? <ActivityIndicator size="small" color={theme.colors.white} />
+                  : <Text style={styles.actionBtnText}>Confirm Transshipment</Text>
+                }
+              </TouchableOpacity>
             </View>
-          )}
-
-          <TouchableOpacity
-            style={[
-              styles.actionBtn,
-              styles.actionBtnGreen,
-              (!canConfirmTransshipment || transshipmentLoading) && styles.actionBtnDisabled,
-            ]}
-            onPress={handleConfirmTransshipment}
-            disabled={!canConfirmTransshipment || transshipmentLoading}
-            activeOpacity={0.8}
-          >
-            {transshipmentLoading
-              ? <ActivityIndicator size="small" color={theme.colors.white} />
-              : <Text style={styles.actionBtnText}>Confirm Transshipment</Text>
-            }
-          </TouchableOpacity>
-        </View>
-      )}
-      </View>
-      </TouchableWithoutFeedback>
-      </KeyboardAwareScrollViewCompat>
+          </TouchableWithoutFeedback>
+        </KeyboardAwareScrollViewCompat>
+      </Modal>
     </View>
   );
 }
@@ -652,13 +655,14 @@ const styles = StyleSheet.create({
     color: theme.colors.error,
     fontWeight: '500',
   },
-  replacementContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 16,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.separator,
+  replacementModalScroll: {
+    flex: 1,
     backgroundColor: theme.colors.background,
+  },
+  replacementModalContent: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
     gap: 12,
   },
   replacementTitle: {
