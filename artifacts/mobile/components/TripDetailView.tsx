@@ -1,6 +1,7 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { theme } from '@/constants/theme';
 import { formatNaira } from '@/utils/formatCurrency';
+import { ADMIN_TRIP_STATUS_BADGE_COLORS, TRIP_STATUS_LABELS } from '@/constants/tripStatus';
 
 export interface TripFee {
   id: string;
@@ -54,11 +55,11 @@ export interface TripDetail {
 }
 
 const STATUS_BADGE: Record<string, { bg: string; text: string; label: string }> = {
-  created:              { bg: '#e8f0fb', text: '#1a6ec8', label: 'Created' },
-  in_transit:           { bg: '#fff8e1', text: '#f59e0b', label: 'In Transit' },
-  completed:            { bg: '#e8f5ec', text: '#2a8a4a', label: 'Completed' },
-  cancelled:            { bg: '#fdf0ed', text: '#c8401a', label: 'Cancelled' },
-  cancellation_pending: { bg: '#fff4ed', text: '#ea580c', label: 'Pending Cancellation' },
+  created:              { ...ADMIN_TRIP_STATUS_BADGE_COLORS.created,              label: TRIP_STATUS_LABELS.created },
+  in_transit:           { ...ADMIN_TRIP_STATUS_BADGE_COLORS.in_transit,           label: TRIP_STATUS_LABELS.in_transit },
+  completed:            { ...ADMIN_TRIP_STATUS_BADGE_COLORS.completed,            label: TRIP_STATUS_LABELS.completed },
+  cancelled:            { ...ADMIN_TRIP_STATUS_BADGE_COLORS.cancelled,            label: TRIP_STATUS_LABELS.cancelled },
+  cancellation_pending: { ...ADMIN_TRIP_STATUS_BADGE_COLORS.cancellation_pending, label: TRIP_STATUS_LABELS.cancellation_pending },
 };
 
 const EVENT_LABELS: Record<string, string> = {

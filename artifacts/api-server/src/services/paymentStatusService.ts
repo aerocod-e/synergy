@@ -43,6 +43,8 @@
  * ============================================================
  */
 
+import { TRIP_STATUS } from '../constants/tripStatus.js';
+
 export interface FeePaymentStatus {
   status: 'paid' | 'pending' | 'reversed';
   paidAt: string | null;
@@ -63,7 +65,7 @@ export function getFeePaymentStatus(
   referenceDate?: Date,
   tripStatus?: string,
 ): FeePaymentStatus {
-  if (tripStatus === 'cancelled') {
+  if (tripStatus === TRIP_STATUS.CANCELLED) {
     return { status: 'reversed', paidAt: null };
   }
 

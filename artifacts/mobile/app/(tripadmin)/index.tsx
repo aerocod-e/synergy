@@ -30,6 +30,15 @@ import { getTrips, createTrip, getActivePricingChart, getStates, requestCancella
 import { formatNaira } from '@/utils/formatCurrency';
 import { useLogout } from '@/hooks/useLogout';
 import { useAuthContext } from '@/app/_layout';
+import {
+  TRIP_ADMIN_STATUS_BADGE_COLORS,
+  TRIP_ADMIN_STATUS_LABELS,
+  TRIP_STATUS,
+  TRIP_STATUS_FILTER_MAP,
+  TRIP_STATUS_FILTER_OPTIONS,
+  type TripStatus,
+  type TripStatusFilterOption,
+} from '@/constants/tripStatus';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -37,7 +46,7 @@ interface TripItem {
   id: string;
   vehicleNumber: string;
   vehicleTypeName?: string | null;
-  status: 'created' | 'in_transit' | 'completed' | 'cancelled' | 'cancellation_pending' | string;
+  status: TripStatus | string;
   loadingState: { id: string; name: string; code: string };
   unloadingState: { id: string; name: string; code: string };
   driver: { id: string; email: string } | null;
@@ -79,35 +88,17 @@ interface VehicleTypeItem {
 
 // ── Status badge helpers ───────────────────────────────────────────────────────
 
-const STATUS_LABELS: Record<string, string> = {
-  created:               'Created',
-  in_transit:            'In Transit',
-  completed:             'Completed',
-  cancelled:             'Cancelled',
-  cancellation_pending:  'Pending Cancel',
-};
+const STATUS_LABELS = TRIP_ADMIN_STATUS_LABELS;
 
-const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
-  created:               { bg: theme.colors.blueMuted,  text: theme.colors.blueText },
-  in_transit:            { bg: '#fef3c7',               text: '#d97706' },
-  completed:             { bg: theme.colors.greenMuted, text: theme.colors.greenText },
-  cancelled:             { bg: theme.colors.grey3,      text: theme.colors.grey1 },
-  cancellation_pending:  { bg: '#fff4ed',               text: '#ea580c' },
-};
+const STATUS_STYLES = TRIP_ADMIN_STATUS_BADGE_COLORS;
 
 const SEARCH_DEBOUNCE_MS = 400;
 
-type StatusFilterOption = 'All' | 'Created' | 'In Transit' | 'Completed' | 'Cancelled';
+type StatusFilterOption = TripStatusFilterOption;
 
-const STATUS_FILTER_OPTIONS: StatusFilterOption[] = ['All', 'Created', 'In Transit', 'Completed', 'Cancelled'];
+const STATUS_FILTER_OPTIONS: StatusFilterOption[] = TRIP_STATUS_FILTER_OPTIONS;
 
-const STATUS_FILTER_MAP: Record<StatusFilterOption, string | null> = {
-  All: null,
-  Created: 'created',
-  'In Transit': 'in_transit',
-  Completed: 'completed',
-  Cancelled: 'cancelled',
-};
+const STATUS_FILTER_MAP: Record<StatusFilterOption, string | null> = TRIP_STATUS_FILTER_MAP;
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -408,7 +399,7 @@ export default function TripAdminTrips() {
   // ── renders ─────────────────────────────────────────────────────────────────
 
   const renderTrip = ({ item }: { item: TripItem }) => {
-    const statusStyle = STATUS_STYLES[item.status] ?? STATUS_STYLES['cancelled']!;
+    const statusStyle = STATUS_STYLES[item.status as keyof typeof STATUS_STYLES] ?? STATUS_STYLES[TRIP_STATUS.CANCELLED];
     return (
       <TouchableOpacity
         style={styles.card}
@@ -421,7 +412,7 @@ export default function TripAdminTrips() {
           </View>
           <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg, flexShrink: 0 }]}>
             <Text style={[styles.statusText, { color: statusStyle.text }]}>
-              {STATUS_LABELS[item.status] ?? item.status}
+              {STATUS_LABELS[item.status as keyof typeof STATUS_LABELS] ?? item.status}
             </Text>
           </View>
         </View>
@@ -447,7 +438,7 @@ export default function TripAdminTrips() {
         ) : item.createdByName ? (
           <Text style={styles.createdByText} numberOfLines={1}>{item.createdByName}</Text>
         ) : null}
-        {(item.status === 'created' || item.status === 'in_transit') && (
+        {(item.status === TRIP_STATUS.CREATED || item.status === TRIP_STATUS.IN_TRANSIT) && (
           <TouchableOpacity
             style={styles.cancelRequestBtn}
             onPress={() => {
@@ -933,7 +924,7 @@ export default function TripAdminTrips() {
           <Pressable style={styles.cancelOverlay} onPress={Keyboard.dismiss}>
             <Pressable style={styles.cancelSheet}>
               <Text style={styles.cancelSheetTitle}>Request Cancellation</Text>
-              {cancelModalTripStatus === 'in_transit' && (
+              {cancelModalTripStatus === TRIP_STATUS.IN_TRANSIT && (
                 <View style={styles.inTransitWarningBanner}>
                   <AlertTriangle size={18} color="#d97706" />
                   <Text style={styles.inTransitWarningText}>

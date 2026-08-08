@@ -18,8 +18,19 @@ import SearchBar from '@/components/SearchBar';
 import FilterPanel from '@/components/FilterPanel';
 import DateRangeFilter, { getDateRangeParams, type DateRangeValue } from '@/components/DateRangeFilter';
 import { getTrips } from '@/services/api';
+import {
+  ADMIN_TRIP_STATUS_BADGE_COLORS,
+  TRIP_STATUS_FILTER_MAP,
+  TRIP_STATUS_FILTER_OPTIONS,
+  TRIP_STATUS_LABELS,
+  type TripStatus as SharedTripStatus,
+  type TripStatusFilterOption,
+} from '@/constants/tripStatus';
 
-type TripStatus = 'created' | 'in_transit' | 'completed' | 'cancelled';
+// This screen has never surfaced 'cancellation_pending' trips, so its local
+// status type intentionally stays narrower than the full shared TripStatus.
+// Derived (not redeclared) from the canonical union so it can't drift from it.
+type TripStatus = Exclude<SharedTripStatus, 'cancellation_pending'>;
 
 interface StateRef {
   id: string;
@@ -42,25 +53,19 @@ interface Trip {
   createdAt: string;
 }
 
-type FilterOption = 'All' | 'Created' | 'In Transit' | 'Completed' | 'Cancelled';
+type FilterOption = TripStatusFilterOption;
 
-const FILTER_OPTIONS: FilterOption[] = ['All', 'Created', 'In Transit', 'Completed', 'Cancelled'];
+const FILTER_OPTIONS: FilterOption[] = TRIP_STATUS_FILTER_OPTIONS;
 
-const STATUS_FILTER_MAP: Record<FilterOption, TripStatus | null> = {
-  All: null,
-  Created: 'created',
-  'In Transit': 'in_transit',
-  Completed: 'completed',
-  Cancelled: 'cancelled',
-};
+const STATUS_FILTER_MAP = TRIP_STATUS_FILTER_MAP as Record<FilterOption, TripStatus | null>;
 
 const SEARCH_DEBOUNCE_MS = 400;
 
 const STATUS_BADGE: Record<TripStatus, { bg: string; text: string; label: string }> = {
-  created:    { bg: '#e8f0fb', text: '#1a6ec8', label: 'Created' },
-  in_transit: { bg: '#fff8e1', text: '#f59e0b', label: 'In Transit' },
-  completed:  { bg: '#e8f5ec', text: '#2a8a4a', label: 'Completed' },
-  cancelled:  { bg: '#fdf0ed', text: '#c8401a', label: 'Cancelled' },
+  created:    { ...ADMIN_TRIP_STATUS_BADGE_COLORS.created,    label: TRIP_STATUS_LABELS.created },
+  in_transit: { ...ADMIN_TRIP_STATUS_BADGE_COLORS.in_transit, label: TRIP_STATUS_LABELS.in_transit },
+  completed:  { ...ADMIN_TRIP_STATUS_BADGE_COLORS.completed,  label: TRIP_STATUS_LABELS.completed },
+  cancelled:  { ...ADMIN_TRIP_STATUS_BADGE_COLORS.cancelled,  label: TRIP_STATUS_LABELS.cancelled },
 };
 
 function formatDate(dateStr: string): string {

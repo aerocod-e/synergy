@@ -1,6 +1,7 @@
 import { type Request, type Response } from "express";
 import pool from "../db/connection.js";
 import { getFeePaymentStatus } from "../services/paymentStatusService.js";
+import { TRIP_STATUS } from "../constants/tripStatus.js";
 
 export async function searchTrips(req: Request, res: Response): Promise<void> {
   const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
@@ -47,8 +48,8 @@ export async function searchTrips(req: Request, res: Response): Promise<void> {
        LEFT JOIN  states us ON t.unloading_state_id = us.id
        LEFT JOIN drivers dr ON dr.id = t.driver_id
        LEFT JOIN users u ON u.id = t.created_by
-       WHERE (t.deleted_at IS NULL OR t.status = 'cancelled')
-         AND t.status IN ('created', 'in_transit', 'completed', 'cancelled')
+       WHERE (t.deleted_at IS NULL OR t.status = '${TRIP_STATUS.CANCELLED}')
+         AND t.status IN ('${TRIP_STATUS.CREATED}', '${TRIP_STATUS.IN_TRANSIT}', '${TRIP_STATUS.COMPLETED}', '${TRIP_STATUS.CANCELLED}')
          AND (
                t.trip_code             ILIKE $1
            OR  v.registration_number   ILIKE $1

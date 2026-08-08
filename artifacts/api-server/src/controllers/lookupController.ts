@@ -1,6 +1,7 @@
 import { type Request, type Response } from "express";
 import pool from "../db/connection.js";
 import { getFeePaymentStatus } from "../services/paymentStatusService.js";
+import { TRIP_STATUS } from "../constants/tripStatus.js";
 
 // NOTE: GET /lookup/vehicle/:vehicleNumber is the original vehicle lookup endpoint.
 // Its external contract (URL, request params, response shape, HTTP status codes)
@@ -41,7 +42,7 @@ export async function lookupVehicle(req: Request, res: Response): Promise<void> 
        LEFT JOIN users d ON t.driver_id = d.id
        WHERE LOWER(v.registration_number) = LOWER($1)
          AND t.deleted_at IS NULL
-         AND t.status IN ('created', 'in_transit', 'completed')
+         AND t.status IN ('${TRIP_STATUS.CREATED}', '${TRIP_STATUS.IN_TRANSIT}', '${TRIP_STATUS.COMPLETED}')
        ORDER BY t.created_at DESC
        LIMIT 1`,
       [vehicleNumber]

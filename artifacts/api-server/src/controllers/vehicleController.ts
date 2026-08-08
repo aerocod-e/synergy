@@ -1,5 +1,6 @@
 import { type Request, type Response } from "express";
 import pool from "../db/connection.js";
+import { TRIP_STATUS } from "../constants/tripStatus.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -334,7 +335,7 @@ export async function updateVehicle(req: Request, res: Response): Promise<void> 
     const activeTrip = await pool.query<{ id: string }>(
       `SELECT id FROM trips
        WHERE vehicle_id = $1
-         AND status IN ('created', 'in_transit')
+         AND status IN ('${TRIP_STATUS.CREATED}', '${TRIP_STATUS.IN_TRANSIT}')
          AND deleted_at IS NULL
        LIMIT 1`,
       [id]
@@ -430,7 +431,7 @@ export async function deleteVehicle(req: Request, res: Response): Promise<void> 
     const activeTrip = await pool.query<{ id: string }>(
       `SELECT id FROM trips
        WHERE  vehicle_id = $1
-         AND  status IN ('created', 'in_transit')
+         AND  status IN ('${TRIP_STATUS.CREATED}', '${TRIP_STATUS.IN_TRANSIT}')
          AND  deleted_at IS NULL
        LIMIT  1`,
       [id]

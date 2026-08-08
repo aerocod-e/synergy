@@ -1,5 +1,6 @@
 import pool from '../db/connection.js';
 import { type Request, type Response } from 'express';
+import { TRIP_STATUS } from '../constants/tripStatus.js';
 
 export async function getTripAdminAudit(req: Request, res: Response): Promise<void> {
   const stateEntityId = req.user!.entityId;
@@ -135,14 +136,14 @@ export async function getTripAdminAudit(req: Request, res: Response): Promise<vo
     const tripAdmins = taRes.rows.map((ta: any) => {
       const trips    = tripsByTA.get(ta.id) ?? [];
       const crCounts = crByTA.get(ta.id) ?? { total: 0, approved: 0, rejected: 0 };
-      const cancelled = trips.filter((t) => t.status === 'cancelled').length;
+      const cancelled = trips.filter((t) => t.status === TRIP_STATUS.CANCELLED).length;
       const summary = {
         totalTrips:            trips.length,
-        completed:             trips.filter((t) => t.status === 'completed').length,
+        completed:             trips.filter((t) => t.status === TRIP_STATUS.COMPLETED).length,
         cancelled,
-        inTransit:             trips.filter((t) => t.status === 'in_transit').length,
-        created:               trips.filter((t) => t.status === 'created').length,
-        cancellationPending:   trips.filter((t) => t.status === 'cancellation_pending').length,
+        inTransit:             trips.filter((t) => t.status === TRIP_STATUS.IN_TRANSIT).length,
+        created:               trips.filter((t) => t.status === TRIP_STATUS.CREATED).length,
+        cancellationPending:   trips.filter((t) => t.status === TRIP_STATUS.CANCELLATION_PENDING).length,
         totalRevenue:          trips.reduce((s: number, t) => s + Number(t.total_fees), 0),
         directCancellations:   Math.max(0, cancelled - crCounts.approved),
         approvalCancellations: crCounts.total,
@@ -285,11 +286,11 @@ export async function getDriverAudit(req: Request, res: Response): Promise<void>
       const trips = tripsByDriver.get(d.id) ?? [];
       const summary = {
         totalTrips:          trips.length,
-        completed:           trips.filter((t) => t.status === 'completed').length,
-        cancelled:           trips.filter((t) => t.status === 'cancelled').length,
-        inTransit:           trips.filter((t) => t.status === 'in_transit').length,
-        created:             trips.filter((t) => t.status === 'created').length,
-        cancellationPending: trips.filter((t) => t.status === 'cancellation_pending').length,
+        completed:           trips.filter((t) => t.status === TRIP_STATUS.COMPLETED).length,
+        cancelled:           trips.filter((t) => t.status === TRIP_STATUS.CANCELLED).length,
+        inTransit:           trips.filter((t) => t.status === TRIP_STATUS.IN_TRANSIT).length,
+        created:             trips.filter((t) => t.status === TRIP_STATUS.CREATED).length,
+        cancellationPending: trips.filter((t) => t.status === TRIP_STATUS.CANCELLATION_PENDING).length,
         totalRevenue:        trips.reduce((s: number, t) => s + Number(t.total_fees), 0),
       };
       return {
@@ -423,11 +424,11 @@ export async function getVehicleAudit(req: Request, res: Response): Promise<void
       const trips = tripsByVehicle.get(v.id) ?? [];
       const summary = {
         totalTrips:           trips.length,
-        completed:            trips.filter((t) => t.status === 'completed').length,
-        cancelled:            trips.filter((t) => t.status === 'cancelled').length,
-        inTransit:            trips.filter((t) => t.status === 'in_transit').length,
-        created:              trips.filter((t) => t.status === 'created').length,
-        cancellationPending:  trips.filter((t) => t.status === 'cancellation_pending').length,
+        completed:            trips.filter((t) => t.status === TRIP_STATUS.COMPLETED).length,
+        cancelled:            trips.filter((t) => t.status === TRIP_STATUS.CANCELLED).length,
+        inTransit:            trips.filter((t) => t.status === TRIP_STATUS.IN_TRANSIT).length,
+        created:              trips.filter((t) => t.status === TRIP_STATUS.CREATED).length,
+        cancellationPending:  trips.filter((t) => t.status === TRIP_STATUS.CANCELLATION_PENDING).length,
         totalRevenue:         trips.reduce((s, t) => s + Number(t.total_fees), 0),
       };
       return {

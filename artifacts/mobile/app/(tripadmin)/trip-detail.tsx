@@ -9,6 +9,7 @@ import { getTripById, startTrip, completeTrip } from '@/services/api';
 import TripDetailView, { type TripDetail } from '@/components/TripDetailView';
 import { formatNaira } from '@/utils/formatCurrency';
 import { confirmAction, notifyAction } from '@/utils/confirmAction';
+import { TRIP_ADMIN_STATUS_LABELS, TRIP_STATUS } from '@/constants/tripStatus';
 
 // ── Share helpers ────────────────────────────────────────────────────────────
 
@@ -35,13 +36,7 @@ const shareWithTimeout = async (
   }
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  created:              'Created',
-  in_transit:           'In Transit',
-  completed:            'Completed',
-  cancelled:            'Cancelled',
-  cancellation_pending: 'Pending Cancel',
-};
+const STATUS_LABELS = TRIP_ADMIN_STATUS_LABELS;
 
 function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -50,8 +45,8 @@ function fmtDate(iso: string): string {
 // ── Proof of Payment PDF builder ─────────────────────────────────────────────
 
 function buildProofOfPaymentHtml(trip: TripDetail, includeZeroFee: boolean): string {
-  const statusLabel = STATUS_LABELS[trip.status] ?? trip.status;
-  const isCancelled = trip.status === 'cancelled';
+  const statusLabel = STATUS_LABELS[trip.status as keyof typeof STATUS_LABELS] ?? trip.status;
+  const isCancelled = trip.status === TRIP_STATUS.CANCELLED;
 
   const paidFees = trip.fees.filter((f) => f.feeType !== 'cancellation_reversal');
   const total = paidFees.reduce((sum, f) => sum + f.amount, 0);
@@ -307,7 +302,7 @@ export default function TripAdminTripDetail() {
     </>
   );
 
-  const showActions = trip.status === 'created' || trip.status === 'in_transit';
+  const showActions = trip.status === TRIP_STATUS.CREATED || trip.status === TRIP_STATUS.IN_TRANSIT;
 
   return (
     <View style={styles.root}>
@@ -323,7 +318,7 @@ export default function TripAdminTripDetail() {
             </View>
           )}
 
-          {trip.status === 'created' && (
+          {trip.status === TRIP_STATUS.CREATED && (
             <TouchableOpacity
               style={[styles.actionBtn, styles.actionBtnGreen, actionLoading && styles.actionBtnDisabled]}
               onPress={handleStart}
@@ -337,7 +332,7 @@ export default function TripAdminTripDetail() {
             </TouchableOpacity>
           )}
 
-          {trip.status === 'in_transit' && (
+          {trip.status === TRIP_STATUS.IN_TRANSIT && (
             <TouchableOpacity
               style={[styles.actionBtn, styles.actionBtnGreen, actionLoading && styles.actionBtnDisabled]}
               onPress={handleComplete}

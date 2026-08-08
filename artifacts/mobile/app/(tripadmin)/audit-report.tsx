@@ -18,6 +18,11 @@ import TopBar from '@/components/TopBar';
 import { getDriverAudit, getTripAdminAudit, getVehicleAudit } from '@/services/api';
 import { formatNaira } from '@/utils/formatCurrency';
 import { notifyAction } from '@/utils/confirmAction';
+import {
+  TRIP_ADMIN_STATUS_BADGE_COLORS,
+  TRIP_ADMIN_STATUS_LABELS,
+  TRIP_STATUSES,
+} from '@/constants/tripStatus';
 
 // ── Share helpers ────────────────────────────────────────────────────────────
 
@@ -90,23 +95,11 @@ interface AuditData {
 
 // ── Status helpers ────────────────────────────────────────────────────────────
 
-const STATUS_LABELS: Record<string, string> = {
-  created:              'Created',
-  in_transit:           'In Transit',
-  completed:            'Completed',
-  cancelled:            'Cancelled',
-  cancellation_pending: 'Pending Cancel',
-};
+const STATUS_LABELS = TRIP_ADMIN_STATUS_LABELS;
 
-const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
-  created:              { bg: theme.colors.blueMuted,  text: theme.colors.blueText },
-  in_transit:           { bg: '#fef3c7',               text: '#d97706' },
-  completed:            { bg: theme.colors.greenMuted, text: theme.colors.greenText },
-  cancelled:            { bg: theme.colors.grey3,      text: theme.colors.grey1 },
-  cancellation_pending: { bg: '#fff4ed',               text: '#ea580c' },
-};
+const STATUS_STYLES = TRIP_ADMIN_STATUS_BADGE_COLORS;
 
-const ALL_STATUSES = ['created', 'in_transit', 'completed', 'cancelled', 'cancellation_pending'];
+const ALL_STATUSES: string[] = TRIP_STATUSES.slice();
 
 // ── Date preset helpers ───────────────────────────────────────────────────────
 
@@ -240,7 +233,7 @@ function buildHtml(data: AuditData, title: string, isSingle: boolean, entityType
       <td>${t.tripCode ?? '—'}</td>
       <td>${fmtDate(t.date)}</td>
       <td>${t.loadingState ?? '—'} → ${t.unloadingState ?? '—'}</td>
-      <td>${STATUS_LABELS[t.status] ?? t.status}</td>
+      <td>${STATUS_LABELS[t.status as keyof typeof STATUS_LABELS] ?? t.status}</td>
       <td>${((isDriver || isTripAdmin) ? t.vehicleReg : t.driverName) ?? '—'}</td>
       <td>${formatNaira(t.totalFees)}</td>
     </tr>`).join('');
@@ -425,14 +418,14 @@ export default function AuditReportScreen() {
   );
 
   const renderTripRow = (t: TripEntry) => {
-    const ss = STATUS_STYLES[t.status] ?? { bg: theme.colors.grey3, text: theme.colors.grey1 };
+    const ss = STATUS_STYLES[t.status as keyof typeof STATUS_STYLES] ?? { bg: theme.colors.grey3, text: theme.colors.grey1 };
     return (
       <View key={t.id} style={styles.tripRow}>
         <View style={styles.tripRowTop}>
           <Text style={styles.tripCode}>{t.tripCode ?? '—'}</Text>
           <View style={[styles.statusBadge, { backgroundColor: ss.bg }]}>
             <Text style={[styles.statusBadgeText, { color: ss.text }]}>
-              {STATUS_LABELS[t.status] ?? t.status}
+              {STATUS_LABELS[t.status as keyof typeof STATUS_LABELS] ?? t.status}
             </Text>
           </View>
         </View>
@@ -535,7 +528,7 @@ export default function AuditReportScreen() {
               <Text style={[styles.statusPillText, !statusFilter && styles.statusPillTextActive]}>All</Text>
             </TouchableOpacity>
             {ALL_STATUSES.map((s) => {
-              const ss = STATUS_STYLES[s] ?? { bg: theme.colors.grey3, text: theme.colors.grey1 };
+              const ss = STATUS_STYLES[s as keyof typeof STATUS_STYLES] ?? { bg: theme.colors.grey3, text: theme.colors.grey1 };
               const isActive = statusFilter === s;
               return (
                 <TouchableOpacity
@@ -548,7 +541,7 @@ export default function AuditReportScreen() {
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.statusPillText, isActive && { color: ss.text, fontWeight: '700' }]}>
-                    {STATUS_LABELS[s]}
+                    {STATUS_LABELS[s as keyof typeof STATUS_LABELS]}
                   </Text>
                 </TouchableOpacity>
               );

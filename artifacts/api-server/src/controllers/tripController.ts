@@ -1,5 +1,6 @@
 import { type Request, type Response } from "express";
 import pool from "../db/connection.js";
+import { TRIP_STATUS } from "../constants/tripStatus.js";
 
 interface CreateTripBody {
   vehicleId?: unknown;
@@ -198,7 +199,7 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
     const dupRes = await client.query<{ id: string }>(
       `SELECT id FROM trips
        WHERE vehicle_id = $1
-         AND status IN ('created', 'in_transit')
+         AND status IN ('${TRIP_STATUS.CREATED}', '${TRIP_STATUS.IN_TRANSIT}')
          AND deleted_at IS NULL
        LIMIT 1`,
       [vehicleId]
@@ -419,13 +420,13 @@ export async function startTrip(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    if (trip.status !== "created") {
+    if (trip.status !== TRIP_STATUS.CREATED) {
       res.status(409).json({ error: "CONFLICT", message: "Trip cannot be started from its current status" });
       return;
     }
 
     await pool.query(
-      `UPDATE trips SET status = 'in_transit', updated_at = NOW() WHERE id = $1`,
+      `UPDATE trips SET status = '${TRIP_STATUS.IN_TRANSIT}', updated_at = NOW() WHERE id = $1`,
       [tripId]
     );
 
@@ -433,13 +434,13 @@ export async function startTrip(req: Request, res: Response): Promise<void> {
       `INSERT INTO trip_events (trip_id, event_type, performed_by, metadata)
        VALUES ($1, 'started', $2, $3::jsonb)
        RETURNING created_at`,
-      [tripId, callerId, JSON.stringify({ previousStatus: "created" })]
+      [tripId, callerId, JSON.stringify({ previousStatus: TRIP_STATUS.CREATED })]
     );
 
     res.json({
       data: {
         tripId,
-        status: "in_transit",
+        status: TRIP_STATUS.IN_TRANSIT,
         startedAt: event!.created_at,
       },
       message: "Trip started",
@@ -476,13 +477,13 @@ export async function completeTrip(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    if (trip.status !== "in_transit") {
+    if (trip.status !== TRIP_STATUS.IN_TRANSIT) {
       res.status(409).json({ error: "CONFLICT", message: "Trip cannot be completed from its current status" });
       return;
     }
 
     await pool.query(
-      `UPDATE trips SET status = 'completed', updated_at = NOW() WHERE id = $1`,
+      `UPDATE trips SET status = '${TRIP_STATUS.COMPLETED}', updated_at = NOW() WHERE id = $1`,
       [tripId]
     );
 
@@ -490,13 +491,13 @@ export async function completeTrip(req: Request, res: Response): Promise<void> {
       `INSERT INTO trip_events (trip_id, event_type, performed_by, metadata)
        VALUES ($1, 'completed', $2, $3::jsonb)
        RETURNING created_at`,
-      [tripId, callerId, JSON.stringify({ previousStatus: "in_transit" })]
+      [tripId, callerId, JSON.stringify({ previousStatus: TRIP_STATUS.IN_TRANSIT })]
     );
 
     res.json({
       data: {
         tripId,
-        status: "completed",
+        status: TRIP_STATUS.COMPLETED,
         completedAt: event!.created_at,
       },
       message: "Trip completed",
@@ -521,7 +522,7 @@ export async function listTrips(req: Request, res: Response): Promise<void> {
   const limit  = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100) : 20;
   const offset = (page - 1) * limit;
 
-  const validStatuses = ["created", "in_transit", "completed", "cancelled"];
+  const validStatuses: string[] = [TRIP_STATUS.CREATED, TRIP_STATUS.IN_TRANSIT, TRIP_STATUS.COMPLETED, TRIP_STATUS.CANCELLED];
   if (statusFilter && !validStatuses.includes(statusFilter)) {
     res.status(400).json({ error: "BAD_REQUEST", message: "Invalid status filter" });
     return;
@@ -586,7 +587,7 @@ export async function listTrips(req: Request, res: Response): Promise<void> {
         ? pool.query<{ count: string }>(
             `SELECT COUNT(*) AS count
              FROM trips
-             WHERE status = 'created'
+             WHERE status = '${TRIP_STATUS.CREATED}'
                AND created_at < NOW() - INTERVAL '2 hours'`
           )
         : Promise.resolve(null),
@@ -631,7 +632,7 @@ export async function listTrips(req: Request, res: Response): Promise<void> {
            d.id    AS driver_id,
            d.email AS driver_email,
            ${isSuperAdmin
-             ? "(t.status = 'created' AND t.created_at < NOW() - INTERVAL '2 hours')"
+             ? `(t.status = '${TRIP_STATUS.CREATED}' AND t.created_at < NOW() - INTERVAL '2 hours')`
              : "NULL"
            } AS unstarted_flag,
            u.first_name || ' ' || u.last_name AS created_by_name,
@@ -732,7 +733,7 @@ export async function getTripById(req: Request, res: Response): Promise<void> {
          us.id   AS unloading_state_id,
          us.name AS unloading_state_name,
          us.code AS unloading_state_code,
-         (t.status = 'created' AND t.created_at < NOW() - INTERVAL '2 hours') AS unstarted_flag,
+         (t.status = '${TRIP_STATUS.CREATED}' AND t.created_at < NOW() - INTERVAL '2 hours') AS unstarted_flag,
          u.first_name || ' ' || u.last_name AS created_by_name,
          u.email AS created_by_email
        FROM trips t

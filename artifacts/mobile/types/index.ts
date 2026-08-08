@@ -18,7 +18,8 @@ export interface AuthTokens {
   refreshToken: string;
 }
 
-export type TripStatus = 'created' | 'in_transit' | 'completed' | 'cancelled' | 'cancellation_pending';
+import type { TripStatus } from '@/constants/tripStatus';
+export type { TripStatus };
 
 export type FeeType = 'loading' | 'unloading' | 'stakeholder_fee';
 

@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { theme } from '@/constants/theme';
 import { searchPublicTrips } from '@/services/api';
+import { PUBLIC_TRIP_STATUS_BADGE_COLORS, TRIP_STATUS_LABELS } from '@/constants/tripStatus';
 
 type FeeStatus = 'paid' | 'pending' | 'reversed';
 
@@ -44,20 +45,6 @@ interface TripResult {
   paymentStatus: TripPaymentStatus;
 }
 
-const TRIP_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  created:    { bg: '#fef3c7', text: '#d97706' },
-  in_transit: { bg: '#dbeafe', text: '#1a6ec8' },
-  completed:  { bg: '#d1fae5', text: '#15803d' },
-  cancelled:  { bg: '#fee2e2', text: '#dc2626' },
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  created:    'Created',
-  in_transit: 'In Transit',
-  completed:  'Completed',
-  cancelled:  'Cancelled',
-};
-
 function PaymentBadge({ status }: { status: FeeStatus }) {
   if (status === 'reversed') {
     return (
@@ -85,7 +72,7 @@ function TripCard({
   expanded: boolean;
   onToggle: () => void;
 }) {
-  const statusStyle = TRIP_STATUS_COLORS[trip.status] ?? TRIP_STATUS_COLORS.created!;
+  const statusStyle = PUBLIC_TRIP_STATUS_BADGE_COLORS[trip.status as keyof typeof PUBLIC_TRIP_STATUS_BADGE_COLORS] ?? PUBLIC_TRIP_STATUS_BADGE_COLORS.created;
   const date = new Date(trip.createdAt).toLocaleDateString('en-NG', {
     day: 'numeric',
     month: 'short',
@@ -99,7 +86,7 @@ function TripCard({
         <Text style={styles.tripCode}>{trip.tripCode ?? trip.id.slice(0, 8).toUpperCase()}</Text>
         <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
           <Text style={[styles.statusText, { color: statusStyle.text }]}>
-            {STATUS_LABELS[trip.status] ?? trip.status}
+            {TRIP_STATUS_LABELS[trip.status as keyof typeof TRIP_STATUS_LABELS] ?? trip.status}
           </Text>
         </View>
       </View>

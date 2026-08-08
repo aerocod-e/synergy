@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import type { PoolClient } from "pg";
 import pool from "../db/connection.js";
+import { TRIP_STATUS } from "../constants/tripStatus.js";
 
 // ── Shared wallet reversal + cancel helper ───────────────────────────────────
 
@@ -50,7 +51,7 @@ async function applyWalletReversal(
 
   await client.query(
     `UPDATE trips
-     SET status = 'cancelled', updated_at = NOW()
+     SET status = '${TRIP_STATUS.CANCELLED}', updated_at = NOW()
      WHERE id = $1`,
     [tripId]
   );
@@ -101,9 +102,9 @@ export async function requestCancellation(req: Request, res: Response): Promise<
     const trip = tripRows[0]!;
 
     if (
-      trip.status === "completed" ||
-      trip.status === "cancelled" ||
-      trip.status === "cancellation_pending"
+      trip.status === TRIP_STATUS.COMPLETED ||
+      trip.status === TRIP_STATUS.CANCELLED ||
+      trip.status === TRIP_STATUS.CANCELLATION_PENDING
     ) {
       res.status(409).json({
         error: "CONFLICT",
@@ -142,7 +143,7 @@ export async function requestCancellation(req: Request, res: Response): Promise<
       res.status(200).json({
         data: {
           tripId,
-          status: "cancelled",
+          status: TRIP_STATUS.CANCELLED,
           immediate: true,
           reversedEntries,
           walletsRestored,
@@ -161,9 +162,9 @@ export async function requestCancellation(req: Request, res: Response): Promise<
         [tripId]
       );
       if (
-        lockedTrip[0]?.status === "completed" ||
-        lockedTrip[0]?.status === "cancelled" ||
-        lockedTrip[0]?.status === "cancellation_pending"
+        lockedTrip[0]?.status === TRIP_STATUS.COMPLETED ||
+        lockedTrip[0]?.status === TRIP_STATUS.CANCELLED ||
+        lockedTrip[0]?.status === TRIP_STATUS.CANCELLATION_PENDING
       ) {
         await client.query("ROLLBACK");
         res.status(409).json({
@@ -197,7 +198,7 @@ export async function requestCancellation(req: Request, res: Response): Promise<
       const cancellationRequest = reqRows[0]!;
 
       await client.query(
-        `UPDATE trips SET status = 'cancellation_pending', updated_at = NOW() WHERE id = $1`,
+        `UPDATE trips SET status = '${TRIP_STATUS.CANCELLATION_PENDING}', updated_at = NOW() WHERE id = $1`,
         [tripId]
       );
 
