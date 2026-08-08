@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  ScrollView,
 } from 'react-native';
 import { theme } from '@/constants/theme';
 import { searchDrivers, createDriver } from '@/services/api';
@@ -154,93 +153,86 @@ export default function DriverSearchInput({ value, onSelect, placeholder }: Prop
 
       {showDropdown && (
         <View style={styles.dropdown}>
-          <ScrollView
-            style={styles.dropdownScroll}
-            keyboardShouldPersistTaps="handled"
-            nestedScrollEnabled
-            showsVerticalScrollIndicator={true}
-          >
-            {results.map((driver) => (
-              <TouchableOpacity
-                key={driver.id}
-                style={styles.dropdownRow}
-                onPress={() => handleSelect(driver)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.driverName}>{driver.fullName}</Text>
-                <Text style={styles.driverSub}>
-                  {driver.licenseNumber} · {driver.phoneNumber}
-                </Text>
-              </TouchableOpacity>
-            ))}
+          {results.map((driver) => (
+            <TouchableOpacity
+              key={driver.id}
+              style={styles.dropdownRow}
+              onPress={() => handleSelect(driver)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.driverName}>{driver.fullName}</Text>
+              <Text style={styles.driverSub}>
+                {driver.licenseNumber} · {driver.phoneNumber}
+              </Text>
+            </TouchableOpacity>
+          ))}
 
-            {results.length === 0 && !showRegisterForm && (
-              <TouchableOpacity
-                style={[styles.dropdownRow, styles.registerRow]}
-                onPress={handleOpenRegisterForm}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.registerText}>Register new driver…</Text>
-              </TouchableOpacity>
-            )}
+          {results.length === 0 && !showRegisterForm && (
+            <TouchableOpacity
+              style={[styles.dropdownRow, styles.registerRow]}
+              onPress={handleOpenRegisterForm}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.registerText}>Register new driver…</Text>
+            </TouchableOpacity>
+          )}
 
-            {showRegisterForm && (
-              <View style={styles.registerForm}>
-                <TextInput
-                  style={styles.formInput}
-                  value={regName}
-                  onChangeText={setRegName}
-                  placeholder="Full Name"
-                  placeholderTextColor={theme.colors.grey1}
-                  autoCorrect={false}
-                />
-                <TextInput
-                  style={styles.formInput}
-                  value={regLicense}
-                  onChangeText={setRegLicense}
-                  placeholder="License Number"
-                  placeholderTextColor={theme.colors.grey1}
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                />
-                <TextInput
-                  style={styles.formInput}
-                  value={regPhone}
-                  onChangeText={setRegPhone}
-                  placeholder="Phone Number"
-                  placeholderTextColor={theme.colors.grey1}
-                  keyboardType="phone-pad"
-                  autoCorrect={false}
-                />
-                <DateField
-                  value={regExpiry}
-                  onChange={setRegExpiry}
-                  placeholder="License Expiry Date"
-                  style={styles.formInput}
-                />
+          {showRegisterForm && (
+            <View style={styles.registerForm}>
+              <TextInput
+                style={styles.formInput}
+                value={regName}
+                onChangeText={setRegName}
+                placeholder="Full Name"
+                placeholderTextColor={theme.colors.grey1}
+                autoCorrect={false}
+              />
+              <TextInput
+                style={styles.formInput}
+                value={regLicense}
+                onChangeText={setRegLicense}
+                placeholder="License Number"
+                placeholderTextColor={theme.colors.grey1}
+                autoCapitalize="characters"
+                autoCorrect={false}
+              />
+              <TextInput
+                style={styles.formInput}
+                value={regPhone}
+                onChangeText={setRegPhone}
+                placeholder="Phone Number"
+                placeholderTextColor={theme.colors.grey1}
+                keyboardType="phone-pad"
+                autoCorrect={false}
+              />
+              <DateField
+                value={regExpiry}
+                onChange={setRegExpiry}
+                placeholder="License Expiry Date"
+                style={styles.formInput}
+              />
 
-                {registerError && (
-                  <Text style={styles.formError}>{registerError}</Text>
-                )}
+              {registerError && (
+                <Text style={styles.formError}>{registerError}</Text>
+              )}
 
-                {registering ? (
-                  <ActivityIndicator
-                    size="small"
-                    color={theme.colors.primary}
-                    style={{ marginTop: 10, alignSelf: 'center' }}
-                  />
-                ) : (
-                  <TouchableOpacity
-                    style={styles.submitBtn}
-                    onPress={handleSubmitRegister}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.submitBtnText}>Register Driver</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
-          </ScrollView>
+              {registering ? (
+                <ActivityIndicator
+                  size="small"
+                  color={theme.colors.primary}
+                  style={{ marginTop: 10, alignSelf: 'center' }}
+                />
+              ) : (
+                <TouchableOpacity
+                  style={styles.submitBtn}
+                  onPress={handleSubmitRegister}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.submitBtnText}>Register Driver</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
         </View>
       )}
     </View>
@@ -275,11 +267,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: theme.colors.white,
     overflow: 'hidden',
-    maxHeight: 260,
     ...theme.shadows.card,
-  },
-  dropdownScroll: {
-    maxHeight: 260,
   },
   dropdownRow: {
     paddingHorizontal: 16,
