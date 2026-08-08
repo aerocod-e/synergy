@@ -1,0 +1,48 @@
+Build Feature A, Bulk Payment Records. Follow all steps in order.
+
+Backend
+
+Add a new database table, bulk_payments, with columns: id UUID primary key, company_name VARCHAR NOT NULL, total_amount INTEGER NOT NULL (kobo), expiry_date DATE NOT NULL, created_by UUID REFERENCES users(id), status VARCHAR NOT NULL DEFAULT 'active' (values: active, reversed), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), reversal_deadline TIMESTAMPTZ NOT NULL (set to created_at plus 2 hours at insert time).
+
+Add a second table, bulk_payment_shares, columns: id UUID primary key, bulk_payment_id UUID REFERENCES bulk_payments(id), recipient_type VARCHAR NOT NULL ('state' or 'stakeholder'), recipient_id UUID NOT NULL, percentage NUMERIC(5,2) NOT NULL, amount INTEGER NOT NULL (kobo, computed at save time from percentage times total_amount).
+
+Create bulkPaymentController.ts with these functions, all guarded authenticateToken, requireRole("super_admin"):
+
+createBulkPayment, accepts companyName, totalAmount (Naira, convert to kobo), expiryDate, and an array of shares, each with recipientType, recipientId, percentage. Validate the sum of all percentages equals exactly 100.00, reject with a clear message if not. Validate every recipientId actually exists in states or stakeholders depending on recipientType, and that every stakeholder is currently active. Inside a single transaction: insert the bulk_payments row, insert one bulk_payment_shares row per share with its computed amount, for each share credit the matching wallet by incrementing total_collected, and insert one wallet_ledger row per share with entry_type 'credit', trip_id NULL, trip_fee_id NULL, and a new nullable column bulk_payment_id added to wallet_ledger referencing this bulk payment, so the ledger entry is traceable back to it without needing a trip.
+
+listBulkPayments, returns every bulk payment record with its shares, ordered newest first, including whether it is currently within its reversal window (reversal_deadline compared to now) and whether its expiry_date has passed (expired: true/false, computed at read time, not stored).
+
+reverseBulkPayment, accepts an id, checks status is still active and now is before reversal_deadline, if not return 409 with a clear message. Inside a transaction, for every share on this bulk payment, insert a new wallet_ledger row with entry_type 'reversal', amount negated, same bulk_payment_id, decrement the wallet's total_collected by that share's amount, following the exact same pattern already used in applyWalletReversal in cancellationController.ts. Set the bulk_payments row's status to reversed. Never delete the original credit rows.
+
+removeBulkPayment, accepts an id, this is a pure archive action, add a new boolean column archived to bulk_payments defaulting false, this endpoint only sets archived to true, it must never touch wallet_ledger or wallets under any circumstance, regardless of whether the record is inside or outside its reversal window.
+
+Register all four under a new route file routes/bulkPayments.ts, mounted at /api/bulk-payments.
+
+Update getMyLedger in walletController.ts, for both state_admin and stakeholder roles, so a ledger entry with a non-null bulk_payment_id also returns companyName, and every other share on that same bulk payment (recipient name, recipient type, percentage, amount), shaped the same way tripFees is already shaped on a normal ledger entry, so the existing shared frontend breakdown component can consume it with minimal change.
+
+Also update the vehicle type fee validation in vehicleTypeController.ts, change isPositiveInt's check from v > 0 to v >= 0 for loadingFee and unloadingFee on both create and update, keep rejecting negative and non-integer values.
+
+Frontend
+
+Add a new section to artifacts/mobile/app/(superadmin)/config.tsx, titled Bulk Payments, positioned after the existing Pricing Chart section. This section has its own Add Bulk Payment button opening a modal with: company name text input, total amount Naira input, expiry date picker, then a scrollable list of every active state and every active stakeholder as a row with a toggle switch, toggling a row on reveals a percentage input on that same row. Below the list show a running total of all currently enabled percentages, updating live as the admin types, colored red if not equal to 100.00 and green once it equals exactly 100.00. The Save button is disabled until the total is exactly 100.00 and at least one row is enabled.
+
+Below the Add Bulk Payment button, show the existing bulk payment history as a list of cards, each showing company name, total amount, created date, expiry date with a clear Expired label if passed, and status. If a record is within its reversal window, show a Reverse Payment button with a live countdown or a simple time-remaining label, tapping it confirms then calls the reversal endpoint. Every record, regardless of window status, has a Remove from List action that calls the archive endpoint and hides it from this list without any confirmation dialog needed beyond the standard pattern already used elsewhere in this app for destructive actions.
+
+Add getBulkPayments, createBulkPayment, reverseBulkPayment, removeBulkPayment helpers to services/api.ts.
+
+Update components/LedgerDetailView.tsx to handle an entry where bulkPaymentId is present, in this case render company name in place of the trip route header, and render the share breakdown reusing the exact same visual pattern already used for tripFees, with the viewer's own share highlighted exactly as it already is for trip payments. Guard every place this component currently assumes a trip exists, vehicleNumber, vehicleTypeName, loadingStateName, unloadingStateName, so it renders correctly when those fields are absent on a bulk payment entry.
+
+TypeScript check
+
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+
+Both must return zero errors.
+
+Testing
+
+Backend tests: create a bulk payment with three shares summing to exactly 100, confirm success and confirm all three wallets were credited correctly. Attempt one summing to 99.99, confirm rejection. Reverse a payment within its window, confirm wallets decrement back and ledger shows the reversal entries. Attempt to reverse one outside its window, confirm 409. Archive a record and confirm wallets are untouched. Confirm a vehicle type can now be created or updated with a fee of exactly 0.
+
+Frontend tests, 390x844px, tap only: as Super Admin, open Config, add a bulk payment with three shares, confirm the running total turns green only at exactly 100, save, confirm it appears in history. As State Admin and separately as Stakeholder, open the wallet ledger, confirm the bulk payment credit appears distinctly labeled, tap it, confirm the breakdown screen shows the company name and every share correctly with the viewer's own share highlighted. Reverse a payment within the window as Super Admin, confirm it disappears from wallet balances correctly. Console clean throughout.
+
+Report every file changed and every test result.
