@@ -1,0 +1,28 @@
+Fix two related navigation bugs found during investigation. Do not change anything else.
+
+Fix 1, the routing collision
+
+Six top level route groups, (profile), (stakeholder), (stateadmin), (superadmin), (tripadmin), (tabs), all currently resolve to the exact same root path, /, because Expo Router strips group name parentheses when generating routes, and each group's own index screen claims that same bare path. On any cold app start or full reload, the router cannot tell these apart and deterministically picks (profile), the alphabetically first candidate, regardless of the logged in user's actual role.
+
+Fix this at the source, not by working around the symptom. Confirm whether app/_layout.tsx or a similar root entry point already has explicit logic intended to redirect a logged in user to their correct role group, and if so, why that logic is not currently preventing this, since the investigation found it treats (profile) as an always-allowed exception and therefore never corrects an already-wrong resolution landing there.
+
+The correct fix is to remove the ambiguity itself, not add another special case. Ensure the true landing route, the bare root path with no group, has exactly one unambiguous owner, most likely a single dedicated entry redirect screen, or ensure app/_layout.tsx's initial redirect logic runs before the router settles on any group's index screen, actively sending a freshly restored session straight to that user's correct role group every time, rather than only correcting a mismatch after the fact. Confirm your chosen approach does not reintroduce the same ambiguity for unauthenticated users landing on (public) or (auth).
+
+Fix 2, the back button
+
+In app/(profile)/index.tsx, the back button currently calls router.back() unconditionally. Change this to check router.canGoBack() first. If true, call router.back() as it already does. If false, meaning there is nothing to go back to, navigate explicitly to that user's correct role home screen instead of doing nothing or throwing a navigation warning.
+
+Testing
+
+Test 1, as each of the four roles, Super Admin, State Admin, Trip Admin, Stakeholder, log in normally, confirm landing on the correct home screen, this should already work and must not regress.
+
+Test 2, as each of the four roles, once logged in, trigger a full reload, browser hard refresh in the web preview, and separately confirm the equivalent native reload path if testable in this environment. Confirm every role now correctly lands back on their own home screen, not the profile screen, and not any other role's screen.
+
+Test 3, as any role, navigate directly to the profile screen by tapping the avatar, with no other navigation history before it, meaning this is the first screen visited this session, tap the back button, confirm it correctly returns to that role's home screen rather than doing nothing or showing a warning.
+
+Test 4, confirm normal back navigation still works exactly as before whenever there is real navigation history to go back to, this fix must only change behavior in the specific empty-history case.
+
+Run
+pnpm --filter @workspace/mobile exec tsc --noEmit
+
+Must return zero errors. Console clean throughout all tests. Report the exact fix applied for the routing collision, the file changed for the back button fix, and every test result.
