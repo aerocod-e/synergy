@@ -66,6 +66,8 @@ const STATUS_BADGE: Record<TripStatus, { bg: string; text: string; label: string
   in_transit: { ...ADMIN_TRIP_STATUS_BADGE_COLORS.in_transit, label: TRIP_STATUS_LABELS.in_transit },
   completed:  { ...ADMIN_TRIP_STATUS_BADGE_COLORS.completed,  label: TRIP_STATUS_LABELS.completed },
   cancelled:  { ...ADMIN_TRIP_STATUS_BADGE_COLORS.cancelled,  label: TRIP_STATUS_LABELS.cancelled },
+  breakdown:  { ...ADMIN_TRIP_STATUS_BADGE_COLORS.breakdown,  label: TRIP_STATUS_LABELS.breakdown },
+  transshipment_in_transit: { ...ADMIN_TRIP_STATUS_BADGE_COLORS.transshipment_in_transit, label: TRIP_STATUS_LABELS.transshipment_in_transit },
 };
 
 function formatDate(dateStr: string): string {

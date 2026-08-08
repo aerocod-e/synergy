@@ -20,6 +20,8 @@ export const TRIP_STATUSES = [
   'completed',
   'cancelled',
   'cancellation_pending',
+  'breakdown',
+  'transshipment_in_transit',
 ] as const;
 
 export type TripStatus = (typeof TRIP_STATUSES)[number];
@@ -31,6 +33,8 @@ export const TRIP_STATUS = {
   COMPLETED: 'completed',
   CANCELLED: 'cancelled',
   CANCELLATION_PENDING: 'cancellation_pending',
+  BREAKDOWN: 'breakdown',
+  TRANSSHIPMENT_IN_TRANSIT: 'transshipment_in_transit',
 } as const satisfies Record<string, TripStatus>;
 
 // ── Labels ───────────────────────────────────────────────────────────────────
@@ -44,6 +48,8 @@ export const TRIP_STATUS_LABELS: Record<TripStatus, string> = {
   completed: 'Completed',
   cancelled: 'Cancelled',
   cancellation_pending: 'Pending Cancellation',
+  breakdown: 'Broken Down',
+  transshipment_in_transit: 'Transshipment',
 };
 
 /**
@@ -60,7 +66,14 @@ export const TRIP_ADMIN_STATUS_LABELS: Record<TripStatus, string> = {
 // Shared by every screen with a filter-pill row. None of these expose
 // "Pending Cancellation" as a filter option today.
 
-export type TripStatusFilterOption = 'All' | 'Created' | 'In Transit' | 'Completed' | 'Cancelled';
+export type TripStatusFilterOption =
+  | 'All'
+  | 'Created'
+  | 'In Transit'
+  | 'Completed'
+  | 'Cancelled'
+  | 'Broken Down'
+  | 'Transshipment';
 
 export const TRIP_STATUS_FILTER_OPTIONS: TripStatusFilterOption[] = [
   'All',
@@ -68,6 +81,8 @@ export const TRIP_STATUS_FILTER_OPTIONS: TripStatusFilterOption[] = [
   'In Transit',
   'Completed',
   'Cancelled',
+  'Broken Down',
+  'Transshipment',
 ];
 
 export const TRIP_STATUS_FILTER_MAP: Record<TripStatusFilterOption, TripStatus | null> = {
@@ -76,6 +91,8 @@ export const TRIP_STATUS_FILTER_MAP: Record<TripStatusFilterOption, TripStatus |
   'In Transit': 'in_transit',
   Completed: 'completed',
   Cancelled: 'cancelled',
+  'Broken Down': 'breakdown',
+  Transshipment: 'transshipment_in_transit',
 };
 
 // ── Badge colors ─────────────────────────────────────────────────────────────
@@ -95,6 +112,8 @@ export const ADMIN_TRIP_STATUS_BADGE_COLORS: Record<TripStatus, TripStatusBadgeS
   completed: { bg: '#e8f5ec', text: '#2a8a4a' },
   cancelled: { bg: '#fdf0ed', text: '#c8401a' },
   cancellation_pending: { bg: '#fff4ed', text: '#ea580c' },
+  breakdown: { bg: '#ffedd5', text: '#c2410c' },
+  transshipment_in_transit: { bg: '#f3e8ff', text: '#7e22ce' },
 };
 
 /**
@@ -110,6 +129,8 @@ export const PUBLIC_TRIP_STATUS_BADGE_COLORS: Record<
   in_transit: { bg: '#dbeafe', text: '#1a6ec8' },
   completed: { bg: '#d1fae5', text: '#15803d' },
   cancelled: { bg: '#fee2e2', text: '#dc2626' },
+  breakdown: { bg: '#ffedd5', text: '#c2410c' },
+  transshipment_in_transit: { bg: '#f3e8ff', text: '#7e22ce' },
 };
 
 /**
@@ -123,4 +144,6 @@ export const TRIP_ADMIN_STATUS_BADGE_COLORS: Record<TripStatus, TripStatusBadgeS
   completed: { bg: theme.colors.greenMuted, text: theme.colors.greenText },
   cancelled: { bg: theme.colors.grey3, text: theme.colors.grey1 },
   cancellation_pending: { bg: '#fff4ed', text: '#ea580c' },
+  breakdown: { bg: '#ffedd5', text: '#c2410c' },
+  transshipment_in_transit: { bg: '#f3e8ff', text: '#7e22ce' },
 };

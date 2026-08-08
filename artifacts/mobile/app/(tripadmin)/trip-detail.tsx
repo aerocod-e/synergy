@@ -5,11 +5,13 @@ import { AlertCircle, ChevronLeft, ChevronRight, Download, Search } from 'lucide
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { theme } from '@/constants/theme';
-import { getTripById, startTrip, completeTrip } from '@/services/api';
+import { getTripById, startTrip, completeTrip, markTripBreakdown, markTransshipment } from '@/services/api';
 import TripDetailView, { type TripDetail } from '@/components/TripDetailView';
 import { formatNaira } from '@/utils/formatCurrency';
 import { confirmAction, notifyAction } from '@/utils/confirmAction';
 import { TRIP_ADMIN_STATUS_LABELS, TRIP_STATUS } from '@/constants/tripStatus';
+import VehicleSearchInput, { type Vehicle } from '@/components/VehicleSearchInput';
+import DriverSearchInput, { type Driver } from '@/components/DriverSearchInput';
 
 // ── Share helpers ────────────────────────────────────────────────────────────
 
@@ -131,6 +133,13 @@ export default function TripAdminTripDetail() {
   const [includeZeroFee, setIncludeZeroFee] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
 
+  const [replacementVehicle, setReplacementVehicle] = useState<Vehicle | null>(null);
+  const [vehicleInputValue, setVehicleInputValue] = useState('');
+  const [replacementDriver, setReplacementDriver] = useState<Driver | null>(null);
+  const [driverInputValue, setDriverInputValue] = useState('');
+  const [transshipmentLoading, setTransshipmentLoading] = useState(false);
+  const [transshipmentError, setTransshipmentError] = useState<string | null>(null);
+
   const fetchTrip = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -184,6 +193,54 @@ export default function TripAdminTripDetail() {
           setActionError(err?.message ?? 'Failed to update trip status. Please try again.');
         } finally {
           setActionLoading(false);
+        }
+      },
+    });
+  };
+
+  const handleMarkBreakdown = () => {
+    confirmAction({
+      title: 'Mark as Breakdown',
+      message: 'Are you sure you want to mark this trip as Broken Down? You will then need to select a replacement vehicle and/or driver.',
+      confirmText: 'Confirm',
+      onConfirm: async () => {
+        setActionLoading(true);
+        setActionError(null);
+        try {
+          await markTripBreakdown(id!);
+          await fetchTrip();
+        } catch (err: any) {
+          setActionError(err?.message ?? 'Failed to mark trip as broken down. Please try again.');
+        } finally {
+          setActionLoading(false);
+        }
+      },
+    });
+  };
+
+  const handleConfirmTransshipment = () => {
+    if (!replacementVehicle && !replacementDriver) return;
+    confirmAction({
+      title: 'Confirm Transshipment',
+      message: 'Are you sure you want to confirm this replacement? The trip will move to Transshipment status.',
+      confirmText: 'Confirm',
+      onConfirm: async () => {
+        setTransshipmentLoading(true);
+        setTransshipmentError(null);
+        try {
+          await markTransshipment(id!, {
+            newVehicleId: replacementVehicle?.id,
+            newDriverId: replacementDriver?.id,
+          });
+          setReplacementVehicle(null);
+          setVehicleInputValue('');
+          setReplacementDriver(null);
+          setDriverInputValue('');
+          await fetchTrip();
+        } catch (err: any) {
+          setTransshipmentError(err?.message ?? 'Failed to record transshipment. Please try again.');
+        } finally {
+          setTransshipmentLoading(false);
         }
       },
     });
@@ -302,7 +359,12 @@ export default function TripAdminTripDetail() {
     </>
   );
 
-  const showActions = trip.status === TRIP_STATUS.CREATED || trip.status === TRIP_STATUS.IN_TRANSIT;
+  const showActions =
+    trip.status === TRIP_STATUS.CREATED ||
+    trip.status === TRIP_STATUS.IN_TRANSIT ||
+    trip.status === TRIP_STATUS.TRANSSHIPMENT_IN_TRANSIT;
+  const showReplacementSection = trip.status === TRIP_STATUS.BREAKDOWN;
+  const canConfirmTransshipment = Boolean(replacementVehicle || replacementDriver);
 
   return (
     <View style={styles.root}>
@@ -332,7 +394,7 @@ export default function TripAdminTripDetail() {
             </TouchableOpacity>
           )}
 
-          {trip.status === TRIP_STATUS.IN_TRANSIT && (
+          {(trip.status === TRIP_STATUS.IN_TRANSIT || trip.status === TRIP_STATUS.TRANSSHIPMENT_IN_TRANSIT) && (
             <TouchableOpacity
               style={[styles.actionBtn, styles.actionBtnGreen, actionLoading && styles.actionBtnDisabled]}
               onPress={handleComplete}
@@ -345,6 +407,82 @@ export default function TripAdminTripDetail() {
               }
             </TouchableOpacity>
           )}
+
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.actionBtnAmber, actionLoading && styles.actionBtnDisabled]}
+            onPress={handleMarkBreakdown}
+            disabled={actionLoading}
+            activeOpacity={0.8}
+          >
+            {actionLoading
+              ? <ActivityIndicator size="small" color={theme.colors.white} />
+              : <Text style={styles.actionBtnText}>Mark as Breakdown</Text>
+            }
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {showReplacementSection && (
+        <View style={styles.replacementContainer}>
+          <Text style={styles.replacementTitle}>Select Replacement</Text>
+          <Text style={styles.replacementSubtitle}>
+            This trip broke down. Select a replacement vehicle and/or driver to continue.
+          </Text>
+
+          <View style={styles.replacementCurrentRow}>
+            <Text style={styles.replacementCurrentLabel}>Current vehicle</Text>
+            <Text style={styles.replacementCurrentValue}>{trip.vehicleNumber}</Text>
+          </View>
+          <View style={styles.replacementCurrentRow}>
+            <Text style={styles.replacementCurrentLabel}>Current driver</Text>
+            <Text style={styles.replacementCurrentValue}>{trip.driver?.fullName ?? 'No driver assigned'}</Text>
+          </View>
+
+          <Text style={styles.replacementFieldLabel}>REPLACEMENT VEHICLE</Text>
+          <VehicleSearchInput
+            value={vehicleInputValue}
+            onSelect={(vehicle) => {
+              setReplacementVehicle(vehicle);
+              setVehicleInputValue(vehicle.registrationNumber);
+            }}
+            onRegisterNew={() => {
+              notifyAction('Vehicle not found', 'Please register new vehicles from the trip creation screen first.');
+            }}
+            placeholder="Search replacement vehicle…"
+          />
+
+          <Text style={[styles.replacementFieldLabel, { marginTop: 16 }]}>REPLACEMENT DRIVER</Text>
+          <DriverSearchInput
+            value={driverInputValue}
+            onSelect={(driver) => {
+              setReplacementDriver(driver);
+              setDriverInputValue(driver.fullName);
+            }}
+            placeholder="Search replacement driver…"
+          />
+
+          {transshipmentError && (
+            <View style={styles.actionErrorBox}>
+              <AlertCircle size={16} color={theme.colors.error} />
+              <Text style={styles.actionErrorText}>{transshipmentError}</Text>
+            </View>
+          )}
+
+          <TouchableOpacity
+            style={[
+              styles.actionBtn,
+              styles.actionBtnGreen,
+              (!canConfirmTransshipment || transshipmentLoading) && styles.actionBtnDisabled,
+            ]}
+            onPress={handleConfirmTransshipment}
+            disabled={!canConfirmTransshipment || transshipmentLoading}
+            activeOpacity={0.8}
+          >
+            {transshipmentLoading
+              ? <ActivityIndicator size="small" color={theme.colors.white} />
+              : <Text style={styles.actionBtnText}>Confirm Transshipment</Text>
+            }
+          </TouchableOpacity>
         </View>
       )}
     </View>
@@ -471,6 +609,9 @@ const styles = StyleSheet.create({
   actionBtnGreen: {
     backgroundColor: theme.colors.green,
   },
+  actionBtnAmber: {
+    backgroundColor: '#c2410c',
+  },
   actionBtnDisabled: {
     opacity: 0.6,
   },
@@ -492,5 +633,44 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: theme.colors.error,
     fontWeight: '500',
+  },
+  replacementContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 16,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.separator,
+    backgroundColor: theme.colors.background,
+    gap: 12,
+  },
+  replacementTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.colors.black,
+  },
+  replacementSubtitle: {
+    fontSize: 13,
+    color: theme.colors.grey1,
+    marginTop: -6,
+  },
+  replacementCurrentRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  replacementCurrentLabel: {
+    fontSize: 13,
+    color: theme.colors.grey1,
+  },
+  replacementCurrentValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.black,
+  },
+  replacementFieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.colors.grey1,
+    marginBottom: 6,
   },
 });

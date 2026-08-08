@@ -99,6 +99,15 @@ export const completeTrip = (tripId: string) =>
 export const requestCancellation = (tripId: string, reason: string) =>
   apiRequest(`/api/trips/${tripId}/request-cancellation`, { method: 'PATCH', body: JSON.stringify({ reason }) });
 
+export const markTripBreakdown = (tripId: string) =>
+  apiRequest(`/api/trips/${tripId}/breakdown`, { method: 'PATCH' });
+
+export const markTransshipment = (tripId: string, body: { newVehicleId?: string; newDriverId?: string }) =>
+  apiRequest(`/api/trips/${tripId}/transshipment`, { method: 'PATCH', body: JSON.stringify(body) });
+
+export const getTripTransshipmentHistory = (tripId: string) =>
+  apiRequest(`/api/trips/${tripId}/transshipment-history`);
+
 // ── Cancellation Requests (State Admin) ──────────────────────────────────────
 export const listCancellationRequests = (params?: Record<string, string>) =>
   apiRequest('/api/cancellation-requests' + (params ? '?' + new URLSearchParams(params).toString() : ''));

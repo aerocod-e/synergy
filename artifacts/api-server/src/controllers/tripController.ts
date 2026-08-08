@@ -1,6 +1,6 @@
 import { type Request, type Response } from "express";
 import pool from "../db/connection.js";
-import { TRIP_STATUS } from "../constants/tripStatus.js";
+import { TRIP_STATUS, TRIP_STATUSES, ACTIVE_TRIP_STATUS_SQL_LIST } from "../constants/tripStatus.js";
 
 interface CreateTripBody {
   vehicleId?: unknown;
@@ -199,7 +199,7 @@ export async function createTrip(req: Request, res: Response): Promise<void> {
     const dupRes = await client.query<{ id: string }>(
       `SELECT id FROM trips
        WHERE vehicle_id = $1
-         AND status IN ('${TRIP_STATUS.CREATED}', '${TRIP_STATUS.IN_TRANSIT}')
+         AND status IN (${ACTIVE_TRIP_STATUS_SQL_LIST})
          AND deleted_at IS NULL
        LIMIT 1`,
       [vehicleId]
@@ -477,7 +477,7 @@ export async function completeTrip(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    if (trip.status !== TRIP_STATUS.IN_TRANSIT) {
+    if (trip.status !== TRIP_STATUS.IN_TRANSIT && trip.status !== TRIP_STATUS.TRANSSHIPMENT_IN_TRANSIT) {
       res.status(409).json({ error: "CONFLICT", message: "Trip cannot be completed from its current status" });
       return;
     }
@@ -491,7 +491,7 @@ export async function completeTrip(req: Request, res: Response): Promise<void> {
       `INSERT INTO trip_events (trip_id, event_type, performed_by, metadata)
        VALUES ($1, 'completed', $2, $3::jsonb)
        RETURNING created_at`,
-      [tripId, callerId, JSON.stringify({ previousStatus: TRIP_STATUS.IN_TRANSIT })]
+      [tripId, callerId, JSON.stringify({ previousStatus: trip.status })]
     );
 
     res.json({
@@ -505,6 +505,360 @@ export async function completeTrip(req: Request, res: Response): Promise<void> {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to complete trip" });
+  }
+}
+
+export async function markTripBreakdown(req: Request, res: Response): Promise<void> {
+  const { tripId } = req.params as { tripId: string };
+  const callerId = req.user!.userId;
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const { rows } = await client.query<{
+      id: string;
+      created_by: string;
+      status: string;
+    }>(
+      `SELECT id, created_by, status FROM trips WHERE id = $1 AND deleted_at IS NULL LIMIT 1 FOR UPDATE`,
+      [tripId]
+    );
+
+    if (rows.length === 0) {
+      await client.query("ROLLBACK");
+      res.status(404).json({ error: "NOT_FOUND", message: "Trip not found" });
+      return;
+    }
+
+    const trip = rows[0]!;
+
+    if (trip.created_by !== callerId) {
+      await client.query("ROLLBACK");
+      res.status(403).json({ error: "FORBIDDEN", message: "You did not create this trip" });
+      return;
+    }
+
+    if (
+      trip.status !== TRIP_STATUS.CREATED &&
+      trip.status !== TRIP_STATUS.IN_TRANSIT &&
+      trip.status !== TRIP_STATUS.TRANSSHIPMENT_IN_TRANSIT
+    ) {
+      await client.query("ROLLBACK");
+      res.status(409).json({ error: "CONFLICT", message: "Trip cannot be marked as broken down from its current status" });
+      return;
+    }
+
+    await client.query(
+      `UPDATE trips SET status = '${TRIP_STATUS.BREAKDOWN}', updated_at = NOW() WHERE id = $1`,
+      [tripId]
+    );
+
+    const { rows: [event] } = await client.query<{ created_at: Date }>(
+      `INSERT INTO trip_events (trip_id, event_type, performed_by, metadata)
+       VALUES ($1, 'breakdown_marked', $2, $3::jsonb)
+       RETURNING created_at`,
+      [tripId, callerId, JSON.stringify({ previousStatus: trip.status })]
+    );
+
+    await client.query("COMMIT");
+
+    res.json({
+      data: {
+        tripId,
+        status: TRIP_STATUS.BREAKDOWN,
+        markedAt: event!.created_at,
+      },
+      message: "Trip marked as broken down",
+    });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to mark trip as broken down" });
+  } finally {
+    client.release();
+  }
+}
+
+interface MarkTransshipmentBody {
+  newVehicleId?: unknown;
+  newDriverId?: unknown;
+}
+
+export async function markTransshipment(req: Request, res: Response): Promise<void> {
+  const { tripId } = req.params as { tripId: string };
+  const callerId = req.user!.userId;
+  const body = req.body as MarkTransshipmentBody;
+
+  const newVehicleId = typeof body.newVehicleId === "string" && body.newVehicleId.trim() !== "" ? body.newVehicleId : undefined;
+  const newDriverId = typeof body.newDriverId === "string" && body.newDriverId.trim() !== "" ? body.newDriverId : undefined;
+
+  if (!newVehicleId && !newDriverId) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "At least one of newVehicleId or newDriverId is required" });
+    return;
+  }
+  if (newVehicleId && !UUID_RE.test(newVehicleId)) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "newVehicleId must be a valid UUID" });
+    return;
+  }
+  if (newDriverId && !UUID_RE.test(newDriverId)) {
+    res.status(400).json({ error: "BAD_REQUEST", message: "newDriverId must be a valid UUID" });
+    return;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const { rows } = await client.query<{
+      id: string;
+      created_by: string;
+      status: string;
+      vehicle_id: string;
+      driver_id: string | null;
+    }>(
+      `SELECT id, created_by, status, vehicle_id, driver_id FROM trips WHERE id = $1 AND deleted_at IS NULL LIMIT 1 FOR UPDATE`,
+      [tripId]
+    );
+
+    if (rows.length === 0) {
+      await client.query("ROLLBACK");
+      res.status(404).json({ error: "NOT_FOUND", message: "Trip not found" });
+      return;
+    }
+
+    const trip = rows[0]!;
+
+    if (trip.created_by !== callerId) {
+      await client.query("ROLLBACK");
+      res.status(403).json({ error: "FORBIDDEN", message: "You did not create this trip" });
+      return;
+    }
+
+    if (trip.status !== TRIP_STATUS.BREAKDOWN) {
+      await client.query("ROLLBACK");
+      res.status(409).json({ error: "CONFLICT", message: "Trip must be in breakdown status to record a transshipment" });
+      return;
+    }
+
+    if (newVehicleId) {
+      const vehicleRes = await client.query<{ id: string; created_by: string }>(
+        `SELECT id, created_by FROM vehicles WHERE id = $1 AND is_active = true AND deleted_at IS NULL LIMIT 1`,
+        [newVehicleId]
+      );
+      const vehicle = vehicleRes.rows[0];
+      if (!vehicle) {
+        await client.query("ROLLBACK");
+        res.status(400).json({ error: "BAD_REQUEST", message: "newVehicleId does not reference an active vehicle" });
+        return;
+      }
+      if (vehicle.created_by !== callerId) {
+        await client.query("ROLLBACK");
+        res.status(403).json({ error: "FORBIDDEN", message: "You do not own this vehicle" });
+        return;
+      }
+      const activeVehicleTrip = await client.query<{ id: string }>(
+        `SELECT id FROM trips
+         WHERE vehicle_id = $1
+           AND id != $2
+           AND status IN (${ACTIVE_TRIP_STATUS_SQL_LIST})
+           AND deleted_at IS NULL
+         LIMIT 1`,
+        [newVehicleId, tripId]
+      );
+      if (activeVehicleTrip.rows.length > 0) {
+        await client.query("ROLLBACK");
+        res.status(409).json({ error: "CONFLICT", message: "This vehicle already has an active trip" });
+        return;
+      }
+    }
+
+    if (newDriverId) {
+      const driverRes = await client.query<{ id: string; created_by: string; license_expiry_date: Date | null }>(
+        `SELECT id, created_by, license_expiry_date FROM drivers WHERE id = $1 AND is_active = true AND deleted_at IS NULL LIMIT 1`,
+        [newDriverId]
+      );
+      const driver = driverRes.rows[0];
+      if (!driver) {
+        await client.query("ROLLBACK");
+        res.status(400).json({ error: "BAD_REQUEST", message: "newDriverId does not reference an active driver" });
+        return;
+      }
+      if (driver.created_by !== callerId) {
+        await client.query("ROLLBACK");
+        res.status(403).json({ error: "FORBIDDEN", message: "You do not own this driver" });
+        return;
+      }
+      if (driver.license_expiry_date !== null) {
+        const expiry = new Date(driver.license_expiry_date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        expiry.setHours(0, 0, 0, 0);
+        if (expiry < today) {
+          const formattedDate = new Date(driver.license_expiry_date).toISOString().slice(0, 10);
+          await client.query("ROLLBACK");
+          res.status(422).json({
+            error: "UNPROCESSABLE",
+            message: `This driver's license expired on ${formattedDate}. Please update their license details before assigning them to this trip.`,
+          });
+          return;
+        }
+      }
+      const activeDriverTrip = await client.query<{ id: string }>(
+        `SELECT id FROM trips
+         WHERE driver_id = $1
+           AND id != $2
+           AND status IN (${ACTIVE_TRIP_STATUS_SQL_LIST})
+           AND deleted_at IS NULL
+         LIMIT 1`,
+        [newDriverId, tripId]
+      );
+      if (activeDriverTrip.rows.length > 0) {
+        await client.query("ROLLBACK");
+        res.status(409).json({ error: "CONFLICT", message: "This driver already has an active trip" });
+        return;
+      }
+    }
+
+    // Record history: only the side(s) actually being swapped get old/new values.
+    await client.query(
+      `INSERT INTO trip_transshipment_history
+         (trip_id, old_vehicle_id, new_vehicle_id, old_driver_id, new_driver_id, changed_by)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        tripId,
+        newVehicleId ? trip.vehicle_id : null,
+        newVehicleId ?? null,
+        newDriverId ? trip.driver_id : null,
+        newDriverId ?? null,
+        callerId,
+      ]
+    );
+
+    // Update only the trip columns that were actually provided — fees/ledger/wallets untouched.
+    await client.query(
+      `UPDATE trips
+       SET vehicle_id = COALESCE($2, vehicle_id),
+           driver_id  = COALESCE($3, driver_id),
+           status     = '${TRIP_STATUS.TRANSSHIPMENT_IN_TRANSIT}',
+           updated_at = NOW()
+       WHERE id = $1`,
+      [tripId, newVehicleId ?? null, newDriverId ?? null]
+    );
+
+    const { rows: [event] } = await client.query<{ created_at: Date }>(
+      `INSERT INTO trip_events (trip_id, event_type, performed_by, metadata)
+       VALUES ($1, 'transshipment', $2, $3::jsonb)
+       RETURNING created_at`,
+      [
+        tripId,
+        callerId,
+        JSON.stringify({
+          previousStatus: trip.status,
+          vehicleSwapped: Boolean(newVehicleId),
+          driverSwapped: Boolean(newDriverId),
+        }),
+      ]
+    );
+
+    await client.query("COMMIT");
+
+    res.json({
+      data: {
+        tripId,
+        status: TRIP_STATUS.TRANSSHIPMENT_IN_TRANSIT,
+        changedAt: event!.created_at,
+      },
+      message: "Transshipment recorded",
+    });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to record transshipment" });
+  } finally {
+    client.release();
+  }
+}
+
+export async function getTripTransshipmentHistory(req: Request, res: Response): Promise<void> {
+  const { tripId } = req.params as { tripId: string };
+  const role = req.user!.role;
+  const userId = req.user!.userId;
+
+  try {
+    const tripRes = await pool.query<{ id: string; created_by: string; loading_state_id: string }>(
+      `SELECT id, created_by, loading_state_id FROM trips WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+      [tripId]
+    );
+
+    const trip = tripRes.rows[0];
+    if (!trip) {
+      res.status(404).json({ error: "NOT_FOUND", message: "Trip not found" });
+      return;
+    }
+
+    if (role === "trip_admin") {
+      const entityId = req.user!.entityId;
+      if (trip.loading_state_id !== entityId && trip.created_by !== userId) {
+        res.status(403).json({ error: "FORBIDDEN", message: "Access denied" });
+        return;
+      }
+    } else if (role === "state_admin") {
+      const entityId = req.user!.entityId;
+      if (trip.loading_state_id !== entityId) {
+        res.status(403).json({ error: "FORBIDDEN", message: "Access denied" });
+        return;
+      }
+    }
+
+    const { rows } = await pool.query<{
+      id: string;
+      trip_id: string;
+      old_vehicle_number: string | null;
+      new_vehicle_number: string | null;
+      old_driver_name: string | null;
+      new_driver_name: string | null;
+      changed_by: string | null;
+      changed_by_name: string | null;
+      changed_at: Date;
+    }>(
+      `SELECT
+         h.id,
+         h.trip_id,
+         ov.registration_number AS old_vehicle_number,
+         nv.registration_number AS new_vehicle_number,
+         od.full_name AS old_driver_name,
+         nd.full_name AS new_driver_name,
+         h.changed_by,
+         u.first_name || ' ' || u.last_name AS changed_by_name,
+         h.changed_at
+       FROM trip_transshipment_history h
+       LEFT JOIN vehicles ov ON ov.id = h.old_vehicle_id
+       LEFT JOIN vehicles nv ON nv.id = h.new_vehicle_id
+       LEFT JOIN drivers od ON od.id = h.old_driver_id
+       LEFT JOIN drivers nd ON nd.id = h.new_driver_id
+       LEFT JOIN users u ON u.id = h.changed_by
+       WHERE h.trip_id = $1
+       ORDER BY h.changed_at ASC`,
+      [tripId]
+    );
+
+    res.json({
+      data: rows.map((h) => ({
+        id:              h.id,
+        tripId:          h.trip_id,
+        oldVehicleNumber: h.old_vehicle_number,
+        newVehicleNumber: h.new_vehicle_number,
+        oldDriverName:    h.old_driver_name,
+        newDriverName:    h.new_driver_name,
+        changedBy:        h.changed_by,
+        changedByName:    h.changed_by_name,
+        changedAt:        h.changed_at,
+      })),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to fetch transshipment history" });
   }
 }
 
@@ -522,7 +876,7 @@ export async function listTrips(req: Request, res: Response): Promise<void> {
   const limit  = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100) : 20;
   const offset = (page - 1) * limit;
 
-  const validStatuses: string[] = [TRIP_STATUS.CREATED, TRIP_STATUS.IN_TRANSIT, TRIP_STATUS.COMPLETED, TRIP_STATUS.CANCELLED];
+  const validStatuses: string[] = [...TRIP_STATUSES];
   if (statusFilter && !validStatuses.includes(statusFilter)) {
     res.status(400).json({ error: "BAD_REQUEST", message: "Invalid status filter" });
     return;
@@ -840,6 +1194,39 @@ export async function getTripById(req: Request, res: Response): Promise<void> {
       }));
     }
 
+    // Fetch breakdown/transshipment history (if any). Note trip.vehicle_number /
+    // trip.driver_* above already reflect the CURRENT (possibly swapped) vehicle
+    // and driver, since they're joined off t.vehicle_id / t.driver_id.
+    const historyRes = await pool.query<{
+      id:                 string;
+      old_vehicle_number: string | null;
+      new_vehicle_number: string | null;
+      old_driver_name:    string | null;
+      new_driver_name:    string | null;
+      changed_by:         string | null;
+      changed_by_name:    string | null;
+      changed_at:         Date;
+    }>(
+      `SELECT
+         h.id,
+         ov.registration_number AS old_vehicle_number,
+         nv.registration_number AS new_vehicle_number,
+         od.full_name AS old_driver_name,
+         nd.full_name AS new_driver_name,
+         h.changed_by,
+         u.first_name || ' ' || u.last_name AS changed_by_name,
+         h.changed_at
+       FROM trip_transshipment_history h
+       LEFT JOIN vehicles ov ON ov.id = h.old_vehicle_id
+       LEFT JOIN vehicles nv ON nv.id = h.new_vehicle_id
+       LEFT JOIN drivers od ON od.id = h.old_driver_id
+       LEFT JOIN drivers nd ON nd.id = h.new_driver_id
+       LEFT JOIN users u ON u.id = h.changed_by
+       WHERE h.trip_id = $1
+       ORDER BY h.changed_at ASC`,
+      [tripId]
+    );
+
     res.json({
       data: {
         trip: {
@@ -880,6 +1267,16 @@ export async function getTripById(req: Request, res: Response): Promise<void> {
             createdAt:   e.created_at,
           })),
           vehicleTypeStakeholderRates,
+          transshipmentHistory: historyRes.rows.map((h) => ({
+            id:               h.id,
+            oldVehicleNumber: h.old_vehicle_number,
+            newVehicleNumber: h.new_vehicle_number,
+            oldDriverName:    h.old_driver_name,
+            newDriverName:    h.new_driver_name,
+            changedBy:        h.changed_by,
+            changedByName:    h.changed_by_name,
+            changedAt:        h.changed_at,
+          })),
         },
       },
       message: "Trip retrieved",

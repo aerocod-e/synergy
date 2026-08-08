@@ -2,7 +2,7 @@ import { type Request, type Response } from "express";
 import bcrypt from "bcrypt";
 import pool from "../db/connection.js";
 import { validatePassword } from "../utils/passwordPolicy.js";
-import { TRIP_STATUS } from "../constants/tripStatus.js";
+import { ACTIVE_TRIP_STATUS_SQL_LIST } from "../constants/tripStatus.js";
 
 export async function listUsers(req: Request, res: Response): Promise<void> {
   const rawPage  = parseInt((req.query.page  as string) ?? "1",  10);
@@ -806,7 +806,7 @@ export async function deleteTripAdmin(req: Request, res: Response): Promise<void
     const activeTrip = await pool.query<{ id: string }>(
       `SELECT id FROM trips
        WHERE  created_by = $1
-         AND  status IN ('${TRIP_STATUS.CREATED}', '${TRIP_STATUS.IN_TRANSIT}')
+         AND  status IN (${ACTIVE_TRIP_STATUS_SQL_LIST})
          AND  deleted_at IS NULL
        LIMIT  1`,
       [id]

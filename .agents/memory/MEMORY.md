@@ -12,3 +12,4 @@
 - [Trip status centralization](trip-status-centralization.md) — 3 distinct badge palettes + 2 label variants for the same 5 statuses are intentional, not a bug; keep per-screen exports.
 - [Wallet ledger shared across entity types](wallet-ledger-shared-across-entity-types.md) — trip joins in getMyLedger must be LEFT JOIN or non-trip credits (e.g. bulk payments) vanish from history.
 - [Expo Router root path collision](expo-router-root-path-collision.md) — multiple (group)/index.tsx files all map to "/"; fix via first-resolution-forces-role-redirect, not by renaming every group.
+- [Breakdown/transshipment status flow](breakdown-transshipment-status-flow.md) — breakdown/transshipment_in_transit are treated as active/in-progress, not terminal: repeat breakdowns and completion from either status are both allowed.

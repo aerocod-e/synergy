@@ -465,7 +465,24 @@ async function migrate(): Promise<void> {
     `);
     console.log('✓ wallet_ledger: bulk_payment_id column added');
 
-    console.log('\n✅ Migration complete: 15 tables + vehicle_type_id columns + vehicle-type-based pricing + clearing flag + wallet integrity triggers + driver license history + bulk payments.');
+    // trip_transshipment_history — audit trail of vehicle/driver swaps performed
+    // while recovering a broken-down trip. Either side (vehicle, driver) may be
+    // swapped independently, so old/new columns are nullable in pairs.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS trip_transshipment_history (
+        id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        trip_id         UUID NOT NULL REFERENCES trips(id),
+        old_vehicle_id  UUID REFERENCES vehicles(id),
+        new_vehicle_id  UUID REFERENCES vehicles(id),
+        old_driver_id   UUID REFERENCES drivers(id),
+        new_driver_id   UUID REFERENCES drivers(id),
+        changed_by      UUID REFERENCES users(id),
+        changed_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )
+    `);
+    console.log('✓ Table created: trip_transshipment_history');
+
+    console.log('\n✅ Migration complete: 16 tables + vehicle_type_id columns + vehicle-type-based pricing + clearing flag + wallet integrity triggers + driver license history + bulk payments + transshipment history.');
   } finally {
     client.release();
     await pool.end();

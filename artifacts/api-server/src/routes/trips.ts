@@ -5,6 +5,9 @@ import {
   getTripById,
   startTrip,
   completeTrip,
+  markTripBreakdown,
+  markTransshipment,
+  getTripTransshipmentHistory,
 } from "../controllers/tripController.js";
 import { requestCancellation } from "../controllers/cancellationController.js";
 import { authenticateToken } from "../middleware/auth.js";
@@ -18,5 +21,8 @@ router.post(   "/",                              authenticateToken, requireRole(
 router.patch(  "/:tripId/start",                 authenticateToken, requireRole("trip_admin"),             startTrip);
 router.patch(  "/:tripId/complete",              authenticateToken, requireRole("trip_admin"),             completeTrip);
 router.patch(  "/:tripId/request-cancellation",  authenticateToken, requireRole("trip_admin"),             requestCancellation);
+router.patch(  "/:tripId/breakdown",             authenticateToken, requireRole("trip_admin"),             markTripBreakdown);
+router.patch(  "/:tripId/transshipment",         authenticateToken, requireRole("trip_admin"),             markTransshipment);
+router.get(    "/:tripId/transshipment-history", authenticateToken, requireRole("super_admin", "trip_admin", "state_admin"), getTripTransshipmentHistory);
 
 export default router;

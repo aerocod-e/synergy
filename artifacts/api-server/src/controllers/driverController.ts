@@ -1,6 +1,6 @@
 import { type Request, type Response } from "express";
 import pool from "../db/connection.js";
-import { TRIP_STATUS } from "../constants/tripStatus.js";
+import { ACTIVE_TRIP_STATUS_SQL_LIST } from "../constants/tripStatus.js";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -335,7 +335,7 @@ export async function deleteDriver(req: Request, res: Response): Promise<void> {
     const activeTrip = await pool.query<{ id: string }>(
       `SELECT id FROM trips
        WHERE  driver_id = $1
-         AND  status IN ('${TRIP_STATUS.CREATED}', '${TRIP_STATUS.IN_TRANSIT}')
+         AND  status IN (${ACTIVE_TRIP_STATUS_SQL_LIST})
          AND  deleted_at IS NULL
        LIMIT  1`,
       [id]

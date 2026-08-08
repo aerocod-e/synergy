@@ -1,4 +1,5 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { History } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
 import { formatNaira } from '@/utils/formatCurrency';
 import { ADMIN_TRIP_STATUS_BADGE_COLORS, TRIP_STATUS_LABELS } from '@/constants/tripStatus';
@@ -33,6 +34,17 @@ export interface VehicleTypeStakeholderRate {
   amount: number;
 }
 
+export interface TripTransshipmentHistoryEntry {
+  id: string;
+  oldVehicleNumber: string | null;
+  newVehicleNumber: string | null;
+  oldDriverName: string | null;
+  newDriverName: string | null;
+  changedBy: string | null;
+  changedByName: string | null;
+  changedAt: string;
+}
+
 export interface TripDetail {
   id: string;
   tripCode: string | null;
@@ -52,14 +64,17 @@ export interface TripDetail {
   fees: TripFee[];
   events: TripEvent[];
   vehicleTypeStakeholderRates?: VehicleTypeStakeholderRate[];
+  transshipmentHistory?: TripTransshipmentHistoryEntry[];
 }
 
 const STATUS_BADGE: Record<string, { bg: string; text: string; label: string }> = {
-  created:              { ...ADMIN_TRIP_STATUS_BADGE_COLORS.created,              label: TRIP_STATUS_LABELS.created },
-  in_transit:           { ...ADMIN_TRIP_STATUS_BADGE_COLORS.in_transit,           label: TRIP_STATUS_LABELS.in_transit },
-  completed:            { ...ADMIN_TRIP_STATUS_BADGE_COLORS.completed,            label: TRIP_STATUS_LABELS.completed },
-  cancelled:            { ...ADMIN_TRIP_STATUS_BADGE_COLORS.cancelled,            label: TRIP_STATUS_LABELS.cancelled },
-  cancellation_pending: { ...ADMIN_TRIP_STATUS_BADGE_COLORS.cancellation_pending, label: TRIP_STATUS_LABELS.cancellation_pending },
+  created:                  { ...ADMIN_TRIP_STATUS_BADGE_COLORS.created,                  label: TRIP_STATUS_LABELS.created },
+  in_transit:               { ...ADMIN_TRIP_STATUS_BADGE_COLORS.in_transit,               label: TRIP_STATUS_LABELS.in_transit },
+  completed:                { ...ADMIN_TRIP_STATUS_BADGE_COLORS.completed,                label: TRIP_STATUS_LABELS.completed },
+  cancelled:                { ...ADMIN_TRIP_STATUS_BADGE_COLORS.cancelled,                label: TRIP_STATUS_LABELS.cancelled },
+  cancellation_pending:     { ...ADMIN_TRIP_STATUS_BADGE_COLORS.cancellation_pending,     label: TRIP_STATUS_LABELS.cancellation_pending },
+  breakdown:                { ...ADMIN_TRIP_STATUS_BADGE_COLORS.breakdown,                label: TRIP_STATUS_LABELS.breakdown },
+  transshipment_in_transit: { ...ADMIN_TRIP_STATUS_BADGE_COLORS.transshipment_in_transit, label: TRIP_STATUS_LABELS.transshipment_in_transit },
 };
 
 const EVENT_LABELS: Record<string, string> = {
@@ -69,7 +84,21 @@ const EVENT_LABELS: Record<string, string> = {
   cancelled:               'Trip Cancelled',
   cancellation_requested:  'Cancellation Requested',
   cancellation_rejected:   'Cancellation Rejected',
+  breakdown_marked:        'Marked as Broken Down',
+  transshipment:           'Transshipment Recorded',
 };
+
+function formatHistoryDate(dateStr: string): string {
+  try {
+    return new Date(dateStr).toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  } catch {
+    return dateStr;
+  }
+}
 
 const FEE_LABELS: Record<string, string> = {
   loading:     'Loading Fee',
@@ -242,6 +271,40 @@ export default function TripDetailView({ trip, footer }: TripDetailViewProps) {
           </View>
         )}
       </View>
+
+      {/* ── Vehicle and Driver History ── */}
+      {trip.transshipmentHistory && trip.transshipmentHistory.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.historyHeaderRow}>
+            <History size={16} color={theme.colors.grey1} />
+            <Text style={styles.sectionTitle}>VEHICLE AND DRIVER HISTORY</Text>
+          </View>
+          {trip.transshipmentHistory.map((entry) => (
+            <View key={entry.id} style={[styles.card, styles.historyCard]}>
+              <Text style={styles.historyDate}>{formatHistoryDate(entry.changedAt)}</Text>
+              {(entry.oldVehicleNumber !== null || entry.newVehicleNumber !== null) && (
+                <View style={styles.historyLine}>
+                  <Text style={styles.historyLabel}>Vehicle: </Text>
+                  <Text style={styles.historyValue}>
+                    {entry.oldVehicleNumber ?? '—'} → {entry.newVehicleNumber ?? '—'}
+                  </Text>
+                </View>
+              )}
+              {(entry.oldDriverName !== null || entry.newDriverName !== null) && (
+                <View style={styles.historyLine}>
+                  <Text style={styles.historyLabel}>Driver: </Text>
+                  <Text style={styles.historyValue}>
+                    {entry.oldDriverName ?? '—'} → {entry.newDriverName ?? '—'}
+                  </Text>
+                </View>
+              )}
+              {entry.changedByName && (
+                <Text style={styles.historyChangedBy}>By {entry.changedByName}</Text>
+              )}
+            </View>
+          ))}
+        </View>
+      )}
 
       {footer}
     </ScrollView>
@@ -420,6 +483,40 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   eventTime: {
+    fontSize: 12,
+    color: theme.colors.grey1,
+    marginTop: 4,
+  },
+  historyHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  historyCard: {
+    paddingVertical: 12,
+    marginBottom: 10,
+  },
+  historyDate: {
+    fontSize: 12,
+    color: theme.colors.grey1,
+    marginBottom: 6,
+  },
+  historyLine: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 4,
+  },
+  historyLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.colors.black,
+  },
+  historyValue: {
+    fontSize: 13,
+    color: theme.colors.grey2,
+  },
+  historyChangedBy: {
     fontSize: 12,
     color: theme.colors.grey1,
     marginTop: 4,
