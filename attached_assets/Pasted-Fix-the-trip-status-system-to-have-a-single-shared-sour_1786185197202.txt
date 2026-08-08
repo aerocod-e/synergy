@@ -1,0 +1,31 @@
+Fix the trip status system to have a single shared source of truth before adding two new statuses. Follow all steps in order.
+
+Backend
+
+Create a single shared constants file, artifacts/api-server/src/constants/tripStatus.ts, exporting the full list of valid trip statuses as a typed array and a TypeScript union type. Current values: created, in_transit, completed, cancelled, cancellation_pending.
+
+Do not add the two new statuses yet, this step only centralizes what already exists.
+
+Replace every raw string literal status check across the backend with a reference to this shared constant where it makes sense to do so without behavior change, in tripController.ts, cancellationController.ts, vehicleController.ts, driverController.ts, userController.ts, lookupController.ts, publicLookupController.ts, auditController.ts, and paymentStatusService.ts. Do not change any actual logic or which statuses are checked where, only remove hardcoded string duplication in favor of the shared constant.
+
+Frontend
+
+Create a single shared constants file, artifacts/mobile/constants/tripStatus.ts, exporting the full list of valid trip statuses, a shared label map (human readable text per status), and a shared badge color map, matching the styling already used today so nothing visually changes yet.
+
+Replace the separately redeclared status type, label map, filter list, and badge style map in every one of these files with imports from this shared file: app/(public)/lookup.tsx, app/(stateadmin)/trips.tsx, app/(superadmin)/trips.tsx, app/(tripadmin)/index.tsx, app/(tripadmin)/trip-detail.tsx, app/(tripadmin)/audit-report.tsx, components/TripDetailView.tsx.
+
+Keep the cancellation_pending handling exactly as it currently behaves in each file, some show it in filters, some do not, do not change that behavior in this step, only centralize the definitions.
+
+Do not touch the separate trip_events event type label map inside TripDetailView.tsx, that is a different concept from trip status and must stay untouched.
+
+Testing
+
+Run
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+
+Both must return zero errors.
+
+Then do a full visual regression pass across every screen touched: Super Admin trips list, State Admin trips list, Trip Admin trips list and trip detail, public lookup, audit report screen for all three entity types. Confirm every status badge, filter pill, and label still displays exactly as it did before this change, same text, same colors, nothing visually different. This is a pure refactor, any visual change is a bug.
+
+Report every file changed and confirm the regression pass found zero visual differences.
