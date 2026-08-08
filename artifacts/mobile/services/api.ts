@@ -128,6 +128,19 @@ export const getMyLedger = (params?: Record<string, string>) =>
 export const getAllWallets = () =>
   apiRequest('/api/wallets/all');
 
+// ── Bulk Payments (Super Admin) ──────────────────────────────────────────────
+export const getBulkPayments = () =>
+  apiRequest('/api/bulk-payments');
+
+export const createBulkPayment = (body: unknown) =>
+  apiRequest('/api/bulk-payments', { method: 'POST', body: JSON.stringify(body) });
+
+export const reverseBulkPayment = (id: string) =>
+  apiRequest(`/api/bulk-payments/${id}/reverse`, { method: 'POST' });
+
+export const removeBulkPayment = (id: string) =>
+  apiRequest(`/api/bulk-payments/${id}/remove`, { method: 'POST' });
+
 // ── Lookup ──────────────────────────────────────────────────────────────────
 export const lookupVehicle = (vehicleNumber: string) =>
   apiRequest(`/api/lookup/vehicle/${encodeURIComponent(vehicleNumber)}`, {}, false);

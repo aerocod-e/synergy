@@ -10,3 +10,4 @@
 - [expo-file-system v57 API](expo-file-system-v57.md) — v57 uses File/Paths classes; old cacheDirectory/writeAsStringAsync API gone.
 - [API response double-unwrap](api-response-double-unwrap.md) — apiRequest() already returns json.data; accessing .data again silently breaks a screen with no console error.
 - [Trip status centralization](trip-status-centralization.md) — 3 distinct badge palettes + 2 label variants for the same 5 statuses are intentional, not a bug; keep per-screen exports.
+- [Wallet ledger shared across entity types](wallet-ledger-shared-across-entity-types.md) — trip joins in getMyLedger must be LEFT JOIN or non-trip credits (e.g. bulk payments) vanish from history.

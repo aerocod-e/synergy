@@ -424,7 +424,48 @@ async function migrate(): Promise<void> {
     `);
     console.log('✓ Table created: driver_license_history');
 
-    console.log('\n✅ Migration complete: 15 tables + vehicle_type_id columns + vehicle-type-based pricing + clearing flag + wallet integrity triggers + driver license history.');
+    // bulk_payments — lump-sum company payments split across states/stakeholders
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS bulk_payments (
+        id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_name       VARCHAR NOT NULL,
+        total_amount       INTEGER NOT NULL,
+        expiry_date        DATE NOT NULL,
+        created_by         UUID REFERENCES users(id),
+        status             VARCHAR NOT NULL DEFAULT 'active',
+        created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        reversal_deadline  TIMESTAMPTZ NOT NULL
+      )
+    `);
+    console.log('✓ Table created: bulk_payments');
+
+    // archived — pure "remove from list" flag; never touches wallets/ledger
+    await client.query(`
+      ALTER TABLE bulk_payments ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT false
+    `);
+    console.log('✓ bulk_payments: archived column added');
+
+    // bulk_payment_shares — per-recipient percentage split of a bulk payment
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS bulk_payment_shares (
+        id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        bulk_payment_id   UUID REFERENCES bulk_payments(id),
+        recipient_type    VARCHAR NOT NULL,
+        recipient_id      UUID NOT NULL,
+        percentage        NUMERIC(5,2) NOT NULL,
+        amount            INTEGER NOT NULL
+      )
+    `);
+    console.log('✓ Table created: bulk_payment_shares');
+
+    // wallet_ledger.bulk_payment_id — traces a ledger entry back to a bulk payment
+    // instead of a trip, so bulk-payment credits/reversals reuse the same ledger shape.
+    await client.query(`
+      ALTER TABLE wallet_ledger ADD COLUMN IF NOT EXISTS bulk_payment_id UUID REFERENCES bulk_payments(id)
+    `);
+    console.log('✓ wallet_ledger: bulk_payment_id column added');
+
+    console.log('\n✅ Migration complete: 15 tables + vehicle_type_id columns + vehicle-type-based pricing + clearing flag + wallet integrity triggers + driver license history + bulk payments.');
   } finally {
     client.release();
     await pool.end();

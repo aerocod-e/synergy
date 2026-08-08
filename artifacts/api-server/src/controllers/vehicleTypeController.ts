@@ -2,7 +2,7 @@ import { type Request, type Response } from "express";
 import pool from "../db/connection.js";
 
 function isPositiveInt(v: unknown): v is number {
-  return typeof v === "number" && Number.isInteger(v) && v > 0;
+  return typeof v === "number" && Number.isInteger(v) && v >= 0;
 }
 
 export async function listVehicleTypes(_req: Request, res: Response): Promise<void> {
@@ -48,11 +48,11 @@ export async function createVehicleType(req: Request, res: Response): Promise<vo
     return;
   }
   if (!isPositiveInt(loadingFee)) {
-    res.status(400).json({ error: "BAD_REQUEST", message: "loadingFee must be a positive integer (kobo)" });
+    res.status(400).json({ error: "BAD_REQUEST", message: "loadingFee must be a non-negative integer (kobo)" });
     return;
   }
   if (!isPositiveInt(unloadingFee)) {
-    res.status(400).json({ error: "BAD_REQUEST", message: "unloadingFee must be a positive integer (kobo)" });
+    res.status(400).json({ error: "BAD_REQUEST", message: "unloadingFee must be a non-negative integer (kobo)" });
     return;
   }
 
@@ -132,11 +132,11 @@ export async function updateVehicleType(req: Request, res: Response): Promise<vo
     return;
   }
   if (loadingFee !== undefined && !isPositiveInt(loadingFee)) {
-    res.status(400).json({ error: "BAD_REQUEST", message: "loadingFee must be a positive integer (kobo)" });
+    res.status(400).json({ error: "BAD_REQUEST", message: "loadingFee must be a non-negative integer (kobo)" });
     return;
   }
   if (unloadingFee !== undefined && !isPositiveInt(unloadingFee)) {
-    res.status(400).json({ error: "BAD_REQUEST", message: "unloadingFee must be a positive integer (kobo)" });
+    res.status(400).json({ error: "BAD_REQUEST", message: "unloadingFee must be a non-negative integer (kobo)" });
     return;
   }
 

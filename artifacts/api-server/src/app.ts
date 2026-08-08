@@ -14,6 +14,7 @@ import driversRouter              from "./routes/drivers.js";
 import cancellationRequestsRouter from "./routes/cancellationRequests.js";
 import vehicleTypesRouter        from "./routes/vehicleTypes.js";
 import auditRouter               from "./routes/audit.js";
+import bulkPaymentsRouter        from "./routes/bulkPayments.js";
 
 const app: Express = express();
 app.set('trust proxy', 1);
@@ -40,5 +41,6 @@ app.use("/api/drivers",               driversRouter);
 app.use("/api/cancellation-requests", cancellationRequestsRouter);
 app.use("/api/vehicle-types",         vehicleTypesRouter);
 app.use("/api/audit",                 auditRouter);
+app.use("/api/bulk-payments",         bulkPaymentsRouter);
 
 export default app;

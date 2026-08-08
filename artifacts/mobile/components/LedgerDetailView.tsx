@@ -18,21 +18,33 @@ export interface TripFee {
   amount: number;
 }
 
+export interface BulkPaymentShare {
+  id: string;
+  recipientType: string;
+  recipientId: string;
+  recipientName: string | null;
+  percentage: number;
+  amount: number;
+}
+
 export interface LedgerEntry {
   ledgerId: string;
-  tripId: string;
-  vehicleNumber: string;
-  vehicleTypeName: string;
-  feeType: string;
+  tripId: string | null;
+  bulkPaymentId?: string | null;
+  companyName?: string | null;
+  vehicleNumber: string | null;
+  vehicleTypeName: string | null;
+  feeType: string | null;
   amount: number;
   amountNaira: string;
   entryType: 'credit' | 'reversal';
-  loadingStateName: string;
-  unloadingStateName: string;
+  loadingStateName: string | null;
+  unloadingStateName: string | null;
   cleared: boolean;
   clearedAt: string | null;
   createdAt: string;
   tripFees: TripFee[];
+  bulkPaymentShares?: BulkPaymentShare[];
 }
 
 interface Props {
@@ -58,12 +70,17 @@ function feeLabel(fee: TripFee): string {
 
 export default function LedgerDetailView({ entry, viewerId, viewerType }: Props) {
   const isReversal = entry.entryType === 'reversal';
+  const isBulkPayment = !!entry.bulkPaymentId;
 
   const myFee = entry.tripFees.find(
     (f) => f.recipientId === viewerId && f.recipientType === viewerType,
   );
+  const myShare = (entry.bulkPaymentShares ?? []).find(
+    (s) => s.recipientId === viewerId && s.recipientType === viewerType,
+  );
 
   const totalAmount = entry.tripFees.reduce((s, f) => s + f.amount, 0);
+  const totalShareAmount = (entry.bulkPaymentShares ?? []).reduce((s, f) => s + f.amount, 0);
 
   return (
     <ScrollView
@@ -71,24 +88,39 @@ export default function LedgerDetailView({ entry, viewerId, viewerType }: Props)
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
     >
-      {/* ── Trip Summary Card ─────────────────────────────────────────── */}
+      {/* ── Summary Card ──────────────────────────────────────────────── */}
       <View style={styles.summaryCard}>
-        <View style={styles.routeRow}>
-          <Navigation size={15} color={theme.colors.primary} />
-          <Text style={styles.routeText} numberOfLines={2}>
-            {entry.loadingStateName} → {entry.unloadingStateName}
-          </Text>
-        </View>
+        {isBulkPayment ? (
+          <View style={styles.routeRow}>
+            <Navigation size={15} color={theme.colors.primary} />
+            <Text style={styles.routeText} numberOfLines={2}>
+              {entry.companyName ?? 'Bulk Payment'}
+            </Text>
+          </View>
+        ) : (
+          <>
+            <View style={styles.routeRow}>
+              <Navigation size={15} color={theme.colors.primary} />
+              <Text style={styles.routeText} numberOfLines={2}>
+                {entry.loadingStateName ?? 'Unknown'} → {entry.unloadingStateName ?? 'Unknown'}
+              </Text>
+            </View>
 
-        <View style={styles.infoRow}>
-          <Car size={14} color={theme.colors.grey1} />
-          <Text style={styles.infoText}>{entry.vehicleNumber}</Text>
-        </View>
+            {entry.vehicleNumber && (
+              <View style={styles.infoRow}>
+                <Car size={14} color={theme.colors.grey1} />
+                <Text style={styles.infoText}>{entry.vehicleNumber}</Text>
+              </View>
+            )}
 
-        <View style={styles.infoRow}>
-          <Truck size={14} color={theme.colors.grey1} />
-          <Text style={styles.infoText}>{entry.vehicleTypeName}</Text>
-        </View>
+            {entry.vehicleTypeName && (
+              <View style={styles.infoRow}>
+                <Truck size={14} color={theme.colors.grey1} />
+                <Text style={styles.infoText}>{entry.vehicleTypeName}</Text>
+              </View>
+            )}
+          </>
+        )}
 
         <View style={styles.infoRow}>
           <Calendar size={14} color={theme.colors.grey1} />
@@ -116,7 +148,43 @@ export default function LedgerDetailView({ entry, viewerId, viewerType }: Props)
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>PAYMENT BREAKDOWN</Text>
 
-        {entry.tripFees.length === 0 ? (
+        {isBulkPayment ? (
+          (entry.bulkPaymentShares ?? []).length === 0 ? (
+            <View style={styles.breakdownCard}>
+              <Text style={styles.emptyBreakdown}>No share breakdown available</Text>
+            </View>
+          ) : (
+            <View style={styles.breakdownCard}>
+              {(entry.bulkPaymentShares ?? []).map((share, idx) => {
+                const isMyShare = share.recipientId === viewerId && share.recipientType === viewerType;
+                const isLast = idx === (entry.bulkPaymentShares ?? []).length - 1;
+                return (
+                  <View key={share.id} style={[styles.feeRow, !isLast && styles.feeRowBorder]}>
+                    <View style={styles.feeLabelRow}>
+                      <Text style={styles.feeName}>
+                        {share.recipientName ?? 'Unknown'} ({share.percentage.toFixed(2)}%)
+                      </Text>
+                      {isMyShare && (
+                        <View style={styles.yourShareBadge}>
+                          <Text style={styles.yourShareText}>Your share</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={[styles.feeAmount, isMyShare && styles.feeAmountHighlight]}>
+                      {formatNaira(share.amount)}
+                    </Text>
+                  </View>
+                );
+              })}
+
+              {/* Total row */}
+              <View style={styles.totalRow}>
+                <Text style={styles.totalLabel}>TOTAL COLLECTED</Text>
+                <Text style={styles.totalAmount}>{formatNaira(totalShareAmount)}</Text>
+              </View>
+            </View>
+          )
+        ) : entry.tripFees.length === 0 ? (
           <View style={styles.breakdownCard}>
             <Text style={styles.emptyBreakdown}>No fee breakdown available</Text>
           </View>
@@ -150,11 +218,17 @@ export default function LedgerDetailView({ entry, viewerId, viewerType }: Props)
           </View>
         )}
 
-        {myFee == null && (
-          <Text style={styles.noShareNote}>
-            Your fee entry was not found in the breakdown for this trip.
-          </Text>
-        )}
+        {isBulkPayment
+          ? myShare == null && (
+              <Text style={styles.noShareNote}>
+                Your share entry was not found in the breakdown for this bulk payment.
+              </Text>
+            )
+          : myFee == null && (
+              <Text style={styles.noShareNote}>
+                Your fee entry was not found in the breakdown for this trip.
+              </Text>
+            )}
       </View>
 
       <View style={{ height: theme.PILL_NAV_BOTTOM_PADDING }} />

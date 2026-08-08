@@ -193,18 +193,31 @@ export default function StateAdminWallet() {
       }
     >
       <View style={styles.cardMain}>
-        <View style={styles.routeRow}>
-          <Navigation size={14} color={theme.colors.grey1} />
-          <Text style={styles.routeText} numberOfLines={1}>
-            {item.loadingStateName} → {item.unloadingStateName}
-          </Text>
-        </View>
-        <View style={styles.vehicleTypeRow}>
-          <Truck size={13} color={theme.colors.grey1} />
-          <Text style={styles.vehicleTypeText} numberOfLines={1}>
-            {item.vehicleTypeName || item.vehicleNumber}
-          </Text>
-        </View>
+        {item.bulkPaymentId ? (
+          <View style={styles.routeRow}>
+            <Navigation size={14} color={theme.colors.grey1} />
+            <Text style={styles.routeText} numberOfLines={1}>
+              {item.companyName ?? 'Bulk Payment'}
+            </Text>
+          </View>
+        ) : (
+          <>
+            <View style={styles.routeRow}>
+              <Navigation size={14} color={theme.colors.grey1} />
+              <Text style={styles.routeText} numberOfLines={1}>
+                {item.loadingStateName ?? 'Unknown'} → {item.unloadingStateName ?? 'Unknown'}
+              </Text>
+            </View>
+            {(item.vehicleTypeName || item.vehicleNumber) && (
+              <View style={styles.vehicleTypeRow}>
+                <Truck size={13} color={theme.colors.grey1} />
+                <Text style={styles.vehicleTypeText} numberOfLines={1}>
+                  {item.vehicleTypeName || item.vehicleNumber}
+                </Text>
+              </View>
+            )}
+          </>
+        )}
         <Text style={styles.dateText}>{formatWAT(item.createdAt)}</Text>
       </View>
       <Text style={[

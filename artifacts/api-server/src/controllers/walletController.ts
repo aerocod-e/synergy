@@ -119,12 +119,13 @@ export async function getMyLedger(req: Request, res: Response): Promise<void> {
 
     const baseQuery = `
       FROM wallet_ledger wl
-      JOIN trip_fees tf   ON wl.trip_fee_id    = tf.id
-      JOIN trips t        ON wl.trip_id        = t.id
-      JOIN vehicles v     ON t.vehicle_id      = v.id
+      LEFT JOIN trip_fees tf   ON wl.trip_fee_id    = tf.id
+      LEFT JOIN trips t        ON wl.trip_id        = t.id
+      LEFT JOIN vehicles v     ON t.vehicle_id      = v.id
       LEFT JOIN vehicle_types vt ON vt.id      = v.vehicle_type_id
       LEFT JOIN states sl ON sl.id             = t.loading_state_id
       LEFT JOIN states su ON su.id             = t.unloading_state_id
+      LEFT JOIN bulk_payments bp ON bp.id      = wl.bulk_payment_id
       WHERE wl.wallet_id = $1 ${whereClause}`;
 
     const [summaryRes, countRes] = await Promise.all([
@@ -146,21 +147,25 @@ export async function getMyLedger(req: Request, res: Response): Promise<void> {
 
     const entriesRes = await pool.query<{
       ledger_id:            string;
-      trip_id:              string;
-      vehicle_number:       string;
+      trip_id:              string | null;
+      bulk_payment_id:      string | null;
+      company_name:         string | null;
+      vehicle_number:       string | null;
       vehicle_type_name:    string | null;
-      fee_type:             string;
+      fee_type:             string | null;
       amount:               number;
       entry_type:           string;
       cleared:              boolean;
       cleared_at:           Date | null;
       created_at:           Date;
-      loading_state_name:   string;
-      unloading_state_name: string;
+      loading_state_name:   string | null;
+      unloading_state_name: string | null;
     }>(
       `SELECT
          wl.id          AS ledger_id,
          wl.trip_id,
+         wl.bulk_payment_id,
+         bp.company_name AS company_name,
          v.registration_number AS vehicle_number,
          vt.name               AS vehicle_type_name,
          tf.fee_type,
@@ -169,8 +174,8 @@ export async function getMyLedger(req: Request, res: Response): Promise<void> {
          wl.cleared,
          wl.cleared_at,
          wl.created_at,
-         COALESCE(sl.name, 'Unknown') AS loading_state_name,
-         COALESCE(su.name, 'Unknown') AS unloading_state_name
+         CASE WHEN t.id IS NOT NULL THEN COALESCE(sl.name, 'Unknown') END AS loading_state_name,
+         CASE WHEN t.id IS NOT NULL THEN COALESCE(su.name, 'Unknown') END AS unloading_state_name
        ${baseQuery}
        ORDER BY wl.created_at DESC
        LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
@@ -178,7 +183,7 @@ export async function getMyLedger(req: Request, res: Response): Promise<void> {
     );
 
     // Fetch all trip_fees for every trip on this page (for the detail breakdown)
-    const tripIds = [...new Set(entriesRes.rows.map((r) => r.trip_id))];
+    const tripIds = [...new Set(entriesRes.rows.map((r) => r.trip_id).filter((id): id is string => id !== null))];
 
     let tripFeesMap: Map<string, Array<{
       id: string;
@@ -230,6 +235,62 @@ export async function getMyLedger(req: Request, res: Response): Promise<void> {
       }
     }
 
+    // Fetch all bulk_payment_shares for every bulk payment on this page (for the detail
+    // breakdown), shaped the same way tripFees is shaped so the shared frontend
+    // breakdown component can consume either with minimal change.
+    const bulkPaymentIds = [...new Set(
+      entriesRes.rows.map((r) => r.bulk_payment_id).filter((id): id is string => id !== null)
+    )];
+
+    const bulkSharesMap: Map<string, Array<{
+      id: string;
+      recipientType: string;
+      recipientId: string;
+      recipientName: string | null;
+      percentage: number;
+      amount: number;
+    }>> = new Map();
+
+    if (bulkPaymentIds.length > 0) {
+      const allSharesRes = await pool.query<{
+        bulk_payment_id: string;
+        id:              string;
+        recipient_type:  string;
+        recipient_id:    string;
+        recipient_name:  string | null;
+        percentage:      string;
+        amount:          number;
+      }>(
+        `SELECT
+           bps.bulk_payment_id,
+           bps.id,
+           bps.recipient_type,
+           bps.recipient_id,
+           COALESCE(s.name, sh.name) AS recipient_name,
+           bps.percentage,
+           bps.amount
+         FROM bulk_payment_shares bps
+         LEFT JOIN states       s  ON bps.recipient_type = 'state'       AND s.id  = bps.recipient_id
+         LEFT JOIN stakeholders sh ON bps.recipient_type = 'stakeholder' AND sh.id = bps.recipient_id
+         WHERE bps.bulk_payment_id = ANY($1::uuid[])`,
+        [bulkPaymentIds]
+      );
+
+      for (const share of allSharesRes.rows) {
+        if (!bulkSharesMap.has(share.bulk_payment_id)) {
+          bulkSharesMap.set(share.bulk_payment_id, []);
+        }
+        bulkSharesMap.get(share.bulk_payment_id)!.push({
+          id:            share.id,
+          recipientType: share.recipient_type,
+          recipientId:   share.recipient_id,
+          recipientName: share.recipient_name,
+          percentage:    Number(share.percentage),
+          amount:        share.amount,
+        });
+      }
+    }
+
     const totalCredits   = parseInt(summaryRes.rows[0]!.total_credits,   10);
     const totalReversals = parseInt(summaryRes.rows[0]!.total_reversals, 10);
 
@@ -238,6 +299,8 @@ export async function getMyLedger(req: Request, res: Response): Promise<void> {
         entries: entriesRes.rows.map((r) => ({
           ledgerId:            r.ledger_id,
           tripId:              r.trip_id,
+          bulkPaymentId:       r.bulk_payment_id,
+          companyName:         r.company_name,
           vehicleNumber:       r.vehicle_number,
           vehicleTypeName:     r.vehicle_type_name,
           feeType:             r.fee_type,
@@ -249,7 +312,8 @@ export async function getMyLedger(req: Request, res: Response): Promise<void> {
           createdAt:           r.created_at,
           loadingStateName:    r.loading_state_name,
           unloadingStateName:  r.unloading_state_name,
-          tripFees:            tripFeesMap.get(r.trip_id) ?? [],
+          tripFees:            r.trip_id ? (tripFeesMap.get(r.trip_id) ?? []) : [],
+          bulkPaymentShares:   r.bulk_payment_id ? (bulkSharesMap.get(r.bulk_payment_id) ?? []) : [],
         })),
         pagination: {
           page,

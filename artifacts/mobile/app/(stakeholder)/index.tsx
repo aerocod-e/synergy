@@ -33,19 +33,22 @@ interface TripFee {
 
 interface LedgerEntry {
   ledgerId: string;
-  tripId: string;
-  vehicleNumber: string;
-  vehicleTypeName: string;
-  feeType: string;
+  tripId: string | null;
+  bulkPaymentId?: string | null;
+  companyName?: string | null;
+  vehicleNumber: string | null;
+  vehicleTypeName: string | null;
+  feeType: string | null;
   amount: number;
   amountNaira: string;
   entryType: 'credit' | 'reversal';
-  loadingStateName: string;
-  unloadingStateName: string;
+  loadingStateName: string | null;
+  unloadingStateName: string | null;
   cleared: boolean;
   clearedAt: string | null;
   createdAt: string;
   tripFees: TripFee[];
+  bulkPaymentShares?: unknown[];
 }
 
 interface WalletData {
@@ -220,16 +223,29 @@ export default function StakeholderHome() {
       }
     >
       <View style={styles.cardMain}>
-        <View style={styles.routeRow}>
-          <Navigation size={14} color={theme.colors.grey1} />
-          <Text style={styles.routeText} numberOfLines={1}>
-            {item.loadingStateName} → {item.unloadingStateName}
-          </Text>
-        </View>
-        <View style={styles.vehicleRow}>
-          <Car size={13} color={theme.colors.grey1} />
-          <Text style={styles.vehicleText}>{item.vehicleNumber}</Text>
-        </View>
+        {item.bulkPaymentId ? (
+          <View style={styles.routeRow}>
+            <Navigation size={14} color={theme.colors.grey1} />
+            <Text style={styles.routeText} numberOfLines={1}>
+              {item.companyName ?? 'Bulk Payment'}
+            </Text>
+          </View>
+        ) : (
+          <>
+            <View style={styles.routeRow}>
+              <Navigation size={14} color={theme.colors.grey1} />
+              <Text style={styles.routeText} numberOfLines={1}>
+                {item.loadingStateName ?? 'Unknown'} → {item.unloadingStateName ?? 'Unknown'}
+              </Text>
+            </View>
+            {item.vehicleNumber && (
+              <View style={styles.vehicleRow}>
+                <Car size={13} color={theme.colors.grey1} />
+                <Text style={styles.vehicleText}>{item.vehicleNumber}</Text>
+              </View>
+            )}
+          </>
+        )}
         <Text style={styles.dateText}>{formatWAT(item.createdAt)}</Text>
       </View>
       <Text style={[

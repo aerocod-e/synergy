@@ -15,7 +15,7 @@ import {
   View,
 } from 'react-native';
 
-import { Ban, ChevronDown, ChevronRight, ChevronUp, Pencil, Plus, RotateCcw, Search, X } from 'lucide-react-native';
+import { Ban, ChevronDown, ChevronRight, ChevronUp, Pencil, Plus, RotateCcw, Search, Undo2, X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
@@ -27,7 +27,14 @@ import {
   getAllWallets,
   getVehicleTypeVehicleCount,
   setVehicleTypeActive,
+  getStates,
+  getStakeholders,
+  getBulkPayments,
+  createBulkPayment,
+  reverseBulkPayment,
+  removeBulkPayment,
 } from '@/services/api';
+import DateField from '@/components/DateField';
 import { theme } from '@/constants/theme';
 import TopBar from '@/components/TopBar';
 import ScreenTransition from '@/components/ScreenTransition';
@@ -75,6 +82,40 @@ interface Wallet {
   ownerIsActive: boolean;
 }
 
+interface StateItem {
+  id: string;
+  name: string;
+}
+
+interface StakeholderItem {
+  id: string;
+  name: string;
+  isActive: boolean;
+}
+
+interface BulkPaymentShare {
+  id: string;
+  recipientType: string;
+  recipientId: string;
+  recipientName: string;
+  percentage: number;
+  amount: number;
+}
+
+interface BulkPayment {
+  id: string;
+  companyName: string;
+  totalAmount: number;
+  expiryDate: string;
+  status: 'active' | 'reversed';
+  archived: boolean;
+  createdAt: string;
+  reversalDeadline: string;
+  withinReversalWindow: boolean;
+  expired: boolean;
+  shares: BulkPaymentShare[];
+}
+
 function nairaToKobo(val: string): number {
   return Math.round(parseFloat(val) * 100);
 }
@@ -87,6 +128,27 @@ function isValidNaira(val: string): boolean {
 function isValidAmount(val: string): boolean {
   const n = parseFloat(val);
   return val.trim() !== '' && !isNaN(n) && n >= 0;
+}
+
+function isValidPercentage(val: string): boolean {
+  const n = parseFloat(val);
+  return val.trim() !== '' && !isNaN(n) && n > 0 && n <= 100;
+}
+
+function formatDateShort(value: string): string {
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return value;
+  return d.toLocaleDateString('en-NG', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function formatTimeRemaining(deadline: string): string {
+  const ms = new Date(deadline).getTime() - Date.now();
+  if (ms <= 0) return 'Expiring…';
+  const totalMinutes = Math.floor(ms / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours > 0) return `${hours}h ${minutes}m left to reverse`;
+  return `${minutes}m left to reverse`;
 }
 
 function ActiveChartCard({
@@ -207,6 +269,27 @@ export default function ConfigScreen() {
   const [editVtError, setEditVtError] = useState<string | null>(null);
   const [togglingVtId, setTogglingVtId] = useState<string | null>(null);
 
+  const [states, setStates] = useState<StateItem[]>([]);
+  const [stakeholders, setStakeholders] = useState<StakeholderItem[]>([]);
+  const [bulkPayments, setBulkPayments] = useState<BulkPayment[]>([]);
+
+  const [addBpVisible, setAddBpVisible] = useState(false);
+  const [addBpCompanyName, setAddBpCompanyName] = useState('');
+  const [addBpTotalAmount, setAddBpTotalAmount] = useState('');
+  const [addBpExpiryDate, setAddBpExpiryDate] = useState('');
+  const [addBpToggles, setAddBpToggles] = useState<Record<string, boolean>>({});
+  const [addBpPercentages, setAddBpPercentages] = useState<Record<string, string>>({});
+  const [addBpSubmitting, setAddBpSubmitting] = useState(false);
+  const [addBpError, setAddBpError] = useState<string | null>(null);
+  const [reversingBpId, setReversingBpId] = useState<string | null>(null);
+  const [removingBpId, setRemovingBpId] = useState<string | null>(null);
+  const [, setClockTick] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => setClockTick((t) => t + 1), 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   const [addVtVisible, setAddVtVisible] = useState(false);
   const [addVtName, setAddVtName] = useState('');
   const [addVtLoadingFee, setAddVtLoadingFee] = useState('');
@@ -218,10 +301,13 @@ export default function ConfigScreen() {
   const loadData = useCallback(async () => {
     setPageError(null);
     try {
-      const [chartResult, vehicleTypesResult, walletsResult] = await Promise.allSettled([
+      const [chartResult, vehicleTypesResult, walletsResult, statesResult, stakeholdersResult, bulkPaymentsResult] = await Promise.allSettled([
         getActivePricingChart(),
         listVehicleTypes(),
         getAllWallets(),
+        getStates(),
+        getStakeholders(),
+        getBulkPayments(),
       ]);
 
       if (chartResult.status === 'fulfilled') {
@@ -249,6 +335,21 @@ export default function ConfigScreen() {
           ownerIsActive: w.ownerIsActive ?? w.owner_is_active ?? true,
         }));
         setAllWallets(mapped);
+      }
+
+      if (statesResult.status === 'fulfilled') {
+        const raw: any[] = (statesResult.value as any)?.states ?? [];
+        setStates(raw.map((s: any) => ({ id: s.id, name: s.name })));
+      }
+
+      if (stakeholdersResult.status === 'fulfilled') {
+        const raw: any[] = (stakeholdersResult.value as any)?.stakeholders ?? [];
+        setStakeholders(raw.map((s: any) => ({ id: s.id, name: s.name, isActive: s.isActive ?? s.is_active ?? true })));
+      }
+
+      if (bulkPaymentsResult.status === 'fulfilled') {
+        const raw: any[] = (bulkPaymentsResult.value as any)?.bulkPayments ?? [];
+        setBulkPayments(raw);
       }
     } finally {
       setPageLoading(false);
@@ -460,6 +561,117 @@ export default function ConfigScreen() {
     }
   };
 
+  const bpRecipients: Array<{ key: string; type: 'state' | 'stakeholder'; id: string; name: string }> = [
+    ...states.map((s) => ({ key: `state:${s.id}`, type: 'state' as const, id: s.id, name: s.name })),
+    ...stakeholders.filter((s) => s.isActive).map((s) => ({ key: `stakeholder:${s.id}`, type: 'stakeholder' as const, id: s.id, name: s.name })),
+  ];
+
+  const bpToggledKeys = Object.keys(addBpToggles).filter((k) => addBpToggles[k]);
+  const bpTotalPercentage = bpToggledKeys.reduce((sum, k) => {
+    const n = parseFloat(addBpPercentages[k] ?? '');
+    return sum + (isNaN(n) ? 0 : n);
+  }, 0);
+  const bpTotalRounded = Math.round(bpTotalPercentage * 100) / 100;
+  const bpIsExactly100 = bpToggledKeys.length > 0 && bpTotalRounded === 100;
+
+  const handleOpenAddBp = () => {
+    setAddBpCompanyName('');
+    setAddBpTotalAmount('');
+    setAddBpExpiryDate('');
+    setAddBpToggles({});
+    setAddBpPercentages({});
+    setAddBpError(null);
+    setAddBpVisible(true);
+  };
+
+  const handleSubmitAddBp = async () => {
+    if (!addBpCompanyName.trim()) {
+      setAddBpError('Company name is required.');
+      return;
+    }
+    if (!isValidNaira(addBpTotalAmount)) {
+      setAddBpError('Enter a valid total amount greater than zero.');
+      return;
+    }
+    if (!addBpExpiryDate) {
+      setAddBpError('Select an expiry date.');
+      return;
+    }
+    if (bpToggledKeys.length === 0) {
+      setAddBpError('Select at least one recipient.');
+      return;
+    }
+    for (const key of bpToggledKeys) {
+      if (!isValidPercentage(addBpPercentages[key] ?? '')) {
+        const recipient = bpRecipients.find((r) => r.key === key);
+        setAddBpError(`Enter a valid percentage for ${recipient?.name ?? 'the selected recipient'}.`);
+        return;
+      }
+    }
+    if (!bpIsExactly100) {
+      setAddBpError(`The percentages must sum to exactly 100.00 (currently ${bpTotalRounded.toFixed(2)}).`);
+      return;
+    }
+
+    setAddBpSubmitting(true);
+    setAddBpError(null);
+    try {
+      const shares = bpToggledKeys.map((key) => {
+        const recipient = bpRecipients.find((r) => r.key === key)!;
+        return {
+          recipientType: recipient.type,
+          recipientId: recipient.id,
+          percentage: parseFloat(addBpPercentages[key]!),
+        };
+      });
+      await createBulkPayment({
+        companyName: addBpCompanyName.trim(),
+        totalAmount: parseFloat(addBpTotalAmount),
+        expiryDate: addBpExpiryDate,
+        shares,
+      });
+      setAddBpVisible(false);
+      setPageLoading(true);
+      await loadData();
+    } catch (e: any) {
+      setAddBpError(e?.message ?? 'Failed to create bulk payment.');
+    } finally {
+      setAddBpSubmitting(false);
+    }
+  };
+
+  const handleReverseBp = (bp: BulkPayment) => {
+    confirmAction({
+      title: 'Reverse Bulk Payment',
+      message: `This will reverse the ${formatNaira(bp.totalAmount)} payment from ${bp.companyName} and deduct the credited amounts from every recipient's wallet. This cannot be undone. Continue?`,
+      confirmText: 'Reverse',
+      destructive: true,
+      onConfirm: async () => {
+        setReversingBpId(bp.id);
+        try {
+          await reverseBulkPayment(bp.id);
+          await loadData();
+        } catch (e: any) {
+          notifyAction('Error', e?.message ?? 'Failed to reverse bulk payment.');
+        } finally {
+          setReversingBpId(null);
+        }
+      },
+    });
+  };
+
+  const handleRemoveBp = async (bp: BulkPayment) => {
+    setRemovingBpId(bp.id);
+    try {
+      await removeBulkPayment(bp.id);
+      await loadData();
+    } catch (e: any) {
+      notifyAction('Error', e?.message ?? 'Failed to remove bulk payment.');
+    } finally {
+      setRemovingBpId(null);
+    }
+  };
+
   if (pageLoading) {
     return (
       <View style={styles.centered}>
@@ -519,6 +731,72 @@ export default function ConfigScreen() {
           <Plus size={18} color={theme.colors.primary} />
           <Text style={styles.addVtText}>Add Vehicle Type</Text>
         </TouchableOpacity>
+
+        <Text style={styles.sectionLabel}>Bulk Payments</Text>
+        <TouchableOpacity
+          style={styles.addVtRow}
+          onPress={handleOpenAddBp}
+          activeOpacity={0.75}
+        >
+          <Plus size={18} color={theme.colors.primary} />
+          <Text style={styles.addVtText}>Add Bulk Payment</Text>
+        </TouchableOpacity>
+
+        {bulkPayments.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyText}>No bulk payments yet</Text>
+          </View>
+        ) : (
+          bulkPayments.map((bp) => (
+            <View key={bp.id} style={styles.bpCard}>
+              <View style={styles.bpCardTop}>
+                <Text style={styles.bpCompanyName} numberOfLines={1}>{bp.companyName}</Text>
+                <View style={[styles.bpStatusBadge, bp.status === 'reversed' ? styles.bpStatusReversed : styles.bpStatusActive]}>
+                  <Text style={[styles.bpStatusText, bp.status === 'reversed' ? styles.bpStatusReversedText : styles.bpStatusActiveText]}>
+                    {bp.status === 'reversed' ? 'Reversed' : 'Active'}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.bpTotal}>{formatNaira(bp.totalAmount)}</Text>
+              <Text style={styles.bpMeta}>Created {formatDateShort(bp.createdAt)}</Text>
+              <Text style={styles.bpMeta}>
+                Expiry {formatDateShort(bp.expiryDate)}
+                {bp.expired ? '  •  Expired' : ''}
+              </Text>
+              <View style={styles.bpActionsRow}>
+                {bp.withinReversalWindow && (
+                  <TouchableOpacity
+                    style={styles.bpReverseBtn}
+                    onPress={() => handleReverseBp(bp)}
+                    disabled={reversingBpId === bp.id}
+                    activeOpacity={0.85}
+                  >
+                    {reversingBpId === bp.id ? (
+                      <ActivityIndicator size="small" color={theme.colors.error} />
+                    ) : (
+                      <>
+                        <Undo2 size={14} color={theme.colors.error} />
+                        <Text style={styles.bpReverseBtnText}>{formatTimeRemaining(bp.reversalDeadline)}</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={styles.bpRemoveBtn}
+                  onPress={() => handleRemoveBp(bp)}
+                  disabled={removingBpId === bp.id}
+                  activeOpacity={0.85}
+                >
+                  {removingBpId === bp.id ? (
+                    <ActivityIndicator size="small" color={theme.colors.grey1} />
+                  ) : (
+                    <Text style={styles.bpRemoveBtnText}>Remove from List</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
+        )}
 
         {allWallets.length > 0 && (
           <>
@@ -787,6 +1065,104 @@ export default function ConfigScreen() {
               {addVtSubmitting
                 ? <ActivityIndicator color={theme.colors.white} />
                 : <Text style={styles.submitButtonText}>Create Vehicle Type</Text>}
+            </TouchableOpacity>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ── Add Bulk Payment Modal ── */}
+      <Modal
+        visible={addBpVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setAddBpVisible(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalRoot}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Add Bulk Payment</Text>
+            <TouchableOpacity onPress={() => setAddBpVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <X size={24} color={theme.colors.grey2} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="handled">
+            <Text style={styles.fieldLabel}>Company Name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. Dangote Cement"
+              placeholderTextColor={theme.colors.placeholder}
+              autoCapitalize="words"
+              value={addBpCompanyName}
+              onChangeText={setAddBpCompanyName}
+            />
+            <Text style={[styles.fieldLabel, { marginTop: 14 }]}>Total Amount (₦)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. 500000.00"
+              placeholderTextColor={theme.colors.placeholder}
+              keyboardType="decimal-pad"
+              value={addBpTotalAmount}
+              onChangeText={setAddBpTotalAmount}
+            />
+            <Text style={[styles.fieldLabel, { marginTop: 14 }]}>Expiry Date</Text>
+            <DateField value={addBpExpiryDate} onChange={setAddBpExpiryDate} placeholder="Select expiry date" />
+
+            <Text style={styles.modalSectionLabel}>Split Between Recipients</Text>
+            <ScrollView style={styles.bpRecipientList} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+              {bpRecipients.map((r) => (
+                <View key={r.key} style={styles.bpRecipientRow}>
+                  <TouchableOpacity
+                    style={styles.bpRecipientToggle}
+                    activeOpacity={0.7}
+                    onPress={() =>
+                      setAddBpToggles((prev) => ({ ...prev, [r.key]: !prev[r.key] }))
+                    }
+                  >
+                    <View style={[styles.bpCheckbox, addBpToggles[r.key] && styles.bpCheckboxChecked]}>
+                      {addBpToggles[r.key] && <View style={styles.bpCheckboxDot} />}
+                    </View>
+                    <Text style={styles.bpRecipientName} numberOfLines={1}>
+                      {r.name} <Text style={styles.mutedText}>({r.type === 'state' ? 'State' : 'Stakeholder'})</Text>
+                    </Text>
+                  </TouchableOpacity>
+                  {addBpToggles[r.key] && (
+                    <TextInput
+                      style={styles.bpPercentInput}
+                      placeholder="%"
+                      placeholderTextColor={theme.colors.placeholder}
+                      keyboardType="decimal-pad"
+                      value={addBpPercentages[r.key] ?? ''}
+                      onChangeText={(v) =>
+                        setAddBpPercentages((prev) => ({ ...prev, [r.key]: v }))
+                      }
+                    />
+                  )}
+                </View>
+              ))}
+              {bpRecipients.length === 0 && (
+                <Text style={styles.emptyRatesText}>No active states or stakeholders available.</Text>
+              )}
+            </ScrollView>
+
+            <View style={styles.bpTotalRow}>
+              <Text style={styles.bpTotalLabel}>Total</Text>
+              <Text style={[styles.bpTotalValue, bpIsExactly100 ? styles.bpTotalValueGreen : styles.bpTotalValueRed]}>
+                {bpTotalRounded.toFixed(2)}%
+              </Text>
+            </View>
+
+            {addBpError && <Text style={styles.errorText}>{addBpError}</Text>}
+            <TouchableOpacity
+              style={[styles.submitButton, (addBpSubmitting || !bpIsExactly100) && styles.buttonDisabled]}
+              onPress={handleSubmitAddBp}
+              disabled={addBpSubmitting || !bpIsExactly100}
+              activeOpacity={0.85}
+            >
+              {addBpSubmitting
+                ? <ActivityIndicator color={theme.colors.white} />
+                : <Text style={styles.submitButtonText}>Save Bulk Payment</Text>}
             </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -1160,4 +1536,171 @@ const styles = StyleSheet.create({
   },
   modalScroll: { flex: 1 },
   modalScrollContent: { padding: 20 },
+  bpCard: {
+    backgroundColor: theme.colors.white,
+    marginHorizontal: 20,
+    marginBottom: 12,
+    borderRadius: 16,
+    padding: 16,
+    ...theme.shadows.card,
+  },
+  bpCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  bpCompanyName: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.colors.black,
+    marginRight: 10,
+  },
+  bpStatusBadge: {
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  bpStatusActive: {
+    backgroundColor: theme.colors.greenMuted,
+  },
+  bpStatusReversed: {
+    backgroundColor: theme.colors.grey3,
+  },
+  bpStatusText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  bpStatusActiveText: {
+    color: theme.colors.greenText,
+  },
+  bpStatusReversedText: {
+    color: theme.colors.grey1,
+  },
+  bpTotal: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.colors.primary,
+    marginBottom: 6,
+  },
+  bpMeta: {
+    fontSize: 13,
+    color: theme.colors.grey1,
+    marginBottom: 2,
+  },
+  bpActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  bpReverseBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    flex: 1,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: theme.colors.error,
+    borderRadius: 10,
+    paddingVertical: 10,
+  },
+  bpReverseBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.colors.error,
+  },
+  bpRemoveBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.grey4,
+    borderRadius: 10,
+    paddingVertical: 10,
+  },
+  bpRemoveBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.colors.grey1,
+  },
+  bpRecipientList: {
+    maxHeight: 260,
+    borderWidth: 1,
+    borderColor: theme.colors.separator,
+    borderRadius: 10,
+    backgroundColor: theme.colors.white,
+  },
+  bpRecipientRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.separator,
+  },
+  bpRecipientToggle: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  bpCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: theme.colors.separator,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bpCheckboxChecked: {
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.blueMuted,
+  },
+  bpCheckboxDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 3,
+    backgroundColor: theme.colors.primary,
+  },
+  bpRecipientName: {
+    flex: 1,
+    fontSize: 14,
+    color: theme.colors.black,
+  },
+  bpPercentInput: {
+    width: 64,
+    borderWidth: 1,
+    borderColor: theme.colors.separator,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    fontSize: 14,
+    textAlign: 'right',
+    color: theme.colors.black,
+  },
+  bpTotalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 14,
+    paddingHorizontal: 4,
+  },
+  bpTotalLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.grey2,
+  },
+  bpTotalValue: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  bpTotalValueGreen: {
+    color: theme.colors.greenText,
+  },
+  bpTotalValueRed: {
+    color: theme.colors.error,
+  },
 });
