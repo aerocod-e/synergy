@@ -143,6 +143,24 @@ function formatDateShort(value: string): string {
   return d.toLocaleDateString('en-NG', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+function getBpStatusLabel(bp: BulkPayment): string {
+  if (bp.status === 'reversed') return 'Reversed';
+  if (bp.expired) return 'Expired';
+  return 'Active';
+}
+
+function getBpStatusBadgeStyle(bp: BulkPayment) {
+  if (bp.status === 'reversed') return styles.bpStatusReversed;
+  if (bp.expired) return styles.bpStatusExpired;
+  return styles.bpStatusActive;
+}
+
+function getBpStatusTextStyle(bp: BulkPayment) {
+  if (bp.status === 'reversed') return styles.bpStatusReversedText;
+  if (bp.expired) return styles.bpStatusExpiredText;
+  return styles.bpStatusActiveText;
+}
+
 function formatTimeRemaining(deadline: string): string {
   const ms = new Date(deadline).getTime() - Date.now();
   if (ms <= 0) return 'Expiring…';
@@ -839,9 +857,9 @@ export default function ConfigScreen() {
                 activeOpacity={0.7}
               >
                 <Text style={styles.bpCompanyName} numberOfLines={1}>{bp.companyName}</Text>
-                <View style={[styles.bpStatusBadge, bp.status === 'reversed' ? styles.bpStatusReversed : styles.bpStatusActive]}>
-                  <Text style={[styles.bpStatusText, bp.status === 'reversed' ? styles.bpStatusReversedText : styles.bpStatusActiveText]}>
-                    {bp.status === 'reversed' ? 'Reversed' : 'Active'}
+                <View style={[styles.bpStatusBadge, getBpStatusBadgeStyle(bp)]}>
+                  <Text style={[styles.bpStatusText, getBpStatusTextStyle(bp)]}>
+                    {getBpStatusLabel(bp)}
                   </Text>
                 </View>
                 {bpExpanded
@@ -852,7 +870,6 @@ export default function ConfigScreen() {
               <Text style={styles.bpMeta}>Created {formatDateShort(bp.createdAt)}</Text>
               <Text style={styles.bpMeta}>
                 Expiry {formatDateShort(bp.expiryDate)}
-                {bp.expired ? '  •  Expired' : ''}
               </Text>
               {bpExpanded && (
                 <View style={styles.bpBreakdown}>
@@ -1333,9 +1350,9 @@ export default function ConfigScreen() {
                       activeOpacity={0.7}
                     >
                       <Text style={styles.bpCompanyName} numberOfLines={1}>{bp.companyName}</Text>
-                      <View style={[styles.bpStatusBadge, bp.status === 'reversed' ? styles.bpStatusReversed : styles.bpStatusActive]}>
-                        <Text style={[styles.bpStatusText, bp.status === 'reversed' ? styles.bpStatusReversedText : styles.bpStatusActiveText]}>
-                          {bp.status === 'reversed' ? 'Reversed' : 'Active'}
+                      <View style={[styles.bpStatusBadge, getBpStatusBadgeStyle(bp)]}>
+                        <Text style={[styles.bpStatusText, getBpStatusTextStyle(bp)]}>
+                          {getBpStatusLabel(bp)}
                         </Text>
                       </View>
                       {bpExpanded
@@ -1346,7 +1363,6 @@ export default function ConfigScreen() {
                     <Text style={styles.bpMeta}>Created {formatDateShort(bp.createdAt)}</Text>
                     <Text style={styles.bpMeta}>
                       Expiry {formatDateShort(bp.expiryDate)}
-                      {bp.expired ? '  •  Expired' : ''}
                     </Text>
                     {bpExpanded && (
                       <View style={styles.bpBreakdown}>
@@ -1824,6 +1840,9 @@ const styles = StyleSheet.create({
   bpStatusReversed: {
     backgroundColor: theme.colors.grey3,
   },
+  bpStatusExpired: {
+    backgroundColor: theme.colors.amberMuted,
+  },
   bpStatusText: {
     fontSize: 11,
     fontWeight: '700',
@@ -1834,6 +1853,9 @@ const styles = StyleSheet.create({
   },
   bpStatusReversedText: {
     color: theme.colors.grey1,
+  },
+  bpStatusExpiredText: {
+    color: theme.colors.amberText,
   },
   bpTotal: {
     fontSize: 18,

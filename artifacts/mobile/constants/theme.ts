@@ -14,6 +14,8 @@ export const theme = {
     green: '#22c55e',
     greenMuted: '#d1fae5',
     greenText: '#15803d',
+    amberMuted: '#fef3c7',
+    amberText: '#b45309',
     blueMuted: '#dbeafe',
     blueText: '#1a6ec8',
     darkBadgeBg: '#374151',
