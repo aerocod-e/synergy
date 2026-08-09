@@ -812,7 +812,7 @@ export default function ConfigScreen() {
           </TouchableOpacity>
         </View>
         <TouchableOpacity
-          style={styles.addVtRow}
+          style={[styles.addVtRow, { marginBottom: 12 }]}
           onPress={handleOpenAddBp}
           activeOpacity={0.75}
         >
