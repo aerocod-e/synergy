@@ -1,0 +1,18 @@
+Add the missing share breakdown to each Bulk Payment card, including a clear tag distinguishing states from stakeholders. Frontend only, no backend change needed, the data is already present in the API response.
+
+In artifacts/mobile/app/(superadmin)/config.tsx, add an expandedBpId state variable, tracking at most one expanded card at a time, following the exact same single-expansion pattern already used for the vehicle type cards on this same screen.
+
+Make each Bulk Payment card's header row (company name and status badge) tappable, toggling that card's expanded state, with a chevron icon that rotates or flips to indicate expanded versus collapsed, matching the existing vehicle type card pattern.
+
+When a card is expanded, render a breakdown section between the existing expiry date line and the actions row, showing one row per entry in bp.shares. Each row shows the recipient's name, a small colored tag immediately before or after the name reading either "State" or "Stakeholder" based on recipientType, so the two are visually distinguishable at a glance without needing to infer it, followed by the percentage and the amount in Naira, right aligned. Use the same visual language already used for the payment breakdown section in components/LedgerDetailView.tsx so this reads consistently with how a recipient already sees their own share elsewhere in the app.
+
+Use LayoutAnimation for the expand and collapse, consistent with the existing vehicle type card behavior on this same screen.
+
+Run
+pnpm --filter @workspace/mobile exec tsc --noEmit
+
+Must return zero errors.
+
+Testing, 390x844px, tap only: as Super Admin, open Config, open the Bulk Payments section, tap a card, confirm it expands showing every recipient with a clear State or Stakeholder tag, correct percentage, and correct amount, confirm the total of the displayed amounts matches the card's total amount. Tap a different card, confirm the first one collapses and the new one expands. Tap the same card again, confirm it collapses. Confirm this works correctly on all three seeded bulk payment records, including the one with a mixed state and stakeholder split. Console clean throughout.
+
+Report the file changed and every test result.

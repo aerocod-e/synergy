@@ -253,6 +253,7 @@ export default function ConfigScreen() {
   const [allWallets, setAllWallets] = useState<Wallet[]>([]);
   const [eodSearch, setEodSearch] = useState('');
   const [eodFilter, setEodFilter] = useState<'all' | 'states' | 'stakeholders'>('all');
+  const [expandedBpId, setExpandedBpId] = useState<string | null>(null);
 
   type EditSrEntry = { stakeholderId: string; stakeholderName: string; amount: string };
 
@@ -747,22 +748,70 @@ export default function ConfigScreen() {
             <Text style={styles.emptyText}>No bulk payments yet</Text>
           </View>
         ) : (
-          bulkPayments.map((bp) => (
+          bulkPayments.map((bp) => {
+            const bpExpanded = expandedBpId === bp.id;
+            const bpTotalShareAmount = bp.shares.reduce((s, sh) => s + sh.amount, 0);
+            return (
             <View key={bp.id} style={styles.bpCard}>
-              <View style={styles.bpCardTop}>
+              <TouchableOpacity
+                style={styles.bpCardTop}
+                onPress={() => {
+                  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                  setExpandedBpId(bpExpanded ? null : bp.id);
+                }}
+                activeOpacity={0.7}
+              >
                 <Text style={styles.bpCompanyName} numberOfLines={1}>{bp.companyName}</Text>
                 <View style={[styles.bpStatusBadge, bp.status === 'reversed' ? styles.bpStatusReversed : styles.bpStatusActive]}>
                   <Text style={[styles.bpStatusText, bp.status === 'reversed' ? styles.bpStatusReversedText : styles.bpStatusActiveText]}>
                     {bp.status === 'reversed' ? 'Reversed' : 'Active'}
                   </Text>
                 </View>
-              </View>
+                {bpExpanded
+                  ? <ChevronUp size={16} color={theme.colors.grey1} style={styles.bpChevron} />
+                  : <ChevronDown size={16} color={theme.colors.grey1} style={styles.bpChevron} />}
+              </TouchableOpacity>
               <Text style={styles.bpTotal}>{formatNaira(bp.totalAmount)}</Text>
               <Text style={styles.bpMeta}>Created {formatDateShort(bp.createdAt)}</Text>
               <Text style={styles.bpMeta}>
                 Expiry {formatDateShort(bp.expiryDate)}
                 {bp.expired ? '  •  Expired' : ''}
               </Text>
+              {bpExpanded && (
+                <View style={styles.bpBreakdown}>
+                  <Text style={styles.subLabel}>SHARE BREAKDOWN</Text>
+                  {bp.shares.length === 0 ? (
+                    <Text style={styles.emptyBreakdownText}>No share breakdown available</Text>
+                  ) : (
+                    <View style={styles.bpBreakdownCard}>
+                      {bp.shares.map((share, idx) => {
+                        const isState = share.recipientType === 'state';
+                        const isLast = idx === bp.shares.length - 1;
+                        return (
+                          <View key={share.id} style={[styles.bpShareRow, !isLast && styles.bpShareRowBorder]}>
+                            <View style={styles.bpShareLabelRow}>
+                              <View style={[styles.bpRecipientTag, isState ? styles.bpRecipientTagState : styles.bpRecipientTagStakeholder]}>
+                                <Text style={[styles.bpRecipientTagText, isState ? styles.bpRecipientTagTextState : styles.bpRecipientTagTextStakeholder]}>
+                                  {isState ? 'State' : 'Stakeholder'}
+                                </Text>
+                              </View>
+                              <Text style={styles.bpShareName} numberOfLines={1}>
+                                {share.recipientName ?? 'Unknown'}
+                              </Text>
+                              <Text style={styles.bpSharePercent}>{share.percentage.toFixed(2)}%</Text>
+                            </View>
+                            <Text style={styles.bpShareAmount}>{formatNaira(share.amount)}</Text>
+                          </View>
+                        );
+                      })}
+                      <View style={styles.bpShareTotalRow}>
+                        <Text style={styles.bpShareTotalLabel}>TOTAL</Text>
+                        <Text style={styles.bpShareTotalAmount}>{formatNaira(bpTotalShareAmount)}</Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              )}
               <View style={styles.bpActionsRow}>
                 {bp.withinReversalWindow && (
                   <TouchableOpacity
@@ -795,7 +844,8 @@ export default function ConfigScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-          ))
+            );
+          })
         )}
 
         {allWallets.length > 0 && (
@@ -1589,6 +1639,101 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.colors.grey1,
     marginBottom: 2,
+  },
+  bpChevron: {
+    marginLeft: 8,
+  },
+  bpBreakdown: {
+    marginTop: 10,
+  },
+  emptyBreakdownText: {
+    fontSize: 13,
+    color: theme.colors.grey1,
+    textAlign: 'center',
+    paddingVertical: 12,
+  },
+  bpBreakdownCard: {
+    backgroundColor: theme.colors.background,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  bpShareRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  bpShareRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.separator,
+  },
+  bpShareLabelRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  bpRecipientTag: {
+    borderRadius: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  bpRecipientTagState: {
+    backgroundColor: theme.colors.roleColors.state_admin.bg,
+  },
+  bpRecipientTagStakeholder: {
+    backgroundColor: theme.colors.roleColors.stakeholder.bg,
+  },
+  bpRecipientTagText: {
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  bpRecipientTagTextState: {
+    color: theme.colors.roleColors.state_admin.text,
+  },
+  bpRecipientTagTextStakeholder: {
+    color: theme.colors.roleColors.stakeholder.text,
+  },
+  bpShareName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.colors.black,
+  },
+  bpSharePercent: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.colors.grey1,
+  },
+  bpShareAmount: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.colors.grey2,
+    textAlign: 'right',
+  },
+  bpShareTotalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: theme.colors.separator,
+  },
+  bpShareTotalLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: theme.colors.grey1,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  bpShareTotalAmount: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: theme.colors.black,
   },
   bpActionsRow: {
     flexDirection: 'row',
