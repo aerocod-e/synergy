@@ -150,6 +150,9 @@ export const getAllWallets = () =>
 export const getBulkPayments = () =>
   apiRequest('/api/bulk-payments');
 
+export const getArchivedBulkPayments = () =>
+  apiRequest('/api/bulk-payments?archived=true');
+
 export const createBulkPayment = (body: unknown) =>
   apiRequest('/api/bulk-payments', { method: 'POST', body: JSON.stringify(body) });
 
@@ -158,6 +161,9 @@ export const reverseBulkPayment = (id: string) =>
 
 export const removeBulkPayment = (id: string) =>
   apiRequest(`/api/bulk-payments/${id}/remove`, { method: 'POST' });
+
+export const unarchiveBulkPayment = (id: string) =>
+  apiRequest(`/api/bulk-payments/${id}/unarchive`, { method: 'PATCH' });
 
 // ── Lookup ──────────────────────────────────────────────────────────────────
 export const lookupVehicle = (vehicleNumber: string) =>

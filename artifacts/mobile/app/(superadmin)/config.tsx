@@ -30,9 +30,11 @@ import {
   getStates,
   getStakeholders,
   getBulkPayments,
+  getArchivedBulkPayments,
   createBulkPayment,
   reverseBulkPayment,
   removeBulkPayment,
+  unarchiveBulkPayment,
 } from '@/services/api';
 import DateField from '@/components/DateField';
 import { theme } from '@/constants/theme';
@@ -614,6 +616,19 @@ export default function ConfigScreen() {
       return;
     }
 
+    setAddBpError(null);
+    const recipientCount = bpToggledKeys.length;
+    confirmAction({
+      title: 'Confirm Bulk Payment',
+      message:
+        `You are about to create a bulk payment of ${formatNaira(parseFloat(addBpTotalAmount) * 100)} for ${addBpCompanyName.trim()}, ` +
+        `split across ${recipientCount} recipient${recipientCount === 1 ? '' : 's'}. This will immediately credit every recipient's wallet. Continue?`,
+      confirmText: 'Create',
+      onConfirm: () => doSubmitAddBp(),
+    });
+  };
+
+  const doSubmitAddBp = async () => {
     setAddBpSubmitting(true);
     setAddBpError(null);
     try {
@@ -661,16 +676,68 @@ export default function ConfigScreen() {
     });
   };
 
-  const handleRemoveBp = async (bp: BulkPayment) => {
-    setRemovingBpId(bp.id);
+  const handleRemoveBp = (bp: BulkPayment) => {
+    confirmAction({
+      title: 'Archive Bulk Payment',
+      message: `This moves the ${bp.companyName} bulk payment to the archive and hides it from this list. It does not delete anything — you can restore it later from the Archived view. Continue?`,
+      confirmText: 'Archive',
+      onConfirm: async () => {
+        setRemovingBpId(bp.id);
+        try {
+          await removeBulkPayment(bp.id);
+          await loadData();
+        } catch (e: any) {
+          notifyAction('Error', e?.message ?? 'Failed to archive bulk payment.');
+        } finally {
+          setRemovingBpId(null);
+        }
+      },
+    });
+  };
+
+  const [archivedBpVisible, setArchivedBpVisible] = useState(false);
+  const [archivedBp, setArchivedBp] = useState<BulkPayment[]>([]);
+  const [archivedBpLoading, setArchivedBpLoading] = useState(false);
+  const [archivedBpError, setArchivedBpError] = useState<string | null>(null);
+  const [expandedArchivedBpId, setExpandedArchivedBpId] = useState<string | null>(null);
+  const [unarchivingBpId, setUnarchivingBpId] = useState<string | null>(null);
+
+  const loadArchivedBp = useCallback(async () => {
+    setArchivedBpLoading(true);
+    setArchivedBpError(null);
     try {
-      await removeBulkPayment(bp.id);
-      await loadData();
+      const result: any = await getArchivedBulkPayments();
+      setArchivedBp(result?.bulkPayments ?? []);
     } catch (e: any) {
-      notifyAction('Error', e?.message ?? 'Failed to remove bulk payment.');
+      setArchivedBpError(e?.message ?? 'Failed to load archived bulk payments.');
     } finally {
-      setRemovingBpId(null);
+      setArchivedBpLoading(false);
     }
+  }, []);
+
+  const handleOpenArchivedBp = () => {
+    setExpandedArchivedBpId(null);
+    setArchivedBpVisible(true);
+    loadArchivedBp();
+  };
+
+  const handleUnarchiveBp = (bp: BulkPayment) => {
+    confirmAction({
+      title: 'Unarchive Bulk Payment',
+      message: `This restores the ${bp.companyName} bulk payment to the main Bulk Payments list. Continue?`,
+      confirmText: 'Unarchive',
+      onConfirm: async () => {
+        setUnarchivingBpId(bp.id);
+        try {
+          await unarchiveBulkPayment(bp.id);
+          await Promise.all([loadArchivedBp(), loadData()]);
+        } catch (e: any) {
+          notifyAction('Error', e?.message ?? 'Failed to unarchive bulk payment.');
+        } finally {
+          setUnarchivingBpId(null);
+        }
+      },
+    });
   };
 
   if (pageLoading) {
@@ -733,7 +800,17 @@ export default function ConfigScreen() {
           <Text style={styles.addVtText}>Add Vehicle Type</Text>
         </TouchableOpacity>
 
-        <Text style={styles.sectionLabel}>Bulk Payments</Text>
+        <View style={styles.bpSectionHeaderRow}>
+          <Text style={[styles.sectionLabel, { marginBottom: 0 }]}>Bulk Payments</Text>
+          <TouchableOpacity
+            style={styles.bpArchivedLink}
+            onPress={handleOpenArchivedBp}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.bpArchivedLinkText}>Archived</Text>
+          </TouchableOpacity>
+        </View>
         <TouchableOpacity
           style={styles.addVtRow}
           onPress={handleOpenAddBp}
@@ -839,7 +916,7 @@ export default function ConfigScreen() {
                   {removingBpId === bp.id ? (
                     <ActivityIndicator size="small" color={theme.colors.grey1} />
                   ) : (
-                    <Text style={styles.bpRemoveBtnText}>Remove from List</Text>
+                    <Text style={styles.bpRemoveBtnText}>Archive</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -1217,6 +1294,119 @@ export default function ConfigScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* ── Archived Bulk Payments Modal ── */}
+      <Modal
+        visible={archivedBpVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setArchivedBpVisible(false)}
+      >
+        <View style={styles.modalRoot}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Archived Bulk Payments</Text>
+            <TouchableOpacity onPress={() => setArchivedBpVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <X size={24} color={theme.colors.grey2} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent}>
+            {archivedBpLoading ? (
+              <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginTop: 40 }} />
+            ) : archivedBpError ? (
+              <Text style={styles.errorText}>{archivedBpError}</Text>
+            ) : archivedBp.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyText}>No archived bulk payments</Text>
+              </View>
+            ) : (
+              archivedBp.map((bp) => {
+                const bpExpanded = expandedArchivedBpId === bp.id;
+                const bpTotalShareAmount = bp.shares.reduce((s, sh) => s + sh.amount, 0);
+                return (
+                  <View key={bp.id} style={styles.bpCard}>
+                    <TouchableOpacity
+                      style={styles.bpCardTop}
+                      onPress={() => {
+                        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                        setExpandedArchivedBpId(bpExpanded ? null : bp.id);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.bpCompanyName} numberOfLines={1}>{bp.companyName}</Text>
+                      <View style={[styles.bpStatusBadge, bp.status === 'reversed' ? styles.bpStatusReversed : styles.bpStatusActive]}>
+                        <Text style={[styles.bpStatusText, bp.status === 'reversed' ? styles.bpStatusReversedText : styles.bpStatusActiveText]}>
+                          {bp.status === 'reversed' ? 'Reversed' : 'Active'}
+                        </Text>
+                      </View>
+                      {bpExpanded
+                        ? <ChevronUp size={16} color={theme.colors.grey1} style={styles.bpChevron} />
+                        : <ChevronDown size={16} color={theme.colors.grey1} style={styles.bpChevron} />}
+                    </TouchableOpacity>
+                    <Text style={styles.bpTotal}>{formatNaira(bp.totalAmount)}</Text>
+                    <Text style={styles.bpMeta}>Created {formatDateShort(bp.createdAt)}</Text>
+                    <Text style={styles.bpMeta}>
+                      Expiry {formatDateShort(bp.expiryDate)}
+                      {bp.expired ? '  •  Expired' : ''}
+                    </Text>
+                    {bpExpanded && (
+                      <View style={styles.bpBreakdown}>
+                        <Text style={styles.subLabel}>SHARE BREAKDOWN</Text>
+                        {bp.shares.length === 0 ? (
+                          <Text style={styles.emptyBreakdownText}>No share breakdown available</Text>
+                        ) : (
+                          <View style={styles.bpBreakdownCard}>
+                            {bp.shares.map((share, idx) => {
+                              const isState = share.recipientType === 'state';
+                              const isLast = idx === bp.shares.length - 1;
+                              return (
+                                <View key={share.id} style={[styles.bpShareRow, !isLast && styles.bpShareRowBorder]}>
+                                  <View style={styles.bpShareLabelRow}>
+                                    <View style={[styles.bpRecipientTag, isState ? styles.bpRecipientTagState : styles.bpRecipientTagStakeholder]}>
+                                      <Text style={[styles.bpRecipientTagText, isState ? styles.bpRecipientTagTextState : styles.bpRecipientTagTextStakeholder]}>
+                                        {isState ? 'State' : 'Stakeholder'}
+                                      </Text>
+                                    </View>
+                                    <Text style={styles.bpShareName} numberOfLines={1}>
+                                      {share.recipientName ?? 'Unknown'}
+                                    </Text>
+                                    <Text style={styles.bpSharePercent}>{share.percentage.toFixed(2)}%</Text>
+                                  </View>
+                                  <Text style={styles.bpShareAmount}>{formatNaira(share.amount)}</Text>
+                                </View>
+                              );
+                            })}
+                            <View style={styles.bpShareTotalRow}>
+                              <Text style={styles.bpShareTotalLabel}>TOTAL</Text>
+                              <Text style={styles.bpShareTotalAmount}>{formatNaira(bpTotalShareAmount)}</Text>
+                            </View>
+                          </View>
+                        )}
+                      </View>
+                    )}
+                    <View style={styles.bpActionsRow}>
+                      <TouchableOpacity
+                        style={styles.bpUnarchiveBtn}
+                        onPress={() => handleUnarchiveBp(bp)}
+                        disabled={unarchivingBpId === bp.id}
+                        activeOpacity={0.85}
+                      >
+                        {unarchivingBpId === bp.id ? (
+                          <ActivityIndicator size="small" color={theme.colors.primary} />
+                        ) : (
+                          <>
+                            <RotateCcw size={14} color={theme.colors.primary} />
+                            <Text style={styles.bpUnarchiveBtnText}>Unarchive</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
       </ScreenTransition>
     </View>
   );
@@ -1237,6 +1427,22 @@ const styles = StyleSheet.create({
     marginTop: 20,
     marginHorizontal: 20,
     marginBottom: 12,
+  },
+  bpSectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 20,
+    marginTop: 20,
+    marginBottom: 12,
+  },
+  bpArchivedLink: {
+    paddingVertical: 2,
+  },
+  bpArchivedLinkText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.colors.primary,
   },
   card: {
     backgroundColor: theme.colors.white,
@@ -1769,6 +1975,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: theme.colors.grey1,
+  },
+  bpUnarchiveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    flex: 1,
+    backgroundColor: theme.colors.grey4,
+    borderRadius: 10,
+    paddingVertical: 10,
+  },
+  bpUnarchiveBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.colors.primary,
   },
   bpRecipientList: {
     maxHeight: 260,

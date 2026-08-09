@@ -291,8 +291,13 @@ export async function createBulkPayment(req: Request, res: Response): Promise<vo
 
 // ── listBulkPayments ──────────────────────────────────────────────────────
 
-export async function listBulkPayments(_req: Request, res: Response): Promise<void> {
+export async function listBulkPayments(req: Request, res: Response): Promise<void> {
   try {
+    // `archived` query param: "true" returns only archived records, anything
+    // else (including absent, the default) returns only non-archived records
+    // — matching the original always-false behavior exactly when omitted.
+    const wantArchived = req.query.archived === "true";
+
     const { rows: paymentRows } = await pool.query<{
       id: string;
       company_name: string;
@@ -305,8 +310,9 @@ export async function listBulkPayments(_req: Request, res: Response): Promise<vo
     }>(
       `SELECT id, company_name, total_amount, expiry_date, status, archived, created_at, reversal_deadline
        FROM bulk_payments
-       WHERE archived = false
-       ORDER BY created_at DESC`
+       WHERE archived = $1
+       ORDER BY created_at DESC`,
+      [wantArchived]
     );
 
     const paymentIds = paymentRows.map((p) => p.id);
@@ -500,5 +506,34 @@ export async function removeBulkPayment(req: Request, res: Response): Promise<vo
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to remove bulk payment" });
+  }
+}
+
+// ── unarchiveBulkPayment (pure restore; never touches wallets/ledger) ────
+// Exact mirror of removeBulkPayment: flips the same flag back to false and
+// nothing else. Wallets and wallet_ledger were never touched by archiving,
+// so there is nothing to reverse or re-credit here either.
+
+export async function unarchiveBulkPayment(req: Request, res: Response): Promise<void> {
+  const { id } = req.params as { id: string };
+
+  try {
+    const { rows } = await pool.query<{ id: string; archived: boolean }>(
+      `UPDATE bulk_payments SET archived = false WHERE id = $1 RETURNING id, archived`,
+      [id]
+    );
+
+    if (rows.length === 0) {
+      res.status(404).json({ error: "NOT_FOUND", message: "Bulk payment not found" });
+      return;
+    }
+
+    res.json({
+      data: { bulkPayment: { id: rows[0]!.id, archived: rows[0]!.archived } },
+      message: "Bulk payment restored to list",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to unarchive bulk payment" });
   }
 }

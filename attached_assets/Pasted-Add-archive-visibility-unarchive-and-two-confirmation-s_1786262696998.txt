@@ -1,0 +1,36 @@
+Add archive visibility, unarchive, and two confirmation steps to the Bulk Payments section. Follow all steps in order.
+
+Backend
+
+In bulkPaymentController.ts, add a new function unarchiveBulkPayment, guarded authenticateToken, requireRole("super_admin"), accepts an id, sets archived to false on that record, this is the exact mirror of the existing archive action, no wallet or ledger interaction of any kind, matching the same pure list-visibility nature already documented for archiving.
+
+Update listBulkPayments to accept an optional query param archived, true or false, defaulting to false exactly as it does today when the param is absent, so the existing default behavior for the main list is completely unchanged, but passing archived=true returns only archived records instead.
+
+Register PATCH /bulk-payments/:id/unarchive in routes/bulkPayments.ts, same guard pattern as the existing archive route.
+
+Frontend
+
+In artifacts/mobile/app/(superadmin)/config.tsx, rename the existing "Remove from List" button to "Archive" everywhere it appears, no change to which endpoint it calls, only the label and its confirmation copy.
+
+Wrap the archive action in a confirmation step before it fires, using the shared confirmAction helper already built earlier in this project for web and native alert compatibility, with clear copy explaining this moves the record to the archive and it can be restored later, not that it deletes anything.
+
+Add a small "Archived" text link or button near the Bulk Payments section header. Tapping it opens a separate view, either a modal or a distinct screen, whichever fits this screen's existing patterns more naturally, showing every archived bulk payment using the exact same card and expandable share-breakdown pattern already built for the main list, including the State or Stakeholder tags. Each archived card has a single "Unarchive" action instead of Reverse or Archive, calling the new unarchive endpoint, also behind the same confirmation helper, with copy explaining this restores the record to the main list.
+
+Add getArchivedBulkPayments and unarchiveBulkPayment helpers to services/api.ts.
+
+Add a confirmation step to the bulk payment creation flow as well. When the Super Admin taps Save on a fully filled and validated form, percentages already summing to exactly 100, show a confirmation summarizing what is about to happen, company name, total amount, and how many recipients, before actually calling the create endpoint. Only proceed on explicit confirmation, using the same shared confirmAction helper for consistency.
+
+TypeScript check
+
+pnpm --filter @workspace/api-server exec tsc --noEmit
+pnpm --filter @workspace/mobile exec tsc --noEmit
+
+Both must return zero errors.
+
+Testing
+
+Backend tests: archive a bulk payment, confirm GET /bulk-payments no longer returns it by default but GET /bulk-payments?archived=true does. Unarchive it, confirm it reappears in the default list and disappears from the archived list. Confirm wallets and ledger entries are untouched by both actions.
+
+Frontend tests, 390x844px, tap only: as Super Admin, open the Bulk Payments section, tap Archive on a record, confirm a confirmation prompt appears first, confirm on cancel nothing happens, confirm on confirm the record disappears from the main list. Tap the Archived link, confirm the record appears there with its full share breakdown still viewable. Tap Unarchive, confirm a confirmation prompt appears, confirm on confirm the record returns to the main list and disappears from the archived list. Fill out a new bulk payment fully, tap Save, confirm a confirmation summary appears before the record is actually created, confirm cancelling leaves nothing created. Console clean throughout.
+
+Report every file changed and every test result.
