@@ -124,7 +124,7 @@ function nairaToKobo(val: string): number {
 
 function isValidNaira(val: string): boolean {
   const n = parseFloat(val);
-  return val.trim() !== '' && !isNaN(n) && n > 0;
+  return val.trim() !== '' && !isNaN(n) && n >= 0;
 }
 
 function isValidAmount(val: string): boolean {
@@ -417,11 +417,11 @@ export default function ConfigScreen() {
       return;
     }
     if (!isValidNaira(editVtModal.loadingFee)) {
-      setEditVtError('Enter a valid loading fee greater than zero.');
+      setEditVtError('Enter a valid loading fee (₦0 or more).');
       return;
     }
     if (!isValidNaira(editVtModal.unloadingFee)) {
-      setEditVtError('Enter a valid unloading fee greater than zero.');
+      setEditVtError('Enter a valid unloading fee (₦0 or more).');
       return;
     }
     for (const sr of editVtModal.stakeholderRates) {
@@ -535,11 +535,11 @@ export default function ConfigScreen() {
       return;
     }
     if (!isValidNaira(addVtLoadingFee)) {
-      setAddVtError('Enter a valid loading fee greater than zero.');
+      setAddVtError('Enter a valid loading fee (₦0 or more).');
       return;
     }
     if (!isValidNaira(addVtUnloadingFee)) {
-      setAddVtError('Enter a valid unloading fee greater than zero.');
+      setAddVtError('Enter a valid unloading fee (₦0 or more).');
       return;
     }
     for (const sr of addVtStakeholderRates) {
