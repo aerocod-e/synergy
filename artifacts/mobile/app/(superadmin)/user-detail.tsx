@@ -12,6 +12,7 @@ import {
 import { AlertCircle, ChevronLeft, Key, Lock, PauseCircle, PlayCircle, Trash2 } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthContext } from '@/app/_layout';
 import { getUser, updateUser, resetUserPassword, toggleUserActive, deleteUser } from '@/services/api';
 import type { User } from '@/types/index';
@@ -37,6 +38,7 @@ export default function UserDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { user: currentUser } = useAuthContext();
+  const insets = useSafeAreaInsets();
 
   const [user, setUser]           = useState<User | null>(null);
   const [loading, setLoading]     = useState(true);
@@ -182,7 +184,7 @@ export default function UserDetailScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity
           onPress={() => router.push('/(superadmin)/users')}
           style={styles.backButton}
@@ -396,7 +398,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 56 : 20,
     paddingBottom: 14,
     backgroundColor: theme.colors.white,
     ...theme.shadows.header,

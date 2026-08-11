@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AlertCircle, ChevronLeft, CreditCard, Phone, History } from 'lucide-react-native';
 import { theme } from '@/constants/theme';
 import { getDriver, getDriverLicenseHistory, updateDriverLicense } from '@/services/api';
@@ -46,6 +47,7 @@ function formatDate(value: string | null): string {
 export default function TripAdminDriverDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [driver, setDriver] = useState<DriverDetail | null>(null);
   const [history, setHistory] = useState<LicenseHistoryEntry[]>([]);
@@ -119,7 +121,7 @@ export default function TripAdminDriverDetail() {
   };
 
   const header = (
-    <View style={styles.header}>
+    <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
       <TouchableOpacity
         onPress={() => router.back()}
         style={styles.backButton}
@@ -299,7 +301,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 56 : 20,
     paddingBottom: 12,
     backgroundColor: theme.colors.background,
     borderBottomWidth: 1,
