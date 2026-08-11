@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Keyboard, Platform, StyleSheet, Switch, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { AlertCircle, ChevronLeft, ChevronRight, Download, Search } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { theme } from '@/constants/theme';
@@ -126,6 +127,7 @@ function buildProofOfPaymentHtml(trip: TripDetail, includeZeroFee: boolean): str
 export default function TripAdminTripDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -338,7 +340,7 @@ export default function TripAdminTripDetail() {
   };
 
   const header = (
-    <View style={styles.header}>
+    <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
       <TouchableOpacity
         onPress={() => router.back()}
         style={styles.backButton}
@@ -608,7 +610,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 56 : 20,
     paddingBottom: 12,
     backgroundColor: theme.colors.background,
     borderBottomWidth: 1,
