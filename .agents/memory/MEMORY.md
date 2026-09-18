@@ -15,3 +15,4 @@
 - [Breakdown/transshipment status flow](breakdown-transshipment-status-flow.md) — breakdown/transshipment_in_transit are treated as active/in-progress, not terminal: repeat breakdowns and completion from either status are both allowed.
 - [Trip undo actions pattern](trip-undo-actions-pattern.md) — undo-* endpoints gate on current status only, not event history; requestCancellation uses a deny-list so new statuses are cancellable by default.
 - [PillTabBar testing quirks](pill-tab-bar-testing.md) — inactive tabs are icon-only (no text/accessibility label); superadmin@synergy.com has hideTripsTab=true by design, not a bug.
+- [Expo SDK 57 upgrade notes](expo-sdk57-upgrade.md) — TS6 baseUrl, app.json schema, Metro 8081 clash; Expo Go < iOS 57.0.6 / Android 57.0.3 crashes after bundling with no JS error.

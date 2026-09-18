@@ -21,8 +21,8 @@ catalog:
   drizzle-orm: ^0.45.2
   framer-motion: ^12.23.24
   lucide-react: ^0.545.0
-  react: 19.1.0
-  react-dom: 19.1.0
+  react: 19.2.3
+  react-dom: 19.2.3
   tailwind-merge: ^3.3.1
   tailwindcss: ^4.1.14
   tsx: 4.21.0
@@ -126,5 +126,3 @@ overrides:
   rollup>@rollup/rollup-win32-x64-gnu: '-'
   rollup>@rollup/rollup-win32-x64-msvc: '-'
 
-patchedDependencies:
-  '@react-navigation/bottom-tabs@7.16.1': patches/@react-navigation__bottom-tabs@7.16.1.patch

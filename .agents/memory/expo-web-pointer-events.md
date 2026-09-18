@@ -21,3 +21,5 @@ Patching individual library components that pass `pointerEvents` as a JSX prop i
 - `react-native-screens` `ScreenStackHeaderConfig.js` (commonjs) — Platform.OS guard for web
 
 **Debugging tip:** Use a `console.warn` interceptor + `new Error().stack` in `_layout.tsx` to capture the call chain as a compact pipe-delimited log line. The stack frame `updateForwardRef:NNNN → View:MMMM → createDOMProps` confirms the issue is a View receiving pointerEvents as a prop, but finding the PARENT component from the stack trace alone is impossible — it requires searching all compiled library JS for `pointerEvents.*box-none` outside style objects.
+
+**Update (Expo SDK 57 upgrade, Sept 2026):** expo-router 57 no longer depends on `@react-navigation/*` (it ships `standard-navigation`), so the bottom-tabs/elements patches were removed and only the react-native-web `warnOnce` patch remains in root `package.json` `pnpm.patchedDependencies`. Keep the pnpm patch key pinned to the installed react-native-web version; a future bump of react-native-web will fail `pnpm install` with ERR_PNPM_UNUSED_PATCH until the patch is regenerated.
