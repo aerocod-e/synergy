@@ -160,7 +160,7 @@ export default function RootLayout() {
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
               <AuthContext.Provider value={auth}>
-                <StatusBar style="dark" />
+                <StatusBar style="dark" backgroundColor="#f5f7fa" />
                 <RootLayoutNav />
               </AuthContext.Provider>
             </KeyboardProvider>

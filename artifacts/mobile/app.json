@@ -7,10 +7,21 @@
     "icon": "./assets/images/icon.png",
     "scheme": "mobile",
     "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "statusBarStyle": "dark"
     },
     "android": {},
+    "androidStatusBar": {
+      "barStyle": "dark-content",
+      "backgroundColor": "#f5f7fa"
+    },
     "web": {
       "favicon": "./assets/images/icon.png",
       "baseUrl": "/mobile/"
@@ -23,15 +34,7 @@
         }
       ],
       "expo-font",
-      "expo-web-browser",
-      [
-        "expo-splash-screen",
-        {
-          "image": "./assets/images/icon.png",
-          "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
-        }
-      ]
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
