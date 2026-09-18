@@ -301,7 +301,7 @@ export default function LoginScreen() {
         onRequestClose={closeDemo}
       >
         <Animated.View
-          style={[StyleSheet.absoluteFillObject, styles.backdrop, { opacity: overlayOpacity }]}
+          style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: overlayOpacity }]}
           pointerEvents="none"
         />
         <View style={styles.overlayLayout} pointerEvents="box-none">
