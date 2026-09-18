@@ -1,0 +1,35 @@
+Do not make any changes. I need a full audit of the current payment infrastructure and its underlying logic before we scope a real payment gateway integration.
+
+1, wallet and ledger architecture
+
+Report the exact schema of wallets and wallet_ledger. Confirm how a credit and a reversal are each recorded today, and confirm the cleared and cleared_at columns on wallet_ledger, report where these are currently set, if anywhere, or confirm they are always false and null across all existing rows.
+
+2, is_clearing_enabled
+
+Report where this flag lives, how it gets toggled today, and quote directly from paymentStatusService.ts, specifically any comment block already describing the intended EOD clearing architecture, since one was deliberately written earlier in this project as a forward looking design note for this exact moment.
+
+3, payment status derivation
+
+Report exactly how paymentStatusService.ts currently decides whether a fee shows as paid, pending, or reversed, and confirm this is currently based purely on whether a trip_fees row exists, with no real payment processor involved at all yet.
+
+4, bulk payment reversal window and the EOD dependency
+
+Quote directly the documented dependency already written for bulk payments, about a credit made within its reversal window needing its disbursement deferred to the next clearing cycle, and confirm whether this logic is implemented anywhere yet or purely documented as a future requirement.
+
+5, every place money currently gets credited
+
+List every distinct code path that increments a wallet's total_collected today, trip creation, bulk payment creation, confirm there is no other path, and confirm every single one of them is a wallet_ledger insert with no actual bank transfer or external API call anywhere in the codebase.
+
+6, existing environment configuration and secrets handling
+
+Report how API keys and secrets are currently stored and read in this project, environment variables, a secrets manager, or otherwise, so any future payment processor credentials follow the same existing pattern rather than introducing a new one.
+
+7, states and stakeholders as payout destinations
+
+Confirm whether states or stakeholders currently have any field capturing real world bank account details, account number, bank name, account holder name, anywhere in the schema, or confirm this does not exist yet at all.
+
+8, existing role permissions around money
+
+Confirm which roles can currently view wallet balances and which can currently trigger a wallet altering action, trip creation, cancellation, bulk payment creation, reversal, archive, so a future payment integration's permission boundaries can be designed consistently with what already exists.
+
+Report every finding clearly, quoting exact code where relevant, so this can be turned directly into an SOW without needing to re-investigate anything.
